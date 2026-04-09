@@ -34,3 +34,14 @@ Revisar:
 
 - Frontend preparado para GitHub Pages con `gh-pages`
 - Backend preparado para Render con `render.yaml`
+
+### Publicar frontend en GitHub Pages
+
+```bash
+cd FrontAgente
+npm run deploy
+```
+
+URL esperada:
+
+`https://monraspgit.github.io/PilotoAgente/`
