@@ -1,8 +1,9 @@
 import { Container, Nav, Navbar } from 'react-bootstrap';
-import { BotMessageSquare } from 'lucide-react';
+import { Barcode, BotMessageSquare } from 'lucide-react';
 import { NavLink, Route, Routes } from 'react-router-dom';
 import DashboardPage from './pages/DashboardPage';
 import LoginPage from './pages/LoginPage';
+import ScannerPage from './pages/ScannerPage';
 import './styles/app.css';
 
 function App() {
@@ -18,6 +19,12 @@ function App() {
             <Nav.Link as={NavLink} to="/">
               Dashboard
             </Nav.Link>
+            <Nav.Link as={NavLink} to="/scanner">
+              <span className="nav-icon-wrap">
+                <Barcode size={16} />
+                Escaner
+              </span>
+            </Nav.Link>
             <Nav.Link as={NavLink} to="/login">
               Login
             </Nav.Link>
@@ -29,6 +36,7 @@ function App() {
         <Container>
           <Routes>
             <Route path="/" element={<DashboardPage />} />
+            <Route path="/scanner" element={<ScannerPage />} />
             <Route path="/login" element={<LoginPage />} />
           </Routes>
         </Container>
