@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Badge, Button, Col, Form, Row, Table } from 'react-bootstrap';
+import { Badge, Button, Col, Form, Modal, Row, Table } from 'react-bootstrap';
 import toast from 'react-hot-toast';
 import { scanProductByBarcode } from '../services/api';
 
@@ -16,15 +16,24 @@ function resolveProductImage(imageValue) {
 }
 
 function ScannerPage() {
-  const inputRef = useRef(null);
+  const barcodeInputRef = useRef(null);
+  const manualPriceRef = useRef(null);
   const [barcode, setBarcode] = useState('');
+  const [manualPrice, setManualPrice] = useState('');
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [lastScanMeta, setLastScanMeta] = useState(null);
+  const [manualOpen, setManualOpen] = useState(false);
 
   useEffect(() => {
-    inputRef.current?.focus();
+    barcodeInputRef.current?.focus();
   }, []);
+
+  useEffect(() => {
+    if (manualOpen) {
+      setTimeout(() => manualPriceRef.current?.focus(), 0);
+    }
+  }, [manualOpen]);
 
   const summary = useMemo(() => {
     const totalUnits = items.reduce((accumulator, item) => accumulator + item.quantity, 0);
@@ -41,7 +50,33 @@ function ScannerPage() {
     };
   }, [items]);
 
-  const handleSubmit = async (event) => {
+  const pushProduct = (nextItem) => {
+    setItems((current) => {
+      const existingIndex = current.findIndex((entry) => entry.key === nextItem.key);
+
+      if (existingIndex >= 0) {
+        const next = [...current];
+        const existing = next[existingIndex];
+        const quantity = existing.quantity + 1;
+
+        next[existingIndex] = {
+          ...existing,
+          quantity,
+          total: Number((quantity * existing.price).toFixed(2)),
+          imageUrl: existing.imageUrl || nextItem.imageUrl,
+          hasImage: Boolean(existing.hasImage || nextItem.hasImage),
+          lastDurationMs: nextItem.lastDurationMs,
+          lastSource: nextItem.lastSource
+        };
+
+        return next;
+      }
+
+      return [nextItem, ...current];
+    });
+  };
+
+  const handleScanSubmit = async (event) => {
     event.preventDefault();
 
     if (!barcode.trim()) {
@@ -55,44 +90,20 @@ function ScannerPage() {
       const price = Number(item.precio_venta);
       const normalizedBarcode = item.barcode_normalized || item.barcode || barcode.trim();
 
-      setItems((current) => {
-        const existingIndex = current.findIndex((entry) => entry.barcode === normalizedBarcode);
-
-        if (existingIndex >= 0) {
-          const next = [...current];
-          const existing = next[existingIndex];
-          const quantity = existing.quantity + 1;
-
-          next[existingIndex] = {
-            ...existing,
-            quantity,
-            total: Number((quantity * existing.price).toFixed(2)),
-            imageUrl: existing.imageUrl || resolveProductImage(item.imagen),
-            hasImage: Boolean(existing.hasImage || (item.tiene_imagen && item.imagen)),
-            lastDurationMs: meta.durationMs,
-            lastSource: meta.source
-          };
-
-          return next;
-        }
-
-        return [
-          {
-            id: item.id,
-            barcode: normalizedBarcode,
-            name: item.nombre,
-            price,
-            quantity: 1,
-            total: Number(price.toFixed(2)),
-            category: item.categoria,
-            stock: item.stock_actual,
-            imageUrl: resolveProductImage(item.imagen),
-            hasImage: Boolean(item.tiene_imagen && item.imagen),
-            lastDurationMs: meta.durationMs,
-            lastSource: meta.source
-          },
-          ...current
-        ];
+      pushProduct({
+        key: normalizedBarcode,
+        id: item.id,
+        barcode: normalizedBarcode,
+        name: item.nombre,
+        price,
+        quantity: 1,
+        total: Number(price.toFixed(2)),
+        category: item.categoria,
+        stock: item.stock_actual,
+        imageUrl: resolveProductImage(item.imagen),
+        hasImage: Boolean(item.tiene_imagen && item.imagen),
+        lastDurationMs: meta.durationMs,
+        lastSource: meta.source
       });
 
       setLastScanMeta({
@@ -105,65 +116,95 @@ function ScannerPage() {
       toast.error(error.message);
     } finally {
       setLoading(false);
-      inputRef.current?.focus();
+      barcodeInputRef.current?.focus();
     }
+  };
+
+  const handleManualConfirm = () => {
+    const parsedPrice = Number(manualPrice);
+
+    if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) {
+      toast.error('Ingresá un precio válido');
+      return;
+    }
+
+    pushProduct({
+      key: 'manual-product',
+      id: 'manual-product',
+      barcode: 'manual-product',
+      name: 'Producto manual',
+      price: parsedPrice,
+      quantity: 1,
+      total: Number(parsedPrice.toFixed(2)),
+      category: 'Manual',
+      stock: null,
+      imageUrl: '',
+      hasImage: false,
+      lastDurationMs: 0,
+      lastSource: 'manual'
+    });
+
+    setLastScanMeta({
+      durationMs: 0,
+      source: 'manual',
+      name: 'Producto manual'
+    });
+    setManualPrice('');
+    setManualOpen(false);
+    barcodeInputRef.current?.focus();
   };
 
   const clearTicket = () => {
     setItems([]);
     setLastScanMeta(null);
     setBarcode('');
-    inputRef.current?.focus();
+    setManualPrice('');
+    setManualOpen(false);
+    barcodeInputRef.current?.focus();
   };
 
   return (
-    <section className="page-section">
-      <div className="hero-panel">
-        <p className="eyebrow">Escaner + cache + metricas</p>
-        <h1>Escanear productos por codigo de barras</h1>
-        <p>
-          Esta vista consulta el backend una sola vez por codigo y reutiliza cache en cliente y servidor para acelerar
-          lecturas repetidas.
-        </p>
+    <section className="scanner-55 page-section">
+      <div className="hero-panel scanner-hero">
+        <p className="eyebrow">Modo simple para +55</p>
+        <h1>Escaner rapido</h1>
+        <p>Un solo input grande arriba. Escaneas, confirmas y el ticket se arma abajo.</p>
       </div>
 
       <Row className="g-4">
-        <Col xl={4}>
-          <div className="card-panel">
-            <div className="panel-heading">
-              <div>
-                <h3>Nuevo escaneo</h3>
-                <p>Ideal para lector fisico o ingreso manual.</p>
-              </div>
-            </div>
-
-            <Form onSubmit={handleSubmit} className="scanner-form">
+        <Col xl={5}>
+          <div className="card-panel scanner-main-card">
+            <Form onSubmit={handleScanSubmit} className="scanner-main-form">
               <Form.Group>
-                <Form.Label>Codigo de barras</Form.Label>
+                <Form.Label className="scanner-label">Codigo de barras</Form.Label>
                 <Form.Control
-                  ref={inputRef}
+                  ref={barcodeInputRef}
+                  className="scanner-big-input"
                   name="barcode"
                   value={barcode}
                   onChange={(event) => setBarcode(event.target.value)}
-                  placeholder="Escanea o escribi el codigo"
+                  placeholder="Escaneá aqui"
                   autoComplete="off"
                   inputMode="numeric"
                 />
               </Form.Group>
 
-              <div className="scanner-actions">
-                <Button type="submit" disabled={loading}>
-                  {loading ? 'Buscando...' : 'Agregar producto'}
+              <div className="scanner-actions scanner-actions-stacked">
+                <Button type="submit" size="lg" disabled={loading}>
+                  {loading ? 'Buscando...' : 'Confirmar escaneo'}
                 </Button>
-                <Button type="button" variant="outline-secondary" onClick={clearTicket}>
+                <Button type="button" size="lg" variant="outline-dark" onClick={() => setManualOpen(true)}>
+                  Producto Manual
+                </Button>
+                <Button type="button" size="lg" variant="outline-secondary" onClick={clearTicket}>
                   Limpiar lista
                 </Button>
               </div>
             </Form>
 
-            <div className="scanner-metrics">
+            <div className="scanner-metrics scanner-metrics-simple">
               <div className="metric-card">
-                <span>Items</span>
+                <span>Lineas</span>
                 <strong>{items.length}</strong>
               </div>
               <div className="metric-card">
@@ -197,17 +238,17 @@ function ScannerPage() {
           </div>
         </Col>
 
-        <Col xl={8}>
+        <Col xl={7}>
           <div className="card-panel">
             <div className="panel-heading">
               <div>
-                <h3>Lista tipo ticket</h3>
-                <p>Producto, precio, cantidad, total y origen de la ultima resolucion.</p>
+                <h3>Ticket</h3>
+                <p>Producto, precio, cantidad y total en lectura grande.</p>
               </div>
             </div>
 
             {items.length === 0 ? (
-              <p className="empty-copy">Escanea un producto para empezar a armar la lista.</p>
+              <p className="empty-copy">Escaneá un producto para empezar.</p>
             ) : (
               <div className="table-responsive">
                 <Table hover className="scanner-table align-middle">
@@ -217,13 +258,12 @@ function ScannerPage() {
                       <th>Precio</th>
                       <th>Cantidad</th>
                       <th>Total</th>
-                      <th>Tiempo</th>
                       <th>Origen</th>
                     </tr>
                   </thead>
                   <tbody>
                     {items.map((item) => (
-                      <tr key={item.barcode}>
+                      <tr key={item.key}>
                         <td>
                           <div className="scanner-product-cell">
                             {item.hasImage ? (
@@ -233,18 +273,15 @@ function ScannerPage() {
                             )}
                             <div>
                               <strong>{item.name}</strong>
-                              <div className="table-subcopy">
-                                {item.category || 'Sin categoria'} | Stock {item.stock}
-                              </div>
+                              <div className="table-subcopy">{item.category || 'Sin categoria'}</div>
                             </div>
                           </div>
                         </td>
                         <td>${item.price.toFixed(2)}</td>
                         <td>{item.quantity}</td>
                         <td>${item.total.toFixed(2)}</td>
-                        <td>{item.lastDurationMs} ms</td>
                         <td>
-                          <Badge bg={item.lastSource.includes('cache') ? 'success' : 'primary'}>
+                          <Badge bg={item.lastSource.includes('cache') ? 'success' : item.lastSource === 'manual' ? 'dark' : 'primary'}>
                             {item.lastSource}
                           </Badge>
                         </td>
@@ -257,6 +294,32 @@ function ScannerPage() {
           </div>
         </Col>
       </Row>
+
+      <Modal show={manualOpen} onHide={() => setManualOpen(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Producto Manual</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Form.Group>
+            <Form.Label>Precio</Form.Label>
+            <Form.Control
+              ref={manualPriceRef}
+              type="number"
+              min="0"
+              step="0.01"
+              value={manualPrice}
+              onChange={(event) => setManualPrice(event.target.value)}
+              placeholder="Ingresá el precio"
+            />
+          </Form.Group>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="outline-secondary" onClick={() => setManualOpen(false)}>
+            Cancelar
+          </Button>
+          <Button onClick={handleManualConfirm}>Confirmar</Button>
+        </Modal.Footer>
+      </Modal>
     </section>
   );
 }
