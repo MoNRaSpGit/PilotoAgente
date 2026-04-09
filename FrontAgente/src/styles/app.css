@@ -186,6 +186,34 @@
   font-size: 0.9rem;
 }
 
+.scanner-product-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.scanner-product-image,
+.scanner-product-fallback {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.scanner-product-image {
+  background: #e2e8f0;
+}
+
+.scanner-product-fallback {
+  display: grid;
+  place-items: center;
+  background: #e2e8f0;
+  color: #64748b;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
 @media (max-width: 768px) {
   .product-item {
     flex-direction: column;

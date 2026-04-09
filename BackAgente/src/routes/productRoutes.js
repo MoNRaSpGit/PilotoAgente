@@ -62,7 +62,8 @@ router.get('/products/scan/:barcode', async (req, res) => {
           estado,
           barcode,
           barcode_normalized,
-          tiene_imagen
+          tiene_imagen,
+          imagen
         FROM ops_producto
         WHERE barcode_normalized = ? OR barcode = ?
         LIMIT 1

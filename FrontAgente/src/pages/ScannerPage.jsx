@@ -3,6 +3,18 @@ import { Badge, Button, Col, Form, Row, Table } from 'react-bootstrap';
 import toast from 'react-hot-toast';
 import { scanProductByBarcode } from '../services/api';
 
+function resolveProductImage(imageValue) {
+  if (!imageValue) {
+    return '';
+  }
+
+  if (imageValue.startsWith('http://') || imageValue.startsWith('https://') || imageValue.startsWith('data:image/')) {
+    return imageValue;
+  }
+
+  return `data:image/jpeg;base64,${imageValue}`;
+}
+
 function ScannerPage() {
   const inputRef = useRef(null);
   const [barcode, setBarcode] = useState('');
@@ -55,6 +67,8 @@ function ScannerPage() {
             ...existing,
             quantity,
             total: Number((quantity * existing.price).toFixed(2)),
+            imageUrl: existing.imageUrl || resolveProductImage(item.imagen),
+            hasImage: Boolean(existing.hasImage || (item.tiene_imagen && item.imagen)),
             lastDurationMs: meta.durationMs,
             lastSource: meta.source
           };
@@ -72,6 +86,8 @@ function ScannerPage() {
             total: Number(price.toFixed(2)),
             category: item.categoria,
             stock: item.stock_actual,
+            imageUrl: resolveProductImage(item.imagen),
+            hasImage: Boolean(item.tiene_imagen && item.imagen),
             lastDurationMs: meta.durationMs,
             lastSource: meta.source
           },
@@ -103,11 +119,11 @@ function ScannerPage() {
   return (
     <section className="page-section">
       <div className="hero-panel">
-        <p className="eyebrow">Escaner + cache + métricas</p>
-        <h1>Escanear productos por código de barras</h1>
+        <p className="eyebrow">Escaner + cache + metricas</p>
+        <h1>Escanear productos por codigo de barras</h1>
         <p>
-          Esta vista consulta el backend una sola vez por código y reutiliza caché en cliente y servidor para
-          acelerar lecturas repetidas.
+          Esta vista consulta el backend una sola vez por codigo y reutiliza cache en cliente y servidor para acelerar
+          lecturas repetidas.
         </p>
       </div>
 
@@ -117,19 +133,19 @@ function ScannerPage() {
             <div className="panel-heading">
               <div>
                 <h3>Nuevo escaneo</h3>
-                <p>Ideal para lector físico o ingreso manual.</p>
+                <p>Ideal para lector fisico o ingreso manual.</p>
               </div>
             </div>
 
             <Form onSubmit={handleSubmit} className="scanner-form">
               <Form.Group>
-                <Form.Label>Código de barras</Form.Label>
+                <Form.Label>Codigo de barras</Form.Label>
                 <Form.Control
                   ref={inputRef}
                   name="barcode"
                   value={barcode}
                   onChange={(event) => setBarcode(event.target.value)}
-                  placeholder="Escaneá o escribí el código"
+                  placeholder="Escanea o escribi el codigo"
                   autoComplete="off"
                   inputMode="numeric"
                 />
@@ -165,7 +181,7 @@ function ScannerPage() {
             </div>
 
             <div className="last-scan">
-              <h4>Último resultado</h4>
+              <h4>Ultimo resultado</h4>
               {lastScanMeta ? (
                 <div className="last-scan-copy">
                   <strong>{lastScanMeta.name}</strong>
@@ -175,7 +191,7 @@ function ScannerPage() {
                   </Badge>
                 </div>
               ) : (
-                <p className="empty-copy">Todavía no se escaneó ningún producto.</p>
+                <p className="empty-copy">Todavia no se escaneo ningun producto.</p>
               )}
             </div>
           </div>
@@ -186,12 +202,12 @@ function ScannerPage() {
             <div className="panel-heading">
               <div>
                 <h3>Lista tipo ticket</h3>
-                <p>Producto, precio, cantidad, total y origen de la última resolución.</p>
+                <p>Producto, precio, cantidad, total y origen de la ultima resolucion.</p>
               </div>
             </div>
 
             {items.length === 0 ? (
-              <p className="empty-copy">Escaneá un producto para empezar a armar la lista.</p>
+              <p className="empty-copy">Escanea un producto para empezar a armar la lista.</p>
             ) : (
               <div className="table-responsive">
                 <Table hover className="scanner-table align-middle">
@@ -209,9 +225,18 @@ function ScannerPage() {
                     {items.map((item) => (
                       <tr key={item.barcode}>
                         <td>
-                          <strong>{item.name}</strong>
-                          <div className="table-subcopy">
-                            {item.category || 'Sin categoría'} | Stock {item.stock}
+                          <div className="scanner-product-cell">
+                            {item.hasImage ? (
+                              <img className="scanner-product-image" src={item.imageUrl} alt={item.name} loading="lazy" />
+                            ) : (
+                              <div className="scanner-product-fallback">IMG</div>
+                            )}
+                            <div>
+                              <strong>{item.name}</strong>
+                              <div className="table-subcopy">
+                                {item.category || 'Sin categoria'} | Stock {item.stock}
+                              </div>
+                            </div>
                           </div>
                         </td>
                         <td>${item.price.toFixed(2)}</td>
