@@ -188,19 +188,16 @@ export async function updateClientDeliveryById({ clientId, entregaMonto, ultimaF
   return rows[0] || null;
 }
 
-export async function updateClientChargeById({ clientId, chargeAmount, ultimaFechaPago, fechaVencimiento }) {
+export async function updateClientChargeById({ clientId, chargeAmount }) {
   await ensureClientsTable();
 
   const [result] = await pool.query(
     `
       UPDATE ops_clientes
-      SET saldo = saldo + ?,
-          ultima_fecha_pago = ?,
-          fecha_vencimiento = ?,
-          estado = 'activo'
+      SET saldo = saldo + ?
       WHERE id = ?
     `,
-    [chargeAmount, ultimaFechaPago, fechaVencimiento, clientId]
+    [chargeAmount, clientId]
   );
 
   if (result.affectedRows === 0) {

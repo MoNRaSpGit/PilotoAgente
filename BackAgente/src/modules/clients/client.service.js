@@ -177,14 +177,13 @@ export async function updateClientCharge(clientId, payload) {
     throw createServiceError('Monto valido requerido', 400);
   }
 
-  const ultimaFechaPago = normalizeDateInput(payload?.ultima_fecha_pago) || new Date().toISOString().slice(0, 10);
-  const fechaVencimiento = normalizeDateInput(payload?.fecha_vencimiento) || addDays(ultimaFechaPago, 30);
+  const fechaMovimiento = normalizeDateInput(payload?.fecha_movimiento)
+    || normalizeDateInput(payload?.ultima_fecha_pago)
+    || new Date().toISOString().slice(0, 10);
 
   const item = await updateClientChargeById({
     clientId: parsedClientId,
-    chargeAmount,
-    ultimaFechaPago,
-    fechaVencimiento
+    chargeAmount
   });
 
   if (!item) {
@@ -194,7 +193,7 @@ export async function updateClientCharge(clientId, payload) {
   await insertClientHistoryEntries({
     clientId: parsedClientId,
     items: chargeItems,
-    fechaMovimiento: ultimaFechaPago,
+    fechaMovimiento,
     detalle: 'Cargo desde escaner'
   });
 

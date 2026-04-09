@@ -316,6 +316,7 @@ function ClientsPage() {
                   <th className="client-id-column">ID</th>
                   <th>Cliente</th>
                   <th>Deuda</th>
+                  <th>Vence</th>
                   <th>Estado</th>
                   <th></th>
                 </tr>
@@ -328,6 +329,7 @@ function ClientsPage() {
                       <strong className="client-name-strong">{client.nombre}</strong>
                     </td>
                     <td>${Number(client.saldo).toFixed(2)}</td>
+                    <td className="client-due-column">{formatDisplayDate(client.fecha_vencimiento)}</td>
                     <td>
                       <span className={`client-status-pill client-status-${client.status}`}>{getStatusLabel(client)}</span>
                     </td>

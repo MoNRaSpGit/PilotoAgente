@@ -349,6 +349,13 @@
   white-space: nowrap;
 }
 
+.client-due-column {
+  white-space: nowrap;
+  color: #334155;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
 .client-row td {
   padding-top: 0.95rem;
   padding-bottom: 0.95rem;
