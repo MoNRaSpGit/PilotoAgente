@@ -1,6 +1,7 @@
 import cors from 'cors';
 import express from 'express';
 import authRoutes from './routes/authRoutes.js';
+import clientRoutes from './routes/clientRoutes.js';
 import eventRoutes from './routes/eventRoutes.js';
 import healthRoutes from './routes/healthRoutes.js';
 import productRoutes from './routes/productRoutes.js';
@@ -25,6 +26,7 @@ app.get('/', (_req, res) => {
 
 app.use('/api', healthRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api', clientRoutes);
 app.use('/api', eventRoutes);
 app.use('/api', productRoutes);
 app.use('/api', protectedRoutes);

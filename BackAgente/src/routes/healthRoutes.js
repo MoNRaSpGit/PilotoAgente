@@ -1,15 +1,8 @@
 import { Router } from 'express';
-import { checkDatabaseConnection } from '../config/db.js';
+import { healthController } from '../modules/health/health.controller.js';
 
 const router = Router();
 
-router.get('/health', async (_req, res) => {
-  const database = await checkDatabaseConnection();
-
-  res.json({
-    status: 'ok',
-    database
-  });
-});
+router.get('/health', healthController);
 
 export default router;

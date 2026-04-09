@@ -1,13 +1,9 @@
 import { Router } from 'express';
-import { authMiddleware } from '../middleware/authMiddleware.js';
+import { profileController } from '../modules/protected/protected.controller.js';
+import { authMiddleware } from '../modules/auth/auth.middleware.js';
 
 const router = Router();
 
-router.get('/profile', authMiddleware, (req, res) => {
-  res.json({
-    message: 'Ruta protegida activa',
-    user: req.user
-  });
-});
+router.get('/profile', authMiddleware, profileController);
 
 export default router;

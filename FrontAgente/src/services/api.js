@@ -8,6 +8,14 @@ function normalizeBarcode(value = '') {
   return String(value).trim().replace(/\s+/g, '');
 }
 
+async function parseJsonResponse(response) {
+  try {
+    return await response.json();
+  } catch (_error) {
+    return {};
+  }
+}
+
 function loadSessionCache() {
   if (typeof window === 'undefined') {
     return;
@@ -99,6 +107,111 @@ export async function fetchProducts(limit = 5) {
   return (data.items || []).slice(0, limit);
 }
 
+export async function fetchClients() {
+  const response = await fetch(`${API_URL}/api/clients`);
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    throw new Error(data.message || 'No se pudieron cargar los clientes');
+  }
+
+  return data.items || [];
+}
+
+export async function createClient(payload) {
+  const response = await fetch(`${API_URL}/api/clients`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    throw new Error(data.message || 'No se pudo crear el cliente');
+  }
+
+  return data.item;
+}
+
+export async function updateClientPayment(clientId, payload) {
+  const response = await fetch(`${API_URL}/api/clients/${clientId}/payment`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    throw new Error(data.message || 'No se pudo actualizar el cliente');
+  }
+
+  return data.item;
+}
+
+export async function updateClientDelivery(clientId, payload) {
+  const response = await fetch(`${API_URL}/api/clients/${clientId}/delivery`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    throw new Error(data.message || 'No se pudo registrar la entrega');
+  }
+
+  return data.item;
+}
+
+export async function updateClientCharge(clientId, payload) {
+  const response = await fetch(`${API_URL}/api/clients/${clientId}/charge`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    throw new Error(data.message || 'No se pudo agregar el cargo al cliente');
+  }
+
+  return data.item;
+}
+
+export async function fetchClientHistory(clientId, params = {}) {
+  const searchParams = new URLSearchParams();
+
+  if (params.from) {
+    searchParams.set('from', params.from);
+  }
+
+  if (params.to) {
+    searchParams.set('to', params.to);
+  }
+
+  const query = searchParams.toString();
+  const response = await fetch(`${API_URL}/api/clients/${clientId}/history${query ? `?${query}` : ''}`);
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    throw new Error(data.message || 'No se pudo obtener el historial');
+  }
+
+  return data.items || [];
+}
+
 export async function scanProductByBarcode(barcode) {
   const normalizedBarcode = normalizeBarcode(barcode);
 
@@ -125,10 +238,13 @@ export async function scanProductByBarcode(barcode) {
 
   const request = fetch(`${API_URL}/api/products/scan/${encodeURIComponent(normalizedBarcode)}`)
     .then(async (response) => {
-      const data = await response.json();
+      const data = await parseJsonResponse(response);
 
       if (!response.ok) {
-        throw new Error(data.message || 'No se pudo escanear el producto');
+        const error = new Error(data.message || 'No se pudo escanear el producto');
+        error.status = response.status;
+        error.data = data;
+        throw error;
       }
 
       setCachedScannerProduct(normalizedBarcode, data.item);
@@ -140,6 +256,37 @@ export async function scanProductByBarcode(barcode) {
 
   pendingScannerRequests.set(normalizedBarcode, request);
   return request;
+}
+
+export async function createManualProductFromBarcode({ barcode, precioVenta }) {
+  const normalizedBarcode = normalizeBarcode(barcode);
+
+  if (!normalizedBarcode) {
+    throw new Error('IngresÃ¡ un cÃ³digo de barras vÃ¡lido');
+  }
+
+  const response = await fetch(`${API_URL}/api/products/manual-from-scan`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      barcode: normalizedBarcode,
+      precioVenta
+    })
+  });
+
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    const error = new Error(data.message || 'No se pudo guardar el producto');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  setCachedScannerProduct(normalizedBarcode, data.item);
+  return data;
 }
 
 export { API_URL };
