@@ -703,7 +703,7 @@ function CajaPage() {
               <span>Caja inicial</span>
               <strong>{money(selectedDay.opening_amount)}</strong>
             </article>
-            <article className="card-panel caja-stat-card caja-metric-card caja-metric-card-sales">
+            <article className="card-panel caja-stat-card caja-metric-card caja-metric-card-accent">
               <span>Ventas del dia</span>
               <strong>{money(selectedDay.sales_total)}</strong>
             </article>
@@ -711,7 +711,7 @@ function CajaPage() {
               <span>Ganancia diaria</span>
               <strong>{money(selectedDay.profit_amount)}</strong>
             </article>
-            <article className="card-panel caja-stat-card caja-metric-card caja-metric-card-accent">
+            <article className="card-panel caja-stat-card caja-metric-card caja-metric-card-soft">
               <span>Monto actual</span>
               <strong>{money(selectedDay.current_amount)}</strong>
             </article>
@@ -749,7 +749,7 @@ function CajaPage() {
                   aria-expanded={comparisonExpanded}
                   aria-label={comparisonExpanded ? 'Contraer comparaciones' : 'Expandir comparaciones'}
                 >
-                  <span className={`caja-trend-arrow ${comparisonExpanded ? 'is-open' : ''}`}>⌄</span>
+                  <span className={`caja-trend-arrow ${comparisonExpanded ? 'is-open' : ''}`}>v</span>
                 </button>
               </div>
             </article>
@@ -1037,4 +1037,5 @@ function CajaPage() {
 }
 
 export default CajaPage;
+
 

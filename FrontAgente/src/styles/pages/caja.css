@@ -139,6 +139,11 @@
   color: #0f172a;
 }
 
+.caja-stat-card.caja-metric-card-accent span,
+.caja-stat-card.caja-metric-card-accent strong {
+  color: #fff;
+}
+
 .caja-trend-list {
   display: grid;
   gap: 0.85rem;
@@ -203,33 +208,50 @@
 
 .caja-trend-arrow {
   display: inline-block;
-  font-size: 1rem;
+  font-size: 1.05rem;
+  font-weight: 800;
   line-height: 1;
-  transform: translateY(-1px);
+  transform: translateY(-1px) rotate(0deg);
   transition: transform 0.2s ease;
 }
 
 .caja-trend-arrow.is-open {
-  transform: rotate(180deg) translateY(1px);
+  transform: translateY(1px) rotate(180deg);
 }
 
 .caja-trend-flyout {
   position: absolute;
-  left: 0.9rem;
-  right: 0.9rem;
-  bottom: 3.15rem;
-  padding: 0.85rem;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.98);
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  box-shadow: 0 18px 34px rgba(15, 23, 42, 0.12);
-  gap: 0.7rem;
+  left: 0.8rem;
+  right: 0.8rem;
+  bottom: 3.25rem;
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.7rem;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top right, rgba(15, 118, 110, 0.12), transparent 60%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 252, 0.98));
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  box-shadow: 0 20px 38px rgba(15, 23, 42, 0.16), 0 8px 16px rgba(15, 23, 42, 0.08);
   z-index: 3;
   opacity: 0;
   visibility: hidden;
-  transform: translateY(8px) scale(0.985);
-  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s ease;
+  transform: translateY(12px) scale(0.97);
+  transition: opacity 0.22s ease, transform 0.22s ease, visibility 0.22s ease;
   pointer-events: none;
+}
+
+.caja-trend-flyout::after {
+  content: '';
+  position: absolute;
+  right: 1.15rem;
+  bottom: -0.38rem;
+  width: 0.75rem;
+  height: 0.75rem;
+  background: #fff;
+  border-right: 1px solid rgba(148, 163, 184, 0.24);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.24);
+  transform: rotate(45deg);
 }
 
 .caja-trend-flyout.is-open {
@@ -237,6 +259,22 @@
   visibility: visible;
   transform: translateY(0) scale(1);
   pointer-events: auto;
+}
+
+.caja-trend-flyout .caja-trend-item-compact {
+  padding: 0.65rem 0.7rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.05);
+}
+
+.caja-trend-flyout .caja-trend-item-compact small {
+  letter-spacing: 0.03em;
+}
+
+.caja-trend-flyout .caja-trend-item-compact strong {
+  font-size: 1rem;
 }
 
 .caja-trend-footer {
