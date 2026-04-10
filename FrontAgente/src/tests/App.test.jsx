@@ -4,16 +4,21 @@ import { BrowserRouter } from 'react-router-dom';
 import App from '../App';
 import { store } from '../store';
 
+const routerFutureFlags = {
+  v7_startTransition: true,
+  v7_relativeSplatPath: true
+};
+
 describe('App', () => {
-  it('renderiza el título principal', () => {
+  it('renderiza el dashboard vacio', () => {
     render(
       <Provider store={store}>
-        <BrowserRouter>
+        <BrowserRouter future={routerFutureFlags}>
           <App />
         </BrowserRouter>
       </Provider>
     );
 
-    expect(screen.getByText(/Base inicial del panel del agente/i)).toBeInTheDocument();
+    expect(screen.getByText(/Dashboard en blanco/i)).toBeInTheDocument();
   });
 });

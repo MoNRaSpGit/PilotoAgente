@@ -9,11 +9,15 @@ import App from './App';
 import { store } from './store';
 
 const Router = import.meta.env.PROD ? HashRouter : BrowserRouter;
+const routerFutureFlags = {
+  v7_startTransition: true,
+  v7_relativeSplatPath: true
+};
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <Provider store={store}>
-      <Router>
+      <Router future={routerFutureFlags}>
         <App />
         <Toaster position="top-right" />
       </Router>

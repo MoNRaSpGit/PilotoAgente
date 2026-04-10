@@ -1,15 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, Form } from 'react-bootstrap';
 import toast from 'react-hot-toast';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { loginRequest } from '../services/api';
 import { setSession } from '../store/slices/authSlice';
+import { saveAuthSession } from '../utils/authSession';
 
 const QUICK_LOGINS = {
   admin: {
-    email: 'admin2@agente.dev',
-    password: 'AdminPro2026!'
+    email: 'adminnuevo@agente.dev',
+    password: 'AdminNuevo2026!'
   },
   operario: {
     email: 'operario@agente.dev',
@@ -20,11 +21,21 @@ const QUICK_LOGINS = {
 function LoginPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const sessionUserRole = useSelector((state) => state.auth.user?.role);
+  const sessionToken = useSelector((state) => state.auth.token);
   const [form, setForm] = useState({
     email: QUICK_LOGINS.admin.email,
     password: QUICK_LOGINS.admin.password
   });
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!sessionToken || !sessionUserRole) {
+      return;
+    }
+
+    navigate(sessionUserRole === 'admin' ? '/' : '/scanner', { replace: true });
+  }, [navigate, sessionToken, sessionUserRole]);
 
   const handleChange = (event) => {
     setForm((current) => ({
@@ -40,6 +51,7 @@ function LoginPage() {
     try {
       const data = await loginRequest(form);
       dispatch(setSession(data));
+      saveAuthSession(data);
       toast.success('Sesion iniciada');
       navigate(data.user?.role === 'admin' ? '/' : '/scanner', { replace: true });
     } catch (error) {
@@ -62,6 +74,7 @@ function LoginPage() {
     try {
       const data = await loginRequest(credentials);
       dispatch(setSession(data));
+      saveAuthSession(data);
       toast.success('Sesion iniciada');
       navigate(data.user?.role === 'admin' ? '/' : '/scanner', { replace: true });
     } catch (error) {

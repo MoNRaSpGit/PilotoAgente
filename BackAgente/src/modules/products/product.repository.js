@@ -13,20 +13,6 @@ const PRODUCT_COLUMNS = `
   imagen
 `;
 
-export async function listProducts(limit = 20) {
-  const [rows] = await pool.query(
-    `
-      SELECT id, nombre, precio_venta, stock_actual, categoria, estado
-      FROM ops_producto
-      ORDER BY id DESC
-      LIMIT ?
-    `,
-    [limit]
-  );
-
-  return rows;
-}
-
 export async function findProductByBarcode(barcode) {
   const [rows] = await pool.query(
     `

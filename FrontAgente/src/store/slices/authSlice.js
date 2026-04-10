@@ -1,8 +1,11 @@
 import { createSlice } from '@reduxjs/toolkit';
+import { getStoredAuthSession } from '../../utils/authSession';
+
+const storedSession = getStoredAuthSession();
 
 const initialState = {
-  token: '',
-  user: null
+  token: storedSession?.token || '',
+  user: storedSession?.user || null
 };
 
 const authSlice = createSlice({

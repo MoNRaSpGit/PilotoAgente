@@ -1,0 +1,120 @@
+-- Agente DB schema reference
+-- This file documents the current logical structure used by the app.
+-- Keep it in sync with the backend repository files.
+
+-- =========================================================
+-- ops_usuarios
+-- Source: src/modules/auth/auth.repository.js
+-- =========================================================
+-- id INT AUTO_INCREMENT PRIMARY KEY
+-- nombre VARCHAR(140) NOT NULL
+-- email VARCHAR(190) NOT NULL UNIQUE
+-- password_salt VARCHAR(128) NOT NULL
+-- password_hash VARCHAR(255) NOT NULL
+-- role VARCHAR(20) NOT NULL DEFAULT 'operario'
+-- estado VARCHAR(20) NOT NULL DEFAULT 'activo'
+-- created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+-- updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+
+-- =========================================================
+-- ops_clientes
+-- Source: src/modules/clients/client.repository.js
+-- =========================================================
+-- id INT AUTO_INCREMENT PRIMARY KEY
+-- nombre VARCHAR(140) NOT NULL
+-- saldo DECIMAL(12,2) NOT NULL DEFAULT 0.00
+-- entregas_count INT NOT NULL DEFAULT 0
+-- ultima_fecha_pago DATE NOT NULL
+-- fecha_vencimiento DATE NOT NULL
+-- estado VARCHAR(20) NOT NULL DEFAULT 'activo'
+-- created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+-- updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+
+-- =========================================================
+-- ops_clientes_historial
+-- Source: src/modules/clients/client.repository.js
+-- =========================================================
+-- id INT AUTO_INCREMENT PRIMARY KEY
+-- client_id INT NOT NULL
+-- tipo VARCHAR(20) NOT NULL
+-- fecha_movimiento DATE NOT NULL
+-- articulo VARCHAR(190) NOT NULL
+-- cantidad INT NOT NULL DEFAULT 1
+-- precio_unitario DECIMAL(12,2) NOT NULL DEFAULT 0.00
+-- total DECIMAL(12,2) NOT NULL DEFAULT 0.00
+-- detalle VARCHAR(255) NULL
+-- created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+-- updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+-- INDEX idx_client_fecha (client_id, fecha_movimiento)
+-- FOREIGN KEY (client_id) REFERENCES ops_clientes(id) ON DELETE CASCADE
+
+-- =========================================================
+-- ops_cajas
+-- Source: src/modules/caja/caja.repository.js
+-- =========================================================
+-- id INT AUTO_INCREMENT PRIMARY KEY
+-- opening_amount DECIMAL(12,2) NOT NULL
+-- sales_total DECIMAL(12,2) NOT NULL DEFAULT 0.00
+-- payments_total DECIMAL(12,2) NOT NULL DEFAULT 0.00
+-- opened_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+-- closed_at DATETIME NULL
+-- opened_by_user_id INT NULL
+-- opened_by_name VARCHAR(140) NOT NULL
+-- opened_by_role VARCHAR(20) NOT NULL
+-- status VARCHAR(20) NOT NULL DEFAULT 'open'
+-- created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+-- updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+-- INDEX idx_cajas_status_opened_at (status, opened_at)
+-- INDEX idx_cajas_opened_by (opened_by_user_id, opened_at)
+
+-- =========================================================
+-- ops_caja_movimientos
+-- Source: src/modules/caja/caja.repository.js
+-- =========================================================
+-- id INT AUTO_INCREMENT PRIMARY KEY
+-- caja_id INT NOT NULL
+-- type VARCHAR(20) NOT NULL
+-- amount DECIMAL(12,2) NOT NULL
+-- description VARCHAR(255) NULL
+-- source VARCHAR(40) NOT NULL DEFAULT 'manual'
+-- operator_id INT NULL
+-- operator_name VARCHAR(140) NULL
+-- operator_role VARCHAR(20) NULL
+-- metadata LONGTEXT NULL
+-- created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+-- updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+-- INDEX idx_caja_movimientos_caja_fecha (caja_id, created_at)
+-- INDEX idx_caja_movimientos_type_fecha (type, created_at)
+-- FOREIGN KEY (caja_id) REFERENCES ops_cajas(id) ON DELETE CASCADE
+
+-- =========================================================
+-- ops_caja_movimiento_items
+-- Source: src/modules/caja/caja.repository.js
+-- =========================================================
+-- id INT AUTO_INCREMENT PRIMARY KEY
+-- movement_id INT NOT NULL
+-- barcode VARCHAR(120) NULL
+-- product_name VARCHAR(190) NOT NULL
+-- quantity INT NOT NULL DEFAULT 1
+-- unit_price DECIMAL(12,2) NOT NULL DEFAULT 0.00
+-- total DECIMAL(12,2) NOT NULL DEFAULT 0.00
+-- created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+-- updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+-- INDEX idx_caja_items_movement (movement_id)
+-- FOREIGN KEY (movement_id) REFERENCES ops_caja_movimientos(id) ON DELETE CASCADE
+
+-- =========================================================
+-- ops_gastos
+-- Source: src/modules/gastos/gastos.repository.js
+-- =========================================================
+-- id INT AUTO_INCREMENT PRIMARY KEY
+-- name VARCHAR(160) NOT NULL
+-- amount DECIMAL(12,2) NOT NULL
+-- frequency VARCHAR(20) NOT NULL DEFAULT 'monthly'
+-- scope VARCHAR(20) NOT NULL DEFAULT 'business'
+-- active TINYINT(1) NOT NULL DEFAULT 1
+-- notes VARCHAR(255) NULL
+-- created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+-- updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+-- INDEX idx_gastos_active_scope (active, scope)
+-- INDEX idx_gastos_frequency (frequency)

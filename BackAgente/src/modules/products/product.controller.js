@@ -1,4 +1,4 @@
-import { createManualProduct, getProducts, scanProduct } from './product.service.js';
+import { createManualProduct, scanProduct } from './product.service.js';
 
 function handleServiceError(res, error, fallbackMessage) {
   const status = error.status || 500;
@@ -9,15 +9,6 @@ function handleServiceError(res, error, fallbackMessage) {
     ...(error.item ? { item: error.item } : {}),
     ...(status === 500 && error.error ? { error: error.error } : {})
   });
-}
-
-export async function listProductsController(_req, res) {
-  try {
-    const data = await getProducts();
-    return res.json(data);
-  } catch (error) {
-    return handleServiceError(res, error, 'No se pudieron obtener los productos');
-  }
 }
 
 export async function scanProductController(req, res) {

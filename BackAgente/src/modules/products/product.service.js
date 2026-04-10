@@ -1,8 +1,7 @@
 import {
   findProductByBarcode,
   findProductById,
-  insertManualProductFromScan,
-  listProducts
+  insertManualProductFromScan
 } from './product.repository.js';
 import { getCachedProduct, getProductCacheStats, normalizeBarcode, setCachedProduct } from '../../utils/productCache.js';
 
@@ -15,15 +14,6 @@ function createServiceError(message, status, extra = {}) {
   error.status = status;
   Object.assign(error, extra);
   return error;
-}
-
-export async function getProducts(limit = 20) {
-  const items = await listProducts(limit);
-
-  return {
-    count: items.length,
-    items
-  };
 }
 
 export async function scanProduct(barcode) {

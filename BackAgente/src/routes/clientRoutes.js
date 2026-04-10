@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { authMiddleware, requireRole } from '../modules/auth/auth.middleware.js';
 import {
   createClientController,
   listClientHistoryController,
@@ -9,6 +10,8 @@ import {
 } from '../modules/clients/client.controller.js';
 
 const router = Router();
+
+router.use(authMiddleware, requireRole('admin'));
 
 router.get('/clients', listClientsController);
 router.get('/clients/:id/history', listClientHistoryController);

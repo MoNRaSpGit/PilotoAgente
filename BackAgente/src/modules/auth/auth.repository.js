@@ -2,17 +2,10 @@ import { pool } from '../../config/db.js';
 
 const DEMO_USERS = [
   {
-    nombre: 'Admin Pro',
-    email: 'admin2@agente.dev',
-    password_salt: '77f4e846c0239cc92ff6f985eec09c9e',
-    password_hash: 'fb6207f32b6a02aafec2019762287cecd7622cf3f449cc6e10f9c2a0c3fdeabb4a8047c38302d3a681692df021bd4aa7aa776402b64dd7b915d5fd5a86534999',
-    role: 'admin'
-  },
-  {
-    nombre: 'Admin Agente',
-    email: 'admin@agente.dev',
-    password_salt: '8540e29bfd180b106db2820ccd481402',
-    password_hash: '2457a1206052a2eec47baa9769e84047ce2cbc1d4b236c78053729ae7c8b4759a6755cb59924daaa19315f77b432758235dae186349399f95bd382b25e8ffdca',
+    nombre: 'Admin Nuevo',
+    email: 'adminnuevo@agente.dev',
+    password_salt: 'c3f4a8d29b7e4c1a9d6f2e8b5c4a7d90',
+    password_hash: '72c7d60b47fa00be491f03c939ada18b8bbf5584eee1bb681a6b0b701dc181783d7cbe5b29d9bc8d6407b847a760e5bfa4b045e24597577a820c27e219b55c2f',
     role: 'admin'
   },
   {

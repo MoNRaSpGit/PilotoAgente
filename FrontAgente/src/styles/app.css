@@ -33,6 +33,16 @@
   padding-inline: 0.9rem;
 }
 
+.app-nav-links .nav-logout-link {
+  background: transparent;
+  border: 0;
+  color: #b91c1c;
+}
+
+.app-nav-links .nav-logout-link:hover {
+  color: #991b1b;
+}
+
 .nav-icon-wrap {
   display: inline-flex;
   align-items: center;
@@ -46,6 +56,462 @@
 .page-section {
   display: grid;
   gap: 1.25rem;
+}
+
+.dashboard-empty {
+  min-height: calc(100vh - 8.5rem);
+  align-items: center;
+}
+
+.dashboard-empty-panel {
+  width: min(100%, 760px);
+  min-height: 280px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  margin: 0 auto;
+}
+
+.caja-page {
+  gap: 1.1rem;
+}
+
+.caja-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.caja-hero-minimal h1 {
+  margin-bottom: 0;
+}
+
+.caja-hero-status {
+  display: grid;
+  gap: 0.35rem;
+  justify-items: end;
+  text-align: right;
+  color: #475569;
+}
+
+.caja-empty-state {
+  display: grid;
+  gap: 0.65rem;
+  justify-items: start;
+}
+
+.caja-toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.caja-toolbar-actions {
+  display: flex;
+  gap: 0.65rem;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.caja-stats-grid {
+  margin-top: 0.25rem;
+}
+
+.caja-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-auto-rows: minmax(148px, auto);
+  align-items: stretch;
+}
+
+.caja-metric-card-accent {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.95));
+}
+
+.caja-metric-card-accent span,
+.caja-metric-card-accent strong {
+  color: #fff;
+}
+
+.caja-stat-card,
+.caja-trend-card {
+  min-height: 148px;
+  display: grid;
+  align-content: space-between;
+  gap: 0.4rem;
+}
+
+.caja-metric-card {
+  min-height: 160px;
+}
+
+.caja-stat-card span {
+  color: #64748b;
+  font-weight: 600;
+}
+
+.caja-stat-card strong {
+  font-size: clamp(1.25rem, 1.9vw, 1.7rem);
+  color: #0f172a;
+}
+
+.caja-trend-list {
+  display: grid;
+  gap: 0.85rem;
+  flex: 1 1 auto;
+}
+
+.caja-trend-card-compact {
+  min-height: 160px;
+  padding: 1rem 1rem 0.95rem;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.caja-trend-item {
+  display: grid;
+  gap: 0.18rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.22);
+  position: relative;
+  padding-left: 1rem;
+}
+
+.caja-trend-item-main {
+  padding-top: 0;
+}
+
+.caja-trend-item-compact {
+  padding-top: 0;
+  border-top: 0;
+  padding-left: 0;
+}
+
+.caja-trend-item-compact::before {
+  display: none;
+}
+
+.caja-trend-toggle {
+  width: 2.15rem;
+  height: 2.15rem;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.92));
+  color: #64748b;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+  z-index: 2;
+  flex-shrink: 0;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.caja-trend-toggle:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.1);
+}
+
+.caja-trend-card-compact.is-expanded {
+  overflow: visible;
+  z-index: 4;
+}
+
+.caja-trend-arrow {
+  display: inline-block;
+  font-size: 1rem;
+  line-height: 1;
+  transform: translateY(-1px);
+  transition: transform 0.2s ease;
+}
+
+.caja-trend-arrow.is-open {
+  transform: rotate(180deg) translateY(1px);
+}
+
+.caja-trend-flyout {
+  position: absolute;
+  left: 0.9rem;
+  right: 0.9rem;
+  bottom: 3.15rem;
+  padding: 0.85rem;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: 0 18px 34px rgba(15, 23, 42, 0.12);
+  gap: 0.7rem;
+  z-index: 3;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(8px) scale(0.985);
+  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s ease;
+  pointer-events: none;
+}
+
+.caja-trend-flyout.is-open {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.caja-trend-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: auto;
+  padding-top: 0.7rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+  color: #64748b;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.caja-trend-item:first-child {
+  padding-top: 0;
+  border-top: 0;
+  padding-left: 1rem;
+}
+
+.caja-trend-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 1rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: #94a3b8;
+}
+
+.caja-trend-item:first-child::before {
+  top: 0.3rem;
+}
+
+.caja-trend-item small {
+  color: #64748b;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.caja-trend-item strong {
+  font-size: 0.98rem;
+  line-height: 1.1;
+}
+
+.caja-trend-item p {
+  margin: 0;
+  color: #475569;
+  font-size: 0.88rem;
+}
+
+.caja-trend-item .is-positive {
+  color: #15803d;
+}
+
+.caja-trend-item .is-negative {
+  color: #b91c1c;
+}
+
+.caja-trend-item .is-neutral {
+  color: #475569;
+}
+
+.caja-stat-card-highlight {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.95));
+}
+
+.caja-stat-card-highlight span,
+.caja-stat-card-highlight strong {
+  color: #fff;
+}
+
+.caja-payment-panel {
+  display: grid;
+  gap: 0.95rem;
+}
+
+.caja-payment-panel-compact {
+  gap: 0.5rem;
+  padding: 0.9rem 1rem;
+}
+
+.caja-payment-form {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: 1fr 1.3fr auto;
+  align-items: end;
+}
+
+.caja-payment-panel-compact .panel-heading {
+  margin-bottom: 0.35rem;
+}
+
+.caja-payment-panel-compact .panel-heading h3 {
+  font-size: 0.92rem;
+}
+
+.caja-payment-panel-compact .form-control {
+  min-height: 42px;
+  font-size: 0.92rem;
+}
+
+.caja-payment-form .btn {
+  min-height: 42px;
+  border-radius: 14px;
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+
+.caja-open-copy {
+  margin-bottom: 0.75rem;
+}
+
+.caja-open-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.75rem;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.caja-actions-inline {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.caja-expenses-panel {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.caja-expenses-summary {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.caja-expenses-summary article {
+  display: grid;
+  gap: 0.22rem;
+  padding: 0.8rem 0.9rem;
+  border-radius: 16px;
+  background: rgba(248, 250, 252, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.caja-expenses-summary span {
+  color: #64748b;
+  font-size: 0.84rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.caja-expenses-summary strong {
+  font-size: 1.02rem;
+  color: #0f172a;
+}
+
+.caja-expense-highlight {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.95));
+}
+
+.caja-expense-highlight span,
+.caja-expense-highlight strong {
+  color: #fff;
+}
+
+.gastos-page {
+  gap: 1rem;
+}
+
+.gastos-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.gastos-hero-actions {
+  display: flex;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.gastos-summary-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.gastos-form-panel,
+.gastos-table-panel {
+  display: grid;
+  gap: 0.95rem;
+}
+
+.gastos-group {
+  display: grid;
+  gap: 0.75rem;
+  padding-top: 0.35rem;
+}
+
+.gastos-group + .gastos-group {
+  padding-top: 1rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.gastos-group-heading {
+  margin-bottom: 0;
+}
+
+.gastos-group-heading h3 {
+  margin-bottom: 0.15rem;
+}
+
+.gastos-form {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.gastos-form .form-check {
+  align-self: center;
+}
+
+.gastos-form-actions,
+.gastos-row-actions {
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.gastos-table {
+  margin-bottom: 0;
+}
+
+.gastos-table th {
+  color: #64748b;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.gastos-item-name {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.gastos-table td small {
+  display: block;
+  color: #64748b;
+  margin-top: 0.2rem;
 }
 
 .narrow-section {
@@ -649,6 +1115,59 @@
 
   .panel-heading {
     flex-direction: column;
+  }
+
+  .caja-hero {
+    flex-direction: column;
+  }
+
+  .caja-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .caja-hero-status {
+    justify-items: start;
+    text-align: left;
+  }
+
+  .caja-payment-form {
+    grid-template-columns: 1fr;
+  }
+
+  .caja-payment-panel-compact {
+    padding: 0.9rem;
+  }
+
+  .caja-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .caja-toolbar-actions {
+    justify-content: stretch;
+  }
+
+  .caja-trend-toggle {
+    margin-top: 0;
+  }
+
+  .caja-trend-flyout {
+    left: 0.75rem;
+    right: 0.75rem;
+    bottom: 3rem;
+  }
+
+  .caja-expenses-summary,
+  .gastos-summary-grid,
+  .gastos-form {
+    grid-template-columns: 1fr;
+  }
+
+  .gastos-hero {
+    flex-direction: column;
+  }
+
+  .gastos-hero-actions {
+    width: 100%;
   }
 
   .app-nav-links {

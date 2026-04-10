@@ -2,7 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { Button, Form, Modal } from 'react-bootstrap';
 import { useSelector } from 'react-redux';
 import toast from 'react-hot-toast';
-import { createManualProductFromBarcode, fetchClients, scanProductByBarcode, updateClientCharge } from '../services/api';
+import {
+  createManualProductFromBarcode,
+  fetchClients,
+  registerCashboxSale,
+  scanProductByBarcode,
+  updateClientCharge
+} from '../services/api';
 
 function resolveProductImage(imageValue) {
   if (!imageValue) {
@@ -343,7 +349,28 @@ function ScannerPage() {
     setEditOpen(false);
   };
 
-  const handleChargeConfirm = () => {
+  const recordBoxSale = async (saleItems, saleAmount) => {
+    console.log('[scanner:charge]', {
+      user_role: userRole || null,
+      items: saleItems.length,
+      amount: Number(saleAmount || 0)
+    });
+
+    await registerCashboxSale({
+      amount: saleAmount,
+      items: saleItems.map((item) => ({
+        barcode: item.barcode,
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+        total: item.total
+      })),
+      source: 'scanner',
+      description: 'Venta desde escaner'
+    });
+  };
+
+  const handleChargeConfirm = async () => {
     if (selectedClientData) {
       setChargeSnapshotTotal(totalAmount);
       closeChargeModal();
@@ -351,14 +378,19 @@ function ScannerPage() {
       return;
     }
 
-    setItems([]);
-    setBarcode('');
-    setManualPrice('');
-    setClientQuery('');
-    setSelectedClient(null);
-    closeChargeModal();
-    setManualOpen(false);
-    setEditOpen(false);
+    try {
+      await recordBoxSale(items, totalAmount);
+      setItems([]);
+      setBarcode('');
+      setManualPrice('');
+      setClientQuery('');
+      setSelectedClient(null);
+      closeChargeModal();
+      setManualOpen(false);
+      setEditOpen(false);
+    } catch (error) {
+      toast.error(error.message);
+    }
   };
 
   const handleChargeCancel = () => {
@@ -380,6 +412,7 @@ function ScannerPage() {
 
     try {
       const today = new Date().toISOString().slice(0, 10);
+      await recordBoxSale(items, chargeSnapshotTotal);
       const updated = await updateClientCharge(selectedClientData.id, {
         charge_amount: chargeSnapshotTotal,
         ultima_fecha_pago: today,
@@ -410,7 +443,7 @@ function ScannerPage() {
   };
 
   const handleUnknownConfirm = async () => {
-    const price = Number.parseInt(unknownPrice, 10);
+    const price = Number.parseFloat(unknownPrice);
 
     if (!Number.isFinite(price) || price <= 0) {
       toast.error('Ingresa un valor valido');
@@ -636,12 +669,12 @@ function ScannerPage() {
             type="text"
             value={manualPrice}
             onChange={(event) => {
-              const nextValue = event.target.value.replace(/\D/g, '');
+              const nextValue = event.target.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1');
               setManualPrice(nextValue);
             }}
             placeholder="Valor"
-            inputMode="numeric"
-            pattern="\d*"
+            inputMode="decimal"
+            pattern="\d*\.?\d*"
             onKeyDown={(event) => {
               if (event.key === 'Enter') {
                 event.preventDefault();
@@ -675,12 +708,12 @@ function ScannerPage() {
             type="text"
             value={unknownPrice}
             onChange={(event) => {
-              const nextValue = event.target.value.replace(/\D/g, '');
+              const nextValue = event.target.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1');
               setUnknownPrice(nextValue);
             }}
             placeholder="Valor"
-            inputMode="numeric"
-            pattern="\d*"
+            inputMode="decimal"
+            pattern="\d*\.?\d*"
             onKeyDown={(event) => {
               if (event.key === 'Enter') {
                 event.preventDefault();

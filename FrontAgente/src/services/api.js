@@ -1,8 +1,16 @@
+import { getAuthToken } from '../utils/authSession';
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 const PRODUCT_CACHE_KEY = 'frontagente:scanner-cache';
+const EXPENSE_CACHE_KEY = 'frontagente:expenses-cache';
+const CASHBOX_CACHE_KEY = 'frontagente:caja-cache';
 const PRODUCT_CACHE_TTL_MS = 10 * 60 * 1000;
+const EXPENSE_CACHE_TTL_MS = 5 * 60 * 1000;
+const CASHBOX_CACHE_TTL_MS = 30 * 1000;
 const productMemoryCache = new Map();
 const pendingScannerRequests = new Map();
+const expenseMemoryCache = new Map();
+const cashboxMemoryCache = new Map();
 
 function normalizeBarcode(value = '') {
   return String(value).trim().replace(/\s+/g, '');
@@ -14,6 +22,18 @@ async function parseJsonResponse(response) {
   } catch (_error) {
     return {};
   }
+}
+
+function getAuthHeaders() {
+  const token = getAuthToken();
+
+  if (!token) {
+    return {};
+  }
+
+  return {
+    Authorization: `Bearer ${token}`
+  };
 }
 
 function loadSessionCache() {
@@ -49,6 +69,96 @@ function persistSessionCache() {
   window.sessionStorage.setItem(PRODUCT_CACHE_KEY, JSON.stringify(entries));
 }
 
+function loadExpenseCache() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    const raw = window.sessionStorage.getItem(EXPENSE_CACHE_KEY);
+
+    if (!raw) {
+      return;
+    }
+
+    const entry = JSON.parse(raw);
+
+    if (entry?.expiresAt > Date.now()) {
+      expenseMemoryCache.set('summary', entry);
+    }
+  } catch (_error) {
+    window.sessionStorage.removeItem(EXPENSE_CACHE_KEY);
+  }
+}
+
+function persistExpenseCache() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const entry = expenseMemoryCache.get('summary');
+
+  if (!entry || entry.expiresAt <= Date.now()) {
+    window.sessionStorage.removeItem(EXPENSE_CACHE_KEY);
+    return;
+  }
+
+  window.sessionStorage.setItem(EXPENSE_CACHE_KEY, JSON.stringify(entry));
+}
+
+function clearExpenseCache() {
+  expenseMemoryCache.delete('summary');
+
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.sessionStorage.removeItem(EXPENSE_CACHE_KEY);
+}
+
+function loadCashboxCache() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    const raw = window.sessionStorage.getItem(CASHBOX_CACHE_KEY);
+
+    if (!raw) {
+      return;
+    }
+
+    const entries = JSON.parse(raw);
+
+    entries.forEach(([key, value]) => {
+      if (value.expiresAt > Date.now()) {
+        cashboxMemoryCache.set(key, value);
+      }
+    });
+  } catch (_error) {
+    window.sessionStorage.removeItem(CASHBOX_CACHE_KEY);
+  }
+}
+
+function persistCashboxCache() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const entries = [...cashboxMemoryCache.entries()].filter(([, value]) => value.expiresAt > Date.now());
+  window.sessionStorage.setItem(CASHBOX_CACHE_KEY, JSON.stringify(entries));
+}
+
+function clearCashboxCache() {
+  cashboxMemoryCache.clear();
+
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.sessionStorage.removeItem(CASHBOX_CACHE_KEY);
+}
+
 function getCachedScannerProduct(barcode) {
   const normalized = normalizeBarcode(barcode);
   const entry = productMemoryCache.get(normalized);
@@ -78,6 +188,8 @@ function setCachedScannerProduct(barcode, value) {
 }
 
 loadSessionCache();
+loadExpenseCache();
+loadCashboxCache();
 
 export async function loginRequest(payload) {
   const response = await fetch(`${API_URL}/api/auth/login`, {
@@ -95,20 +207,12 @@ export async function loginRequest(payload) {
   return response.json();
 }
 
-export async function fetchProducts(limit = 5) {
-  const response = await fetch(`${API_URL}/api/products`);
-
-  if (!response.ok) {
-    throw new Error('No se pudieron cargar los productos');
-  }
-
-  const data = await response.json();
-
-  return (data.items || []).slice(0, limit);
-}
-
 export async function fetchClients() {
-  const response = await fetch(`${API_URL}/api/clients`);
+  const response = await fetch(`${API_URL}/api/clients`, {
+    headers: {
+      ...getAuthHeaders()
+    }
+  });
   const data = await parseJsonResponse(response);
 
   if (!response.ok) {
@@ -122,7 +226,8 @@ export async function createClient(payload) {
   const response = await fetch(`${API_URL}/api/clients`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      ...getAuthHeaders()
     },
     body: JSON.stringify(payload)
   });
@@ -140,7 +245,8 @@ export async function updateClientPayment(clientId, payload) {
   const response = await fetch(`${API_URL}/api/clients/${clientId}/payment`, {
     method: 'PATCH',
     headers: {
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      ...getAuthHeaders()
     },
     body: JSON.stringify(payload)
   });
@@ -158,7 +264,8 @@ export async function updateClientDelivery(clientId, payload) {
   const response = await fetch(`${API_URL}/api/clients/${clientId}/delivery`, {
     method: 'PATCH',
     headers: {
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      ...getAuthHeaders()
     },
     body: JSON.stringify(payload)
   });
@@ -176,7 +283,8 @@ export async function updateClientCharge(clientId, payload) {
   const response = await fetch(`${API_URL}/api/clients/${clientId}/charge`, {
     method: 'PATCH',
     headers: {
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      ...getAuthHeaders()
     },
     body: JSON.stringify(payload)
   });
@@ -202,7 +310,11 @@ export async function fetchClientHistory(clientId, params = {}) {
   }
 
   const query = searchParams.toString();
-  const response = await fetch(`${API_URL}/api/clients/${clientId}/history${query ? `?${query}` : ''}`);
+  const response = await fetch(`${API_URL}/api/clients/${clientId}/history${query ? `?${query}` : ''}`, {
+    headers: {
+      ...getAuthHeaders()
+    }
+  });
   const data = await parseJsonResponse(response);
 
   if (!response.ok) {
@@ -210,6 +322,238 @@ export async function fetchClientHistory(clientId, params = {}) {
   }
 
   return data.items || [];
+}
+
+export async function fetchExpenses() {
+  const response = await fetch(`${API_URL}/api/gastos`, {
+    headers: {
+      ...getAuthHeaders()
+    }
+  });
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    throw new Error(data.message || 'No se pudieron cargar los gastos');
+  }
+
+  return data.items || [];
+}
+
+export async function fetchExpensesSummary() {
+  const cached = expenseMemoryCache.get('summary');
+
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value;
+  }
+
+  const response = await fetch(`${API_URL}/api/gastos/summary`, {
+    headers: {
+      ...getAuthHeaders()
+    }
+  });
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    throw new Error(data.message || 'No se pudo cargar el resumen de gastos');
+  }
+
+  expenseMemoryCache.set('summary', {
+    value: data,
+    expiresAt: Date.now() + EXPENSE_CACHE_TTL_MS
+  });
+  persistExpenseCache();
+
+  return data;
+}
+
+export async function createExpense(payload) {
+  const response = await fetch(`${API_URL}/api/gastos`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders()
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    throw new Error(data.message || 'No se pudo crear el gasto');
+  }
+
+  clearExpenseCache();
+  return data.item;
+}
+
+export async function updateExpense(expenseId, payload) {
+  const response = await fetch(`${API_URL}/api/gastos/${expenseId}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders()
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    throw new Error(data.message || 'No se pudo actualizar el gasto');
+  }
+
+  clearExpenseCache();
+  return data.item;
+}
+
+export async function deleteExpense(expenseId) {
+  const response = await fetch(`${API_URL}/api/gastos/${expenseId}`, {
+    method: 'DELETE',
+    headers: {
+      ...getAuthHeaders()
+    }
+  });
+
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    throw new Error(data.message || 'No se pudo desactivar el gasto');
+  }
+
+  clearExpenseCache();
+  return data.item;
+}
+
+export async function fetchCashboxSummary(params = {}) {
+  const searchParams = new URLSearchParams();
+
+  if (params.date) {
+    searchParams.set('date', params.date);
+  }
+
+  if (params.compareTo) {
+    searchParams.set('compare_to', params.compareTo);
+  }
+
+  const query = searchParams.toString();
+  const cacheKey = query || 'default';
+  const cached = params.forceRefresh ? null : cashboxMemoryCache.get(cacheKey);
+
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value;
+  }
+
+  const response = await fetch(`${API_URL}/api/caja${query ? `?${query}` : ''}`, {
+    headers: {
+      ...getAuthHeaders()
+    }
+  });
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    const error = new Error(data.message || 'No se pudo obtener la caja');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  cashboxMemoryCache.set(cacheKey, {
+    value: data,
+    expiresAt: Date.now() + CASHBOX_CACHE_TTL_MS
+  });
+  persistCashboxCache();
+
+  return data;
+}
+
+export async function closeCashbox() {
+  const response = await fetch(`${API_URL}/api/caja/close`, {
+    method: 'POST',
+    headers: {
+      ...getAuthHeaders()
+    }
+  });
+
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    const error = new Error(data.message || 'No se pudo cerrar la caja');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  clearCashboxCache();
+  return data.item;
+}
+
+export async function openCashbox(payload) {
+  const response = await fetch(`${API_URL}/api/caja/open`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders()
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    const error = new Error(data.message || 'No se pudo abrir la caja');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  clearCashboxCache();
+  return data.item;
+}
+
+export async function registerCashboxPayment(payload) {
+  const response = await fetch(`${API_URL}/api/caja/payments`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders()
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    const error = new Error(data.message || 'No se pudo registrar el pago');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  clearCashboxCache();
+  return data.item;
+}
+
+export async function registerCashboxSale(payload) {
+  const response = await fetch(`${API_URL}/api/caja/sales`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders()
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    const error = new Error(data.message || 'No se pudo registrar la venta');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  clearCashboxCache();
+  return data.item;
 }
 
 export async function scanProductByBarcode(barcode) {
@@ -236,7 +580,11 @@ export async function scanProductByBarcode(barcode) {
     return pendingScannerRequests.get(normalizedBarcode);
   }
 
-  const request = fetch(`${API_URL}/api/products/scan/${encodeURIComponent(normalizedBarcode)}`)
+  const request = fetch(`${API_URL}/api/products/scan/${encodeURIComponent(normalizedBarcode)}`, {
+    headers: {
+      ...getAuthHeaders()
+    }
+  })
     .then(async (response) => {
       const data = await parseJsonResponse(response);
 
@@ -268,7 +616,8 @@ export async function createManualProductFromBarcode({ barcode, precioVenta }) {
   const response = await fetch(`${API_URL}/api/products/manual-from-scan`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      ...getAuthHeaders()
     },
     body: JSON.stringify({
       barcode: normalizedBarcode,
