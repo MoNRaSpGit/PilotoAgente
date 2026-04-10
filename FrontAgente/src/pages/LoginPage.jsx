@@ -37,7 +37,7 @@ function LoginPage() {
       return;
     }
 
-    navigate(sessionUserRole === 'admin' ? '/' : '/scanner', { replace: true });
+    navigate(sessionUserRole === 'admin' ? '/caja' : '/scanner', { replace: true });
   }, [navigate, sessionToken, sessionUserRole]);
 
   const handleChange = (event) => {
@@ -56,7 +56,7 @@ function LoginPage() {
       dispatch(setSession(data));
       saveAuthSession(data);
       toast.success('Sesion iniciada');
-      navigate(data.user?.role === 'admin' ? '/' : '/scanner', { replace: true });
+      navigate(data.user?.role === 'admin' ? '/caja' : '/scanner', { replace: true });
     } catch (error) {
       toast.error(error.message);
     } finally {
@@ -79,7 +79,7 @@ function LoginPage() {
       dispatch(setSession(data));
       saveAuthSession(data);
       toast.success('Sesion iniciada');
-      navigate(data.user?.role === 'admin' ? '/' : '/scanner', { replace: true });
+      navigate(data.user?.role === 'admin' ? '/caja' : '/scanner', { replace: true });
     } catch (error) {
       toast.error(error.message);
     } finally {

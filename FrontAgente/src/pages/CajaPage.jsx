@@ -197,22 +197,14 @@ function getScannerStatusBadge(updatedAt, hasItems, now = new Date()) {
   const idleMinutes = getScannerIdleMinutes(updatedAt, now);
 
   if (idleMinutes === null && hasItems) {
-    return { label: 'Activo', bg: 'success', text: 'light' };
+    return { label: 'Activo', bg: 'success', text: 'light', tone: 'active' };
   }
 
   if (idleMinutes !== null && idleMinutes < 5) {
-    return { label: 'Activo', bg: 'success', text: 'light' };
+    return { label: 'Activo', bg: 'success', text: 'light', tone: 'active' };
   }
 
-  if (idleMinutes !== null && idleMinutes < 10) {
-    return { label: 'Inactivo', bg: 'secondary', text: 'light' };
-  }
-
-  if (idleMinutes !== null && idleMinutes < 20) {
-    return { label: 'Inactivo', bg: 'warning', text: 'dark' };
-  }
-
-  return { label: 'Inactivo', bg: 'danger', text: 'light' };
+  return { label: 'Inactivo', bg: 'secondary', text: 'light', tone: 'idle' };
 }
 
 function CajaPage() {
@@ -769,7 +761,7 @@ function CajaPage() {
                     <p>Espejo en tiempo real de lo que arma el operario en el scanner.</p>
                   </div>
                 <Badge
-                  className="caja-panel-status-badge"
+                  className={`caja-panel-status-badge ${scannerStatusBadge.tone === 'active' ? 'is-active' : ''}`}
                   bg={scannerStatusBadge.bg}
                   text={scannerStatusBadge.text}
                 >
@@ -969,17 +961,13 @@ function CajaPage() {
                     }));
                   }}
                 />
-                <Button type="submit" variant="dark" disabled={savingPayment || !isOpen}>
+                <Button type="submit" variant="dark" className="caja-payment-submit" disabled={savingPayment || !isOpen}>
                   {savingPayment ? 'Guardando...' : 'Agregar pago'}
                 </Button>
               </form>
 
               <div className="caja-close-box">
-                <div className="caja-close-box-copy">
-                  <span>Acción sensible</span>
-                  <small>Cerrar caja requiere confirmación.</small>
-                </div>
-                <Button variant="danger" onClick={openCloseConfirmModal} disabled={savingClose}>
+                <Button variant="dark" onClick={openCloseConfirmModal} disabled={savingClose}>
                   {savingClose ? 'Cerrando...' : 'Cerrar caja'}
                 </Button>
               </div>
@@ -1033,8 +1021,7 @@ function CajaPage() {
         </Modal.Header>
         <Modal.Body>
           <div className="caja-close-confirm">
-            <strong>Querés cerrar la caja?</strong>
-            <p>Esta acción termina la caja abierta y bloquea nuevos movimientos hasta que se abra otra.</p>
+            <strong>Queres cerrar la caja?</strong>
           </div>
         </Modal.Body>
         <Modal.Footer>
@@ -1042,14 +1029,14 @@ function CajaPage() {
             Cancelar
           </Button>
           <Button
-            variant="danger"
+            variant="dark"
             onClick={async () => {
               closeCloseConfirmModal();
               await handleCloseCashbox();
             }}
             disabled={savingClose}
           >
-            {savingClose ? 'Cerrando...' : 'Sí, cerrar caja'}
+            {savingClose ? 'Cerrando...' : 'Cerrar caja'}
           </Button>
         </Modal.Footer>
       </Modal>
@@ -1058,5 +1045,8 @@ function CajaPage() {
 }
 
 export default CajaPage;
+
+
+
 
 

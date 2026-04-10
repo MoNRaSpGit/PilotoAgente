@@ -35,7 +35,7 @@ function App() {
   const userRole = useSelector((state) => state.auth.user?.role);
   const isAdmin = userRole === 'admin';
   const isLoggedIn = Boolean(userRole);
-  const homePath = isAdmin ? '/' : '/scanner';
+  const homePath = isAdmin ? '/caja' : '/scanner';
   const hideNavbar = location.pathname === '/login';
 
   const handleLogout = () => {
