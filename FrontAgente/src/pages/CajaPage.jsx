@@ -521,24 +521,12 @@ function CajaPage() {
                               aria-expanded={isExpanded}
                               aria-label={isExpanded ? 'Ocultar productos' : 'Ver productos'}
                             >
-                              <span className={`caja-live-sale-arrow ${isExpanded ? 'is-open' : ''}`}>⌄</span>
+                              <span className={`caja-live-sale-toggle-icon ${isExpanded ? 'is-open' : ''}`}>
+                                {isExpanded ? '−' : '+'}
+                              </span>
+                              <span className="caja-live-sale-toggle-label">Detalles</span>
                             </button>
                           </div>
-                        </div>
-
-                        <div className="caja-live-sale-general">
-                          <span>
-                            <small>Operario</small>
-                            <strong>{sale.operatorName}</strong>
-                          </span>
-                          <span>
-                            <small>Fecha</small>
-                            <strong>{formatClock(sale.createdAt)}</strong>
-                          </span>
-                          <span>
-                            <small>Items</small>
-                            <strong>{sale.items.length}</strong>
-                          </span>
                         </div>
 
                         <div className={`caja-live-sale-items ${isExpanded ? 'is-open' : ''}`}>
