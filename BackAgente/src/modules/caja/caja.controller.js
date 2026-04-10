@@ -2,7 +2,9 @@ import {
   addCashboxPayment,
   addCashboxSale,
   closeOpenCashbox,
+  fetchCashboxMovements,
   fetchCashboxDashboard,
+  fetchScannerLiveState,
   openCashbox,
   syncScannerLiveState
 } from './caja.service.js';
@@ -23,6 +25,15 @@ export async function getCashboxSummaryController(_req, res) {
     return res.json(data);
   } catch (error) {
     return handleServiceError(res, error, 'No se pudo obtener la caja');
+  }
+}
+
+export async function getCashboxMovementsController(req, res) {
+  try {
+    const data = await fetchCashboxMovements(req.query);
+    return res.json(data);
+  } catch (error) {
+    return handleServiceError(res, error, 'No se pudieron obtener los movimientos');
   }
 }
 
@@ -59,6 +70,15 @@ export async function syncScannerLiveStateController(req, res) {
     return res.status(201).json(data);
   } catch (error) {
     return handleServiceError(res, error, 'No se pudo sincronizar el escaner');
+  }
+}
+
+export async function getScannerLiveStateController(req, res) {
+  try {
+    const data = await fetchScannerLiveState(req.user);
+    return res.json(data);
+  } catch (error) {
+    return handleServiceError(res, error, 'No se pudo obtener el estado del escaner');
   }
 }
 

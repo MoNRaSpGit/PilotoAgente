@@ -10,7 +10,12 @@ import LoginPage from './pages/LoginPage';
 import ScannerPage from './pages/ScannerPage';
 import { clearSession } from './store/slices/authSlice';
 import { clearAuthSession } from './utils/authSession';
-import './styles/app.css';
+import './styles/layout.css';
+import './styles/components.css';
+import './styles/pages/caja.css';
+import './styles/pages/clients.css';
+import './styles/pages/gastos.css';
+import './styles/pages/scanner.css';
 
 function RoleGate({ children, allow = ['admin'] }) {
   const userRole = useSelector((state) => state.auth.user?.role);

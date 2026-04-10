@@ -14,15 +14,6 @@ export function authMiddleware(req, res, next) {
 
   try {
     req.user = jwt.verify(token, env.jwtAccessSecret);
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('[auth:verified]', {
-        path: req.path,
-        role: req.user?.role || null,
-        email: req.user?.email || null,
-        method: req.method,
-        url: req.originalUrl
-      });
-    }
     return next();
   } catch (_error) {
     return res.status(401).json({ message: 'Token invalido' });
@@ -40,30 +31,11 @@ export function requireRole(...allowedRoles) {
       debugPath.includes('/caja/live-state');
     const scannerOverride = isScannerRoute && userRole === 'operario';
 
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('[auth:role-check]', {
-        path: req.path,
-        url: req.originalUrl,
-        user_role: userRole || null,
-        allowed_roles: allowedRoles,
-        scanner_override: scannerOverride,
-        email: req.user?.email || null
-      });
-    }
-
     if (scannerOverride) {
       return next();
     }
 
     if (!userRole || !allowedRoles.includes(userRole)) {
-      if (process.env.NODE_ENV !== 'production') {
-        console.warn('[auth:forbidden]', {
-          path: req.path,
-          user_role: userRole || null,
-          allowed_roles: allowedRoles,
-          email: req.user?.email || null
-        });
-      }
       return res.status(403).json({ message: 'No autorizado' });
     }
 

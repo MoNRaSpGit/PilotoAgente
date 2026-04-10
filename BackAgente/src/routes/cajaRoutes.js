@@ -5,6 +5,8 @@ import {
   addCashboxSaleController,
   closeCashboxController,
   cashboxStreamController,
+  getCashboxMovementsController,
+  getScannerLiveStateController,
   getCashboxSummaryController,
   openCashboxController,
   syncScannerLiveStateController
@@ -15,11 +17,13 @@ const router = Router();
 router.use(authMiddleware);
 
 router.get('/caja/stream', requireRole('admin', 'operario'), cashboxStreamController);
+router.get('/caja/live-state', requireRole('admin', 'operario'), getScannerLiveStateController);
+router.post('/caja/live-state', requireRole('admin', 'operario'), syncScannerLiveStateController);
 router.get('/caja', requireRole('admin'), getCashboxSummaryController);
+router.get('/caja/movements', requireRole('admin'), getCashboxMovementsController);
 router.post('/caja/open', requireRole('admin'), openCashboxController);
 router.post('/caja/close', requireRole('admin'), closeCashboxController);
 router.post('/caja/payments', requireRole('admin'), addCashboxPaymentController);
-router.post('/caja/live-state', syncScannerLiveStateController);
 router.post('/caja/sales', requireRole('admin', 'operario'), addCashboxSaleController);
 
 export default router;

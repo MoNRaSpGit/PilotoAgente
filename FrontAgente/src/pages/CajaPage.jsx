@@ -3,7 +3,14 @@ import { Badge, Button, Form, Modal } from 'react-bootstrap';
 import toast from 'react-hot-toast';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { closeCashbox, fetchCashboxSummary, openCashbox, registerCashboxPayment } from '../services/api';
+import {
+  closeCashbox,
+  fetchCashboxMovements,
+  fetchCashboxSummary,
+  fetchScannerLiveState,
+  openCashbox,
+  registerCashboxPayment
+} from '../services/api';
 import { clearSession } from '../store/slices/authSlice';
 import { clearAuthSession, getAuthToken } from '../utils/authSession';
 
@@ -53,14 +60,47 @@ function metricValue(current, previous) {
   return `${money(current)} · ${money(previous)}`;
 }
 
-function formatClock(value) {
-  if (!value) {
-    return 'Ahora';
-  }
-
-  const date = new Date(value);
+function formatLongDate(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
 
   if (Number.isNaN(date.getTime())) {
+    return 'Hoy';
+  }
+
+  return date.toLocaleDateString('es-UY', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long'
+  });
+}
+
+function parseApiDate(value) {
+  if (!value) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+
+  const raw = String(value).trim();
+
+  if (!raw) {
+    return null;
+  }
+
+  const hasTimezone = /(?:[zZ]|[+-]\d{2}:?\d{2})$/.test(raw);
+  const normalized = raw.includes(' ') ? raw.replace(' ', 'T') : raw;
+  const iso = hasTimezone ? normalized : `${normalized}Z`;
+  const parsed = new Date(iso);
+
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatClock(value) {
+  const date = parseApiDate(value);
+
+  if (!date) {
     return 'Ahora';
   }
 
@@ -90,12 +130,73 @@ function normalizeLiveSale(payload) {
     operatorName: payload?.operator?.name || payload?.operator_name || 'Operario',
     operatorRole: payload?.operator?.role || payload?.operator_role || null,
     items,
-    createdAt: new Date().toISOString()
+    createdAt: payload?.created_at || payload?.createdAt || new Date().toISOString()
   };
+}
+
+function normalizeRecentMovements(items = []) {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
+  return items.map((payload) => normalizeLiveSale({
+    movement_id: payload?.movement_id || payload?.id,
+    amount: payload?.amount,
+    description: payload?.description,
+    source: payload?.source,
+    operator: payload?.operator || {
+      name: payload?.operator_name,
+      role: payload?.operator_role
+    },
+    items: payload?.items,
+    created_at: payload?.created_at
+  }));
 }
 
 function formatSaleAmount(value) {
   return `+ ${money(value)}`;
+}
+
+function getHistoryTone(createdAt, now) {
+  if (!createdAt) {
+    return 'is-idle';
+  }
+
+  const createdAtDate = parseApiDate(createdAt);
+  const createdAtMs = createdAtDate?.getTime() || Number.NaN;
+  const nowMs = now instanceof Date ? now.getTime() : new Date(now).getTime();
+
+  if (Number.isNaN(createdAtMs) || Number.isNaN(nowMs)) {
+    return 'is-idle';
+  }
+
+  const minutesElapsed = Math.max(0, (nowMs - createdAtMs) / 60000);
+
+  if (minutesElapsed < 5) {
+    return 'is-fresh';
+  }
+
+  if (minutesElapsed < 10) {
+    return 'is-fresh-soft';
+  }
+
+  if (minutesElapsed < 15) {
+    return 'is-warmup';
+  }
+
+  if (minutesElapsed < 20) {
+    return 'is-alert';
+  }
+
+  if (minutesElapsed < 25) {
+    return 'is-alert-strong';
+  }
+
+  if (minutesElapsed < 30) {
+    return 'is-danger-soft';
+  }
+
+  return 'is-danger';
 }
 
 function CajaPage() {
@@ -109,6 +210,8 @@ function CajaPage() {
     total: 0,
     state: 'idle',
     operator: null,
+    editing: null,
+    manual: null,
     updated_at: null
   });
   const [loading, setLoading] = useState(true);
@@ -120,11 +223,17 @@ function CajaPage() {
     amount: '',
     description: ''
   });
+  const [historyNow, setHistoryNow] = useState(() => new Date());
   const [savingPayment, setSavingPayment] = useState(false);
   const [comparisonExpanded, setComparisonExpanded] = useState(false);
+  const [expandedMovements, setExpandedMovements] = useState({});
+  const [movementsMode, setMovementsMode] = useState('recent');
+  const [movementsLoading, setMovementsLoading] = useState(false);
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
   const dashboardRef = useRef(null);
   const loadDashboardRef = useRef(null);
+  const loadMovementsRef = useRef(null);
+  const movementsModeRef = useRef('recent');
 
   useEffect(() => {
     dashboardRef.current = dashboard;
@@ -143,13 +252,36 @@ function CajaPage() {
         setLoading(true);
       }
 
-      const data = await fetchCashboxSummary({
-        date: todayDate(),
-        compareTo: yesterdayDate(),
-        forceRefresh: Boolean(options.forceRefresh)
-      });
+      const movementLimit =
+        options.movementsMode === 'all'
+          ? 'all'
+          : options.movementsMode === 'top10'
+            ? 10
+            : 3;
+      const [data, liveState, movementData] = await Promise.all([
+        fetchCashboxSummary({
+          date: todayDate(),
+          compareTo: yesterdayDate(),
+          forceRefresh: Boolean(options.forceRefresh)
+        }),
+        fetchScannerLiveState(),
+        fetchCashboxMovements({
+          date: todayDate(),
+          limit: movementLimit
+        })
+      ]);
 
       setDashboard(data);
+      setLiveSales(normalizeRecentMovements(movementData?.items));
+      setScannerLiveState({
+        items: Array.isArray(liveState?.items) ? liveState.items : [],
+        total: Number(liveState?.total || 0),
+        state: liveState?.state || 'idle',
+        operator: liveState?.operator || null,
+        editing: liveState?.editing || null,
+        manual: liveState?.manual || null,
+        updated_at: liveState?.updated_at || null
+      });
     } catch (error) {
       if (error.status === 401) {
         handleSessionExpired();
@@ -161,6 +293,7 @@ function CajaPage() {
       }
     } finally {
       setLoading(false);
+      setMovementsLoading(false);
     }
   };
 
@@ -168,19 +301,80 @@ function CajaPage() {
     loadDashboardRef.current = loadDashboard;
   }, [loadDashboard]);
 
+  const loadMovements = async (mode = movementsMode, quiet = false) => {
+    const movementLimit = mode === 'all' ? 'all' : mode === 'top10' ? 10 : 3;
+
+    try {
+      if (!quiet) {
+        setMovementsLoading(true);
+      }
+
+      const movementData = await fetchCashboxMovements({
+        date: todayDate(),
+        limit: movementLimit
+      });
+      setLiveSales(normalizeRecentMovements(movementData?.items));
+      setMovementsMode(mode);
+    } catch (error) {
+      if (!quiet) {
+        toast.error(error.message);
+      }
+    } finally {
+      if (!quiet) {
+        setMovementsLoading(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    loadMovementsRef.current = loadMovements;
+  }, [loadMovements]);
+
+  useEffect(() => {
+    movementsModeRef.current = movementsMode;
+  }, [movementsMode]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setHistoryNow(new Date());
+    }, 30000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
   useEffect(() => {
     let active = true;
 
     const run = async () => {
       try {
         setLoading(true);
-        const data = await fetchCashboxSummary({
-          date: todayDate(),
-          compareTo: yesterdayDate()
-        });
+        const movementLimit = movementsMode === 'all' ? 'all' : movementsMode === 'top10' ? 10 : 3;
+        const [data, liveState, movementData] = await Promise.all([
+          fetchCashboxSummary({
+            date: todayDate(),
+            compareTo: yesterdayDate()
+          }),
+          fetchScannerLiveState(),
+          fetchCashboxMovements({
+            date: todayDate(),
+            limit: movementLimit
+          })
+        ]);
 
         if (active) {
           setDashboard(data);
+          setLiveSales(normalizeRecentMovements(movementData?.items));
+          setScannerLiveState({
+            items: Array.isArray(liveState?.items) ? liveState.items : [],
+            total: Number(liveState?.total || 0),
+            state: liveState?.state || 'idle',
+            operator: liveState?.operator || null,
+            editing: liveState?.editing || null,
+            manual: liveState?.manual || null,
+            updated_at: liveState?.updated_at || null
+          });
         }
       } catch (error) {
         if (error.status === 401) {
@@ -230,23 +424,31 @@ function CajaPage() {
           total: Number(payload.total || 0),
           state: payload.state || 'idle',
           operator: payload.operator || null,
+          editing: payload.editing || null,
+          manual: payload.manual || null,
           updated_at: payload.updated_at || new Date().toISOString()
         });
-      } else if (payload.type === 'sale') {
-        const liveSale = normalizeLiveSale(payload);
-        setLiveSales((current) => [liveSale, ...current].slice(0, 6));
-      } else if (payload.type === 'open' || payload.type === 'close') {
+        return;
+      }
+
+      if (payload.type === 'sale') {
+        if (loadMovementsRef.current) {
+          loadMovementsRef.current(movementsModeRef.current, true);
+        }
+      } else if (payload.type === 'cashbox:opened' || payload.type === 'cashbox:closed') {
         setLiveSales([]);
         setScannerLiveState({
           items: [],
           total: 0,
           state: 'idle',
           operator: null,
+          editing: null,
+          manual: null,
           updated_at: null
         });
       }
 
-      if (loadDashboardRef.current) {
+      if (loadDashboardRef.current && payload.type !== 'scanner:state') {
         loadDashboardRef.current(true, { forceRefresh: true });
       }
     };
@@ -281,6 +483,8 @@ function CajaPage() {
     previous: { sales_total: 0 },
     comparison_percent: null
   };
+  const latestMovement = liveSales[0] || null;
+  const historyToneClass = getHistoryTone(latestMovement?.createdAt, historyNow);
 
   const closeOpenModal = () => {
     setOpenModal(false);
@@ -293,6 +497,16 @@ function CajaPage() {
 
   const closeCloseConfirmModal = () => {
     setCloseConfirmOpen(false);
+  };
+
+  const movementSummaryLabel =
+    movementsMode === 'all' ? 'Mostrando todo hoy' : movementsMode === 'top10' ? 'Mostrando ultimos 10' : 'Mostrando ultimos 3';
+
+  const toggleMovementDetails = (movementId) => {
+    setExpandedMovements((current) => ({
+      ...current,
+      [movementId]: !current[movementId]
+    }));
   };
 
   const handleOpenCashbox = async () => {
@@ -324,6 +538,8 @@ function CajaPage() {
         total: 0,
         state: 'idle',
         operator: null,
+        editing: null,
+        manual: null,
         updated_at: null
       });
       toast.success('Caja abierta');
@@ -372,6 +588,7 @@ function CajaPage() {
         total: 0,
         state: 'idle',
         operator: null,
+        editing: null,
         updated_at: null
       });
       toast.success('Caja cerrada');
@@ -439,9 +656,12 @@ function CajaPage() {
   return (
     <section className="page-section caja-page">
       <div className="hero-panel caja-hero caja-hero-minimal">
-        <div>
+        <div className="caja-hero-copy">
           <p className="eyebrow">Caja</p>
           <h1>Control en vivo</h1>
+          <p className="caja-hero-subtitle">
+            {formatLongDate()} · seguimiento fino de caja, scanner y movimientos.
+          </p>
         </div>
         <div className="caja-hero-status">
           <Badge bg={isOpen ? 'success' : 'secondary'}>{isOpen ? 'Abierta' : 'Cerrada'}</Badge>
@@ -465,15 +685,15 @@ function CajaPage() {
           </div>
 
           <div className="caja-grid">
-            <article className="card-panel caja-stat-card caja-metric-card">
+            <article className="card-panel caja-stat-card caja-metric-card caja-metric-card-soft">
               <span>Caja inicial</span>
               <strong>{money(selectedDay.opening_amount)}</strong>
             </article>
-            <article className="card-panel caja-stat-card caja-metric-card">
+            <article className="card-panel caja-stat-card caja-metric-card caja-metric-card-sales">
               <span>Ventas del dia</span>
               <strong>{money(selectedDay.sales_total)}</strong>
             </article>
-            <article className="card-panel caja-stat-card caja-metric-card">
+            <article className="card-panel caja-stat-card caja-metric-card caja-metric-card-profit">
               <span>Ganancia diaria</span>
               <strong>{money(selectedDay.profit_amount)}</strong>
             </article>
@@ -481,7 +701,7 @@ function CajaPage() {
               <span>Monto actual</span>
               <strong>{money(selectedDay.current_amount)}</strong>
             </article>
-            <article className="card-panel caja-stat-card caja-metric-card">
+            <article className="card-panel caja-stat-card caja-metric-card caja-metric-card-soft">
               <span>Pagos registrados</span>
               <strong>{money(selectedDay.payments_total)}</strong>
             </article>
@@ -525,14 +745,54 @@ function CajaPage() {
             <div className="caja-left-stack">
               <article className="card-panel caja-live-panel">
                 <div className="panel-heading">
-                  <div>
+                  <div className="caja-panel-copy">
                     <h3>Caja en vivo</h3>
                     <p>Espejo en tiempo real de lo que arma el operario en el scanner.</p>
                   </div>
-                  <Badge bg={scannerLiveState.items.length > 0 ? 'success' : 'secondary'}>
-                    {scannerLiveState.items.length > 0 ? 'Activo' : 'Sin escaneo'}
-                  </Badge>
-                </div>
+                <Badge
+                  className="caja-panel-status-badge"
+                  bg={
+                    scannerLiveState.state === 'editing'
+                      ? 'warning'
+                      : scannerLiveState.state === 'manual'
+                        ? 'warning'
+                      : scannerLiveState.items.length > 0
+                        ? 'success'
+                        : 'secondary'
+                  }
+                  text={
+                    scannerLiveState.state === 'editing' || scannerLiveState.state === 'manual'
+                      ? 'dark'
+                      : 'light'
+                  }
+                >
+                  {scannerLiveState.state === 'editing'
+                    ? 'Editando'
+                    : scannerLiveState.state === 'manual'
+                      ? 'Manual'
+                    : scannerLiveState.items.length > 0
+                      ? 'Activo'
+                      : 'Sin escaneo'}
+                </Badge>
+              </div>
+
+                {scannerLiveState.editing ? (
+                  <div className="caja-live-editing-banner">
+                    <span>Editando producto</span>
+                    <strong>
+                      {scannerLiveState.editing.name || 'Producto'} · $
+                      {Number(scannerLiveState.editing.price || 0).toFixed(2)}
+                    </strong>
+                  </div>
+                ) : null}
+
+                {scannerLiveState.manual ? (
+                  <div className="caja-live-manual-banner">
+                    <span>Producto manual</span>
+                    <strong>El operario esta cargando un producto manualmente.</strong>
+                    <p>La caja lo ve en vivo mientras el modal sigue abierto.</p>
+                  </div>
+                ) : null}
 
                 {scannerLiveState.items.length === 0 ? (
                   <div className="caja-live-empty">
@@ -566,12 +826,32 @@ function CajaPage() {
 
               <article className="card-panel caja-live-panel">
                 <div className="panel-heading">
-                  <div>
+                  <div className="caja-panel-copy">
                     <h3>Movimientos</h3>
                     <p>Resumen compacto de las ventas confirmadas.</p>
                   </div>
-                  <Badge bg="secondary">Historial</Badge>
+                  <div className="caja-movements-tools">
+                    <span className={`caja-history-badge ${historyToneClass}`}>Historial</span>
+                    <div className="caja-movements-actions">
+                      {movementsMode === 'recent' ? (
+                        <button type="button" className="caja-inline-link" onClick={() => loadMovements('top10')} disabled={movementsLoading}>
+                          Ver mas
+                        </button>
+                      ) : null}
+                      {movementsMode === 'top10' ? (
+                        <button type="button" className="caja-inline-link" onClick={() => loadMovements('all')} disabled={movementsLoading}>
+                          Ver todo
+                        </button>
+                      ) : null}
+                      {movementsMode === 'all' ? (
+                        <button type="button" className="caja-inline-link" onClick={() => loadMovements('recent')} disabled={movementsLoading}>
+                          Volver a 3
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
                 </div>
+                <small className="caja-movements-caption">{movementSummaryLabel}</small>
 
                 {liveSales.length === 0 ? (
                   <div className="caja-live-empty">
@@ -582,11 +862,55 @@ function CajaPage() {
                   <div className="caja-movements-list">
                     {liveSales.map((sale) => (
                       <div className="caja-movement-row" key={`movement-${sale.id}`}>
-                        <div>
-                          <strong>{sale.operatorName}</strong>
-                          <span>{formatClock(sale.createdAt)}</span>
+                        <div className="caja-movement-head">
+                          <div>
+                            <strong>{sale.operatorName}</strong>
+                            <span>{formatClock(sale.createdAt)}</span>
+                          </div>
+                          <div className="caja-live-sale-head-actions">
+                            <strong className="caja-movement-amount">{formatSaleAmount(sale.amount)}</strong>
+                            {sale.items.length > 0 ? (
+                              <button
+                                type="button"
+                                className="caja-live-sale-toggle"
+                                onClick={() => toggleMovementDetails(sale.id)}
+                                aria-expanded={Boolean(expandedMovements[sale.id])}
+                                aria-label={expandedMovements[sale.id] ? 'Ocultar detalle' : 'Ver detalle'}
+                              >
+                                <span
+                                  className={`caja-live-sale-toggle-icon ${
+                                    expandedMovements[sale.id] ? 'is-open' : ''
+                                  }`}
+                                >
+                                  {expandedMovements[sale.id] ? '-' : '+'}
+                                </span>
+                                <span className="caja-live-sale-toggle-label">
+                                  {expandedMovements[sale.id] ? 'Ocultar' : 'Detalle'}
+                                </span>
+                              </button>
+                            ) : null}
+                          </div>
                         </div>
-                        <strong className="caja-movement-amount">{formatSaleAmount(sale.amount)}</strong>
+
+                        {sale.items.length > 0 ? (
+                          <div
+                            className={`caja-live-sale-items ${
+                              expandedMovements[sale.id] ? 'is-open' : ''
+                            }`}
+                          >
+                            {sale.items.map((item, index) => (
+                              <div
+                                className="caja-live-sale-item-row"
+                                key={`${sale.id}-${item.barcode || item.name || 'item'}-${index}`}
+                              >
+                                <span className="caja-live-sale-item-name">
+                                  {item.quantity} x {item.name}
+                                </span>
+                                <span className="caja-live-sale-item-total">{money(item.total)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                     ))}
                   </div>
@@ -596,7 +920,7 @@ function CajaPage() {
 
             <article className="card-panel caja-payment-panel caja-payment-panel-compact caja-payment-side">
               <div className="panel-heading">
-                <div>
+                <div className="caja-panel-copy">
                   <h3>Registrar pago</h3>
                   <p>Movimientos manuales, en formato liviano.</p>
                 </div>

@@ -1,0 +1,76 @@
+.app-shell {
+  min-height: 100vh;
+}
+
+.app-navbar {
+  background: rgba(255, 255, 255, 0.9);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+.app-navbar .navbar-toggler {
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  box-shadow: none;
+}
+
+.app-navbar .navbar-toggler:focus {
+  box-shadow: 0 0 0 0.18rem rgba(15, 118, 110, 0.12);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+}
+
+.app-nav-links {
+  gap: 0.25rem;
+}
+
+.app-nav-links .nav-link {
+  border-radius: 999px;
+  padding-inline: 0.9rem;
+}
+
+.app-nav-links .nav-logout-link {
+  background: transparent;
+  border: 0;
+  color: #b91c1c;
+}
+
+.app-nav-links .nav-logout-link:hover {
+  color: #991b1b;
+}
+
+.nav-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.app-main {
+  padding: 1.5rem 0 2.5rem;
+}
+
+.page-section {
+  display: grid;
+  gap: 1.25rem;
+}
+
+@media (max-width: 768px) {
+  .app-main {
+    padding-top: 1rem;
+  }
+
+  .app-nav-links {
+    gap: 0.5rem;
+    padding-top: 0.75rem;
+  }
+
+  .app-nav-links .nav-link {
+    padding: 0.7rem 1rem;
+    border-radius: 14px;
+    background: rgba(248, 250, 252, 0.85);
+  }
+}

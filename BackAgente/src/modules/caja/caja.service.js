@@ -2,10 +2,12 @@ import {
   createCashbox,
   closeCashbox,
   getCashboxSummary,
+  listCashboxSaleMovements,
   recordCashboxPayment,
   recordCashboxSale
 } from './caja.repository.js';
 import { broadcastCashboxUpdate } from './caja.realtime.js';
+import { getScannerLiveState, saveScannerLiveState } from './scannerLiveState.store.js';
 
 function createServiceError(message, status) {
   const error = new Error(message);
@@ -22,6 +24,21 @@ export async function fetchCashboxDashboard(query = {}) {
     date: query?.date,
     compareTo: query?.compare_to || query?.compareTo
   });
+}
+
+export async function fetchCashboxMovements(query = {}) {
+  const rawLimit = query?.limit;
+  const limit = rawLimit === 'all' ? null : rawLimit;
+  return listCashboxSaleMovements({
+    date: query?.date,
+    limit
+  });
+}
+
+export async function fetchScannerLiveState(user) {
+  return {
+    item: getScannerLiveState(user)
+  };
 }
 
 export async function openCashbox(payload, user) {
@@ -121,27 +138,30 @@ export async function syncScannerLiveState(payload, user) {
   const items = Array.isArray(payload?.items) ? payload.items : [];
   const total = Number(payload?.total ?? payload?.amount ?? 0);
   const state = String(payload?.state || (items.length > 0 ? 'active' : 'idle'));
-
-  broadcastCashboxUpdate({
+  const operator = {
+    id: user?.id ?? payload?.operator?.id ?? null,
+    name: user?.name ?? payload?.operator?.name ?? null,
+    role: user?.role ?? payload?.operator?.role ?? null
+  };
+  const snapshot = saveScannerLiveState({
     type: 'scanner:state',
     source: payload?.source || 'scanner',
     state,
     total: Number.isFinite(total) ? Number(total.toFixed(2)) : 0,
     items,
-    operator: {
-      id: user?.id || null,
-      name: user?.name || null,
-      role: user?.role || null
-    },
+    operator,
+    editing: payload?.editing || null,
+    manual: payload?.manual || null,
     updated_at: new Date().toISOString()
   });
 
+  broadcastCashboxUpdate({
+    type: 'scanner:state',
+    ...snapshot
+  });
+
   return {
-    item: {
-      state,
-      total: Number.isFinite(total) ? Number(total.toFixed(2)) : 0,
-      items
-    }
+    item: snapshot
   };
 }
 

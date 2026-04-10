@@ -466,6 +466,37 @@ export async function fetchCashboxSummary(params = {}) {
   return data;
 }
 
+export async function fetchCashboxMovements(params = {}) {
+  const searchParams = new URLSearchParams();
+
+  if (params.date) {
+    searchParams.set('date', params.date);
+  }
+
+  if (params.limit === 'all') {
+    searchParams.set('limit', 'all');
+  } else if (Number.isFinite(Number(params.limit)) && Number(params.limit) > 0) {
+    searchParams.set('limit', String(Math.floor(Number(params.limit))));
+  }
+
+  const query = searchParams.toString();
+  const response = await fetch(`${API_URL}/api/caja/movements${query ? `?${query}` : ''}`, {
+    headers: {
+      ...getAuthHeaders()
+    }
+  });
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    const error = new Error(data.message || 'No se pudieron obtener los movimientos');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  return data;
+}
+
 export async function closeCashbox() {
   const response = await fetch(`${API_URL}/api/caja/close`, {
     method: 'POST',
@@ -576,6 +607,25 @@ export async function syncScannerLiveState(payload) {
   }
 
   return data;
+}
+
+export async function fetchScannerLiveState() {
+  const response = await fetch(`${API_URL}/api/caja/live-state`, {
+    headers: {
+      ...getAuthHeaders()
+    }
+  });
+
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    const error = new Error(data.message || 'No se pudo obtener el estado del escaner');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  return data.item || null;
 }
 
 export async function scanProductByBarcode(barcode) {

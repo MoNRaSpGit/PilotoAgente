@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Button, Form, Modal } from 'react-bootstrap';
 import { useSelector } from 'react-redux';
 import toast from 'react-hot-toast';
-import { syncScannerLiveState } from '../services/api';
+import { fetchScannerLiveState, syncScannerLiveState } from '../services/api';
 import {
   createManualProductFromBarcode,
   fetchClients,
@@ -36,7 +36,7 @@ function ScannerPage() {
   const editPriceRef = useRef(null);
   const pressTimerRef = useRef(null);
   const liveSyncTimerRef = useRef(null);
-  const userRef = useRef(user);
+  const lastLiveSyncSignatureRef = useRef('');
   const suppressNextClickRef = useRef(false);
   const [barcode, setBarcode] = useState('');
   const [clients, setClients] = useState([]);
@@ -56,6 +56,27 @@ function ScannerPage() {
   const [chargeSnapshotTotal, setChargeSnapshotTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState([]);
+  const [scannerStateReady, setScannerStateReady] = useState(false);
+
+  const normalizeDraftItems = (draftItems = []) =>
+    (Array.isArray(draftItems) ? draftItems : []).map((item, index) => {
+      const price = Number(item?.price || 0);
+      const quantity = Number(item?.quantity || 1);
+      const total = Number(item?.total || price * quantity);
+      const fallbackKey = item?.barcode || `${item?.name || 'item'}-${index}`;
+
+      return {
+        key: item?.key || fallbackKey,
+        barcode: item?.barcode || fallbackKey,
+        name: item?.name || 'Producto',
+        price: Number(price.toFixed(2)),
+        quantity,
+        total: Number(total.toFixed(2)),
+        imageUrl: '',
+        hasImage: false,
+        source: item?.source || 'scanner'
+      };
+    });
 
   useEffect(() => {
     barcodeInputRef.current?.focus();
@@ -66,6 +87,38 @@ function ScannerPage() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    if (!userRole) {
+      setScannerStateReady(true);
+      return undefined;
+    }
+
+    fetchScannerLiveState()
+      .then((snapshot) => {
+        if (!active || !snapshot) {
+          return;
+        }
+
+        setItems(normalizeDraftItems(snapshot.items));
+      })
+      .catch(() => {
+        if (active) {
+          setItems([]);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setScannerStateReady(true);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [userRole]);
 
   useEffect(() => {
     if (userRole !== 'admin') {
@@ -156,11 +209,7 @@ function ScannerPage() {
   const selectedClientData = userRole === 'admin' ? selectedClient : null;
 
   useEffect(() => {
-    userRef.current = user;
-  }, [user]);
-
-  useEffect(() => {
-    if (!userRole) {
+    if (!userRole || !scannerStateReady) {
       return undefined;
     }
 
@@ -168,25 +217,46 @@ function ScannerPage() {
       window.clearTimeout(liveSyncTimerRef.current);
     }
 
+    const liveState = {
+      state: editOpen && editItem ? 'editing' : manualOpen ? 'manual' : items.length > 0 ? 'active' : 'idle',
+      source: 'scanner',
+      total: totalAmount,
+      items: items.map((item) => ({
+        barcode: item.barcode,
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+        total: item.total,
+        source: item.source
+      })),
+      editing: editOpen && editItem
+        ? {
+            key: editItem.key,
+            name: editName,
+            price: editPrice
+          }
+        : null,
+      manual: manualOpen
+        ? {
+            active: true
+          }
+        : null,
+      operator: {
+        id: user?.id || null,
+        name: user?.name || null,
+        role: userRole || null
+      }
+    };
+    const liveStateSignature = JSON.stringify(liveState);
+
+    if (lastLiveSyncSignatureRef.current === liveStateSignature) {
+      return undefined;
+    }
+
     liveSyncTimerRef.current = window.setTimeout(() => {
-      syncScannerLiveState({
-        state: items.length > 0 ? 'active' : 'idle',
-        source: 'scanner',
-        total: totalAmount,
-        items: items.map((item) => ({
-          barcode: item.barcode,
-          name: item.name,
-          quantity: item.quantity,
-          price: item.price,
-          total: item.total,
-          source: item.source
-        })),
-        operator: {
-          id: user?.id || null,
-          name: user?.name || null,
-          role: userRole || null
-        }
-      }).catch((error) => {
+      lastLiveSyncSignatureRef.current = liveStateSignature;
+
+      syncScannerLiveState(liveState).catch((error) => {
         if (error?.status !== 401 && error?.status !== 403) {
           // Ignore transient sync failures; live-state is best-effort only.
         }
@@ -198,28 +268,12 @@ function ScannerPage() {
         window.clearTimeout(liveSyncTimerRef.current);
       }
     };
-  }, [items, totalAmount, user, userRole]);
+  }, [items, totalAmount, user, userRole, editOpen, editItem, editName, editPrice, manualOpen, scannerStateReady]);
 
   useEffect(() => {
     return () => {
       if (liveSyncTimerRef.current) {
         window.clearTimeout(liveSyncTimerRef.current);
-      }
-
-      const currentUser = userRef.current;
-
-      if (currentUser?.role) {
-        syncScannerLiveState({
-          state: 'idle',
-          source: 'scanner',
-          total: 0,
-          items: [],
-          operator: {
-            id: currentUser?.id || null,
-            name: currentUser?.name || null,
-            role: currentUser?.role || null
-          }
-        }).catch(() => {});
       }
     };
   }, []);
@@ -649,7 +703,12 @@ function ScannerPage() {
         ) : null}
 
         <div className="scanner-actions">
-          <Button variant="dark" size="lg" onClick={() => setManualOpen(true)}>
+          <Button
+            variant="dark"
+            size="lg"
+            className="scanner-manual-button"
+            onClick={() => setManualOpen(true)}
+          >
             Producto Manual
           </Button>
         </div>

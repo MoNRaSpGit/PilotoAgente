@@ -757,6 +757,99 @@ function calculateProfitAmount(salesTotal, paymentsTotal) {
   return Number(((Number(salesTotal || 0) - Number(paymentsTotal || 0)) * 0.2).toFixed(2));
 }
 
+async function loadMovementItemsMap(connection, movementIds = []) {
+  if (!Array.isArray(movementIds) || movementIds.length === 0) {
+    return new Map();
+  }
+
+  const placeholders = movementIds.map(() => '?').join(', ');
+  const [rows] = await connection.query(
+    `
+      SELECT ${CASHBOX_ITEM_COLUMNS}
+      FROM ops_caja_movimiento_items
+      WHERE movement_id IN (${placeholders})
+      ORDER BY movement_id ASC, id ASC
+    `,
+    movementIds
+  );
+
+  const itemsMap = new Map();
+
+  rows.forEach((row) => {
+    const normalizedItem = {
+      id: row.id,
+      barcode: row.barcode || null,
+      product_name: row.product_name || 'Producto',
+      quantity: Number(row.quantity || 1),
+      unit_price: Number(row.unit_price || 0),
+      total: Number(row.total || 0),
+      created_at: row.created_at || null
+    };
+
+    const currentItems = itemsMap.get(row.movement_id) || [];
+    currentItems.push(normalizedItem);
+    itemsMap.set(row.movement_id, currentItems);
+  });
+
+  return itemsMap;
+}
+
+async function loadRecentSaleMovements(connection, startDate, endDateExclusive, limit = 6) {
+  const hasLimit = Number.isFinite(Number(limit)) && Number(limit) > 0;
+  const safeLimit = hasLimit ? Math.floor(Number(limit)) : null;
+  const sql = `
+      SELECT ${CASHBOX_MOVEMENT_COLUMNS}
+      FROM ops_caja_movimientos
+      WHERE type = 'sale'
+        AND created_at >= ?
+        AND created_at < ?
+      ORDER BY created_at DESC, id DESC
+      ${hasLimit ? 'LIMIT ?' : ''}
+    `;
+  const params = hasLimit
+    ? [`${startDate} 00:00:00`, `${endDateExclusive} 00:00:00`, safeLimit]
+    : [`${startDate} 00:00:00`, `${endDateExclusive} 00:00:00`];
+  const [rows] = await connection.query(sql, params);
+
+  if (!rows.length) {
+    return [];
+  }
+
+  const movementIds = rows.map((row) => row.id);
+  const itemsMap = await loadMovementItemsMap(connection, movementIds);
+
+  return rows.map((row) => ({
+    id: row.id,
+    movement_id: row.id,
+    type: row.type,
+    amount: Number(row.amount || 0),
+    description: row.description || 'Venta desde escaner',
+    source: row.source || 'scanner',
+    operator: {
+      id: row.operator_id || null,
+      name: row.operator_name || 'Operario',
+      role: row.operator_role || null
+    },
+    operator_name: row.operator_name || 'Operario',
+    operator_role: row.operator_role || null,
+    created_at: row.created_at || null,
+    items: itemsMap.get(row.id) || []
+  }));
+}
+
+export async function listCashboxSaleMovements({ date, limit } = {}) {
+  await ensureCashboxTables();
+  const selectedDate = normalizeDateInput(date) || new Date().toISOString().slice(0, 10);
+  const selectedDayEnd = addDays(selectedDate, 1);
+  const movementLimit = Number.isFinite(Number(limit)) && Number(limit) > 0 ? Math.floor(Number(limit)) : null;
+  const movements = await loadRecentSaleMovements(pool, selectedDate, selectedDayEnd, movementLimit);
+
+  return {
+    selected_date: selectedDate,
+    items: movements
+  };
+}
+
 export async function getCashboxSummary({ date, compareTo } = {}) {
   await ensureCashboxTables();
 
@@ -782,9 +875,10 @@ export async function getCashboxSummary({ date, compareTo } = {}) {
   const previousMonthStart = addMonths(monthStart, -1);
   const previousMonthEnd = addDays(previousMonthStart, selectedMonthDays);
 
-  const [periodRows, openBox] = await Promise.all([
+  const [periodRows, openBox, recentMovements] = await Promise.all([
     loadCashboxRowsInRange(pool, previousMonthStart, selectedDayEnd),
-    findOpenCashbox()
+    findOpenCashbox(),
+    loadRecentSaleMovements(pool, selectedDate, selectedDayEnd, 6)
   ]);
 
   const previousDay = buildPeriodSummaryFromRows(periodRows, comparisonDate, comparisonDayEnd);
@@ -807,6 +901,7 @@ export async function getCashboxSummary({ date, compareTo } = {}) {
     selected_date: selectedDate,
     comparison_date: comparisonDate,
     selected_day: selectedDay,
+    recent_movements: recentMovements,
     previous_day: previousDay,
     comparison_percent: comparisonPercent,
     weekly: {
