@@ -38,9 +38,17 @@ function pruneExpiredStates() {
 }
 
 function normalizeSnapshot(snapshot = {}) {
+  const hasVersion =
+    snapshot.version !== null &&
+    snapshot.version !== undefined &&
+    String(snapshot.version).trim() !== '';
+  const normalizedVersion = hasVersion ? Number(snapshot.version) : Number.NaN;
+
   return {
     state: snapshot.state || 'idle',
     source: snapshot.source || 'scanner',
+    version: Number.isFinite(normalizedVersion) ? normalizedVersion : null,
+    client_updated_at: snapshot.client_updated_at || null,
     total: Number(snapshot.total || 0),
     items: Array.isArray(snapshot.items) ? snapshot.items : [],
     operator: snapshot.operator || null,
@@ -48,6 +56,41 @@ function normalizeSnapshot(snapshot = {}) {
     manual: snapshot.manual || null,
     updated_at: snapshot.updated_at || new Date().toISOString()
   };
+}
+
+function parseTimestamp(value) {
+  if (!value) {
+    return Number.NaN;
+  }
+
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
+
+function isIncomingSnapshotStale(currentSnapshot = {}, incomingSnapshot = {}) {
+  const hasCurrentVersion =
+    currentSnapshot.version !== null &&
+    currentSnapshot.version !== undefined &&
+    String(currentSnapshot.version).trim() !== '';
+  const hasIncomingVersion =
+    incomingSnapshot.version !== null &&
+    incomingSnapshot.version !== undefined &&
+    String(incomingSnapshot.version).trim() !== '';
+  const currentVersion = hasCurrentVersion ? Number(currentSnapshot.version) : Number.NaN;
+  const incomingVersion = hasIncomingVersion ? Number(incomingSnapshot.version) : Number.NaN;
+
+  if (Number.isFinite(currentVersion) && Number.isFinite(incomingVersion)) {
+    return incomingVersion < currentVersion;
+  }
+
+  const currentClientTime = parseTimestamp(currentSnapshot.client_updated_at);
+  const incomingClientTime = parseTimestamp(incomingSnapshot.client_updated_at);
+
+  if (Number.isFinite(currentClientTime) && Number.isFinite(incomingClientTime)) {
+    return incomingClientTime < currentClientTime;
+  }
+
+  return false;
 }
 
 export function saveScannerLiveState(snapshot = {}) {
@@ -58,6 +101,12 @@ export function saveScannerLiveState(snapshot = {}) {
 
   if (!operatorKey) {
     return normalizedSnapshot;
+  }
+
+  const currentEntry = operatorStates.get(operatorKey);
+
+  if (currentEntry && isIncomingSnapshotStale(currentEntry.snapshot, normalizedSnapshot)) {
+    return currentEntry.snapshot;
   }
 
   operatorStates.set(operatorKey, {

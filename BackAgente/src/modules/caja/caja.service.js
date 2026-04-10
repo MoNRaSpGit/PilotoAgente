@@ -15,6 +15,15 @@ function createServiceError(message, status) {
   return error;
 }
 
+function parseOptionalNumber(value) {
+  if (value === null || value === undefined || String(value).trim() === '') {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export async function fetchCashboxSummary() {
   return getCashboxSummary();
 }
@@ -99,6 +108,8 @@ export async function addCashboxPayment(payload, user) {
 export async function addCashboxSale(payload, user) {
   const amount = Number(payload?.amount ?? payload?.total ?? 0);
   const items = Array.isArray(payload?.items) ? payload.items : [];
+  const shouldClearLiveState = Boolean(payload?.clear_live_state);
+  const clearLiveStateVersion = parseOptionalNumber(payload?.clear_live_state_version);
 
   if (!Number.isFinite(amount) || amount <= 0) {
     throw createServiceError('Monto valido requerido', 400);
@@ -117,6 +128,27 @@ export async function addCashboxSale(payload, user) {
     description: payload?.description || 'Venta desde escaner',
     operator
   });
+
+  if (shouldClearLiveState) {
+    const clearedSnapshot = saveScannerLiveState({
+      type: 'scanner:state',
+      source: payload?.source || 'scanner',
+      state: 'idle',
+      version: clearLiveStateVersion,
+      client_updated_at: new Date().toISOString(),
+      total: 0,
+      items: [],
+      operator,
+      editing: null,
+      manual: null,
+      updated_at: new Date().toISOString()
+    });
+
+    broadcastCashboxUpdate({
+      type: 'scanner:state',
+      ...clearedSnapshot
+    });
+  }
 
   broadcastCashboxUpdate({
     type: 'sale',
@@ -138,6 +170,7 @@ export async function syncScannerLiveState(payload, user) {
   const items = Array.isArray(payload?.items) ? payload.items : [];
   const total = Number(payload?.total ?? payload?.amount ?? 0);
   const state = String(payload?.state || (items.length > 0 ? 'active' : 'idle'));
+  const version = parseOptionalNumber(payload?.version);
   const operator = {
     id: user?.id ?? payload?.operator?.id ?? null,
     name: user?.name ?? payload?.operator?.name ?? null,
@@ -147,6 +180,8 @@ export async function syncScannerLiveState(payload, user) {
     type: 'scanner:state',
     source: payload?.source || 'scanner',
     state,
+    version,
+    client_updated_at: payload?.updated_at || null,
     total: Number.isFinite(total) ? Number(total.toFixed(2)) : 0,
     items,
     operator,

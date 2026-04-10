@@ -37,6 +37,7 @@ function ScannerPage() {
   const pressTimerRef = useRef(null);
   const liveSyncTimerRef = useRef(null);
   const lastLiveSyncSignatureRef = useRef('');
+  const liveSyncVersionRef = useRef(0);
   const suppressNextClickRef = useRef(false);
   const [barcode, setBarcode] = useState('');
   const [clients, setClients] = useState([]);
@@ -218,6 +219,8 @@ function ScannerPage() {
     }
 
     const liveState = {
+      version: ++liveSyncVersionRef.current,
+      updated_at: new Date().toISOString(),
       state: editOpen && editItem ? 'editing' : manualOpen ? 'manual' : items.length > 0 ? 'active' : 'idle',
       source: 'scanner',
       total: totalAmount,
@@ -477,6 +480,9 @@ function ScannerPage() {
   };
 
   const recordBoxSale = async (saleItems, saleAmount) => {
+    const clearLiveStateVersion = liveSyncVersionRef.current + 1;
+    liveSyncVersionRef.current = clearLiveStateVersion;
+
     console.log('[scanner:charge]', {
       user_role: userRole || null,
       items: saleItems.length,
@@ -492,6 +498,8 @@ function ScannerPage() {
         price: item.price,
         total: item.total
       })),
+      clear_live_state: true,
+      clear_live_state_version: clearLiveStateVersion,
       source: 'scanner',
       description: 'Venta desde escaner'
     });

@@ -111,6 +111,18 @@ function formatClock(value) {
   });
 }
 
+function hasRecentScannerActivity(updatedAt, now = new Date()) {
+  const updatedAtDate = parseApiDate(updatedAt);
+  const updatedAtMs = updatedAtDate?.getTime() || Number.NaN;
+  const nowMs = now instanceof Date ? now.getTime() : new Date(now).getTime();
+
+  if (Number.isNaN(updatedAtMs) || Number.isNaN(nowMs)) {
+    return false;
+  }
+
+  return nowMs - updatedAtMs < 5 * 60 * 1000;
+}
+
 function normalizeLiveSale(payload) {
   const items = Array.isArray(payload?.items)
     ? payload.items.map((item) => ({
@@ -485,6 +497,8 @@ function CajaPage() {
   };
   const latestMovement = liveSales[0] || null;
   const historyToneClass = getHistoryTone(latestMovement?.createdAt, historyNow);
+  const scannerIsActive =
+    hasRecentScannerActivity(scannerLiveState.updated_at, historyNow) || (scannerLiveState.items.length > 0 && !scannerLiveState.updated_at);
 
   const closeOpenModal = () => {
     setOpenModal(false);
@@ -751,28 +765,10 @@ function CajaPage() {
                   </div>
                 <Badge
                   className="caja-panel-status-badge"
-                  bg={
-                    scannerLiveState.state === 'editing'
-                      ? 'warning'
-                      : scannerLiveState.state === 'manual'
-                        ? 'warning'
-                      : scannerLiveState.items.length > 0
-                        ? 'success'
-                        : 'secondary'
-                  }
-                  text={
-                    scannerLiveState.state === 'editing' || scannerLiveState.state === 'manual'
-                      ? 'dark'
-                      : 'light'
-                  }
+                  bg={scannerIsActive ? 'success' : 'secondary'}
+                  text="light"
                 >
-                  {scannerLiveState.state === 'editing'
-                    ? 'Editando'
-                    : scannerLiveState.state === 'manual'
-                      ? 'Manual'
-                    : scannerLiveState.items.length > 0
-                      ? 'Activo'
-                      : 'Sin escaneo'}
+                  {scannerIsActive ? 'Activo' : 'Inactivo'}
                 </Badge>
               </div>
 
@@ -785,7 +781,6 @@ function CajaPage() {
                     </strong>
                   </div>
                 ) : null}
-
                 {scannerLiveState.manual ? (
                   <div className="caja-live-manual-banner">
                     <span>Producto manual</span>
@@ -793,7 +788,6 @@ function CajaPage() {
                     <p>La caja lo ve en vivo mientras el modal sigue abierto.</p>
                   </div>
                 ) : null}
-
                 {scannerLiveState.items.length === 0 ? (
                   <div className="caja-live-empty">
                     <strong>Sin productos escaneados todavia</strong>
@@ -1043,3 +1037,4 @@ function CajaPage() {
 }
 
 export default CajaPage;
+
