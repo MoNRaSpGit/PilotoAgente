@@ -117,6 +117,34 @@ export async function addCashboxSale(payload, user) {
   };
 }
 
+export async function syncScannerLiveState(payload, user) {
+  const items = Array.isArray(payload?.items) ? payload.items : [];
+  const total = Number(payload?.total ?? payload?.amount ?? 0);
+  const state = String(payload?.state || (items.length > 0 ? 'active' : 'idle'));
+
+  broadcastCashboxUpdate({
+    type: 'scanner:state',
+    source: payload?.source || 'scanner',
+    state,
+    total: Number.isFinite(total) ? Number(total.toFixed(2)) : 0,
+    items,
+    operator: {
+      id: user?.id || null,
+      name: user?.name || null,
+      role: user?.role || null
+    },
+    updated_at: new Date().toISOString()
+  });
+
+  return {
+    item: {
+      state,
+      total: Number.isFinite(total) ? Number(total.toFixed(2)) : 0,
+      items
+    }
+  };
+}
+
 export async function closeOpenCashbox(user) {
   const operator = {
     id: user?.id,

@@ -36,7 +36,8 @@ export function requireRole(...allowedRoles) {
     const isScannerRoute =
       debugPath.includes('/products/scan/') ||
       debugPath.includes('/products/manual-from-scan') ||
-      debugPath.includes('/caja/sales');
+      debugPath.includes('/caja/sales') ||
+      debugPath.includes('/caja/live-state');
     const scannerOverride = isScannerRoute && userRole === 'operario';
 
     if (process.env.NODE_ENV !== 'production') {

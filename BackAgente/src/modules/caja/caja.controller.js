@@ -3,7 +3,8 @@ import {
   addCashboxSale,
   closeOpenCashbox,
   fetchCashboxDashboard,
-  openCashbox
+  openCashbox,
+  syncScannerLiveState
 } from './caja.service.js';
 import { attachCashboxStream, authenticateCashboxStream } from './caja.realtime.js';
 
@@ -49,6 +50,15 @@ export async function addCashboxSaleController(req, res) {
     return res.status(201).json(data);
   } catch (error) {
     return handleServiceError(res, error, 'No se pudo registrar la venta');
+  }
+}
+
+export async function syncScannerLiveStateController(req, res) {
+  try {
+    const data = await syncScannerLiveState(req.body, req.user);
+    return res.status(201).json(data);
+  } catch (error) {
+    return handleServiceError(res, error, 'No se pudo sincronizar el escaner');
   }
 }
 

@@ -6,7 +6,8 @@ import {
   closeCashboxController,
   cashboxStreamController,
   getCashboxSummaryController,
-  openCashboxController
+  openCashboxController,
+  syncScannerLiveStateController
 } from '../modules/caja/caja.controller.js';
 
 const router = Router();
@@ -18,6 +19,7 @@ router.get('/caja', requireRole('admin'), getCashboxSummaryController);
 router.post('/caja/open', requireRole('admin'), openCashboxController);
 router.post('/caja/close', requireRole('admin'), closeCashboxController);
 router.post('/caja/payments', requireRole('admin'), addCashboxPaymentController);
+router.post('/caja/live-state', syncScannerLiveStateController);
 router.post('/caja/sales', requireRole('admin', 'operario'), addCashboxSaleController);
 
 export default router;

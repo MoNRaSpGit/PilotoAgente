@@ -556,6 +556,28 @@ export async function registerCashboxSale(payload) {
   return data.item;
 }
 
+export async function syncScannerLiveState(payload) {
+  const response = await fetch(`${API_URL}/api/caja/live-state`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders()
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    const error = new Error(data.message || 'No se pudo sincronizar el estado del escaner');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  return data;
+}
+
 export async function scanProductByBarcode(barcode) {
   const normalizedBarcode = normalizeBarcode(barcode);
 

@@ -104,6 +104,13 @@ function CajaPage() {
   const user = useSelector((state) => state.auth.user);
   const [dashboard, setDashboard] = useState(null);
   const [liveSales, setLiveSales] = useState([]);
+  const [scannerLiveState, setScannerLiveState] = useState({
+    items: [],
+    total: 0,
+    state: 'idle',
+    operator: null,
+    updated_at: null
+  });
   const [loading, setLoading] = useState(true);
   const [openModal, setOpenModal] = useState(false);
   const [openingAmount, setOpeningAmount] = useState('');
@@ -115,7 +122,7 @@ function CajaPage() {
   });
   const [savingPayment, setSavingPayment] = useState(false);
   const [comparisonExpanded, setComparisonExpanded] = useState(false);
-  const [expandedSales, setExpandedSales] = useState([]);
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
   const dashboardRef = useRef(null);
   const loadDashboardRef = useRef(null);
 
@@ -217,12 +224,26 @@ function CajaPage() {
         payload = {};
       }
 
-      if (payload.type === 'sale') {
+      if (payload.type === 'scanner:state') {
+        setScannerLiveState({
+          items: Array.isArray(payload.items) ? payload.items : [],
+          total: Number(payload.total || 0),
+          state: payload.state || 'idle',
+          operator: payload.operator || null,
+          updated_at: payload.updated_at || new Date().toISOString()
+        });
+      } else if (payload.type === 'sale') {
         const liveSale = normalizeLiveSale(payload);
         setLiveSales((current) => [liveSale, ...current].slice(0, 6));
       } else if (payload.type === 'open' || payload.type === 'close') {
         setLiveSales([]);
-        setExpandedSales([]);
+        setScannerLiveState({
+          items: [],
+          total: 0,
+          state: 'idle',
+          operator: null,
+          updated_at: null
+        });
       }
 
       if (loadDashboardRef.current) {
@@ -266,10 +287,12 @@ function CajaPage() {
     setOpeningAmount('');
   };
 
-  const toggleSale = (saleId) => {
-    setExpandedSales((current) =>
-      current.includes(saleId) ? current.filter((id) => id !== saleId) : [saleId, ...current]
-    );
+  const openCloseConfirmModal = () => {
+    setCloseConfirmOpen(true);
+  };
+
+  const closeCloseConfirmModal = () => {
+    setCloseConfirmOpen(false);
   };
 
   const handleOpenCashbox = async () => {
@@ -296,7 +319,13 @@ function CajaPage() {
         }
       }));
       setLiveSales([]);
-      setExpandedSales([]);
+      setScannerLiveState({
+        items: [],
+        total: 0,
+        state: 'idle',
+        operator: null,
+        updated_at: null
+      });
       toast.success('Caja abierta');
       closeOpenModal();
     } catch (error) {
@@ -338,7 +367,13 @@ function CajaPage() {
       }));
       setComparisonExpanded(false);
       setLiveSales([]);
-      setExpandedSales([]);
+      setScannerLiveState({
+        items: [],
+        total: 0,
+        state: 'idle',
+        operator: null,
+        updated_at: null
+      });
       toast.success('Caja cerrada');
     } catch (error) {
       if (error.status === 401) {
@@ -425,6 +460,10 @@ function CajaPage() {
 
       {isOpen ? (
         <>
+          <div className="caja-section-label">
+            <p className="eyebrow">Seccion Caja</p>
+          </div>
+
           <div className="caja-grid">
             <article className="card-panel caja-stat-card caja-metric-card">
               <span>Caja inicial</span>
@@ -483,75 +522,77 @@ function CajaPage() {
           </div>
 
           <div className="caja-bottom-grid">
-            <article className="card-panel caja-live-panel">
-              <div className="panel-heading">
-                <div>
-                  <h3>Movimientos</h3>
-                  <p>Ventas confirmadas en tiempo real desde el escaner.</p>
+            <div className="caja-left-stack">
+              <article className="card-panel caja-live-panel">
+                <div className="panel-heading">
+                  <div>
+                    <h3>Caja en vivo</h3>
+                    <p>Espejo en tiempo real de lo que arma el operario en el scanner.</p>
+                  </div>
+                  <Badge bg={scannerLiveState.items.length > 0 ? 'success' : 'secondary'}>
+                    {scannerLiveState.items.length > 0 ? 'Activo' : 'Sin escaneo'}
+                  </Badge>
                 </div>
-                <Badge bg="dark">SSE</Badge>
-              </div>
 
-              {liveSales.length === 0 ? (
-                <div className="caja-live-empty">
-                  <strong>Sin ventas confirmadas todavia</strong>
-                  <p>Cuando el operario confirme una venta, se va a mostrar aca en tiempo real.</p>
+                {scannerLiveState.items.length === 0 ? (
+                  <div className="caja-live-empty">
+                    <strong>Sin productos escaneados todavia</strong>
+                    <p>Cuando el operario agregue o quite productos, la caja se va a clonar aca al instante.</p>
+                  </div>
+                ) : (
+                  <div className="caja-live-feed">
+                    <div className="caja-live-scanner-head">
+                      <div>
+                        <strong>{scannerLiveState.operator?.name || 'Operario'}</strong>
+                        <span>{formatClock(scannerLiveState.updated_at)}</span>
+                      </div>
+                      <div className="caja-live-scanner-total">
+                        <small>Total actual</small>
+                        <strong>{money(scannerLiveState.total)}</strong>
+                      </div>
+                    </div>
+
+                    {scannerLiveState.items.map((item, index) => (
+                      <div className="caja-live-sale-item-row caja-live-scanner-row" key={`${item.barcode || item.name || 'item'}-${index}`}>
+                        <span className="caja-live-sale-item-name">
+                          {item.quantity} x {item.name}
+                        </span>
+                        <span className="caja-live-sale-item-total">{money(item.total)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </article>
+
+              <article className="card-panel caja-live-panel">
+                <div className="panel-heading">
+                  <div>
+                    <h3>Movimientos</h3>
+                    <p>Resumen compacto de las ventas confirmadas.</p>
+                  </div>
+                  <Badge bg="secondary">Historial</Badge>
                 </div>
-              ) : (
-                <div className="caja-live-feed">
-                  {liveSales.map((sale) => {
-                    const isExpanded = expandedSales.includes(sale.id);
 
-                    return (
-                      <article className={`caja-live-sale ${isExpanded ? 'is-expanded' : ''}`} key={sale.id}>
-                        <div className="caja-live-sale-head">
-                          <div>
-                            <strong>Venta confirmada</strong>
-                            <span>
-                              {sale.operatorName} · {formatClock(sale.createdAt)}
-                            </span>
-                          </div>
-
-                          <div className="caja-live-sale-head-actions">
-                            <div className="caja-live-sale-total">{formatSaleAmount(sale.amount)}</div>
-                            <button
-                              type="button"
-                              className="caja-live-sale-toggle"
-                              onClick={() => toggleSale(sale.id)}
-                              aria-expanded={isExpanded}
-                              aria-label={isExpanded ? 'Ocultar productos' : 'Ver productos'}
-                            >
-                              <span className={`caja-live-sale-toggle-icon ${isExpanded ? 'is-open' : ''}`}>
-                                {isExpanded ? '−' : '+'}
-                              </span>
-                              <span className="caja-live-sale-toggle-label">Detalles</span>
-                            </button>
-                          </div>
+                {liveSales.length === 0 ? (
+                  <div className="caja-live-empty">
+                    <strong>Sin movimientos recientes</strong>
+                    <p>Cuando haya ventas confirmadas, este resumen acompaña el panel de caja en vivo.</p>
+                  </div>
+                ) : (
+                  <div className="caja-movements-list">
+                    {liveSales.map((sale) => (
+                      <div className="caja-movement-row" key={`movement-${sale.id}`}>
+                        <div>
+                          <strong>{sale.operatorName}</strong>
+                          <span>{formatClock(sale.createdAt)}</span>
                         </div>
-
-                        <div className={`caja-live-sale-items ${isExpanded ? 'is-open' : ''}`}>
-                          {sale.items.map((item, index) => (
-                            <div className="caja-live-sale-item-row" key={`${sale.id}-${index}`}>
-                              <span className="caja-live-sale-item-name">
-                                {item.quantity} x {item.name}
-                              </span>
-                              <span className="caja-live-sale-item-total">{money(item.total)}</span>
-                            </div>
-                          ))}
-                        </div>
-
-                        <div className="caja-live-sale-foot">
-                          <Badge bg="light" text="dark">
-                            {sale.items.length} productos
-                          </Badge>
-                          <small>{sale.description}</small>
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
-              )}
-            </article>
+                        <strong className="caja-movement-amount">{formatSaleAmount(sale.amount)}</strong>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </article>
+            </div>
 
             <article className="card-panel caja-payment-panel caja-payment-panel-compact caja-payment-side">
               <div className="panel-heading">
@@ -593,13 +634,17 @@ function CajaPage() {
                   {savingPayment ? 'Guardando...' : 'Agregar pago'}
                 </Button>
               </form>
-            </article>
-          </div>
 
-          <div className="caja-actions-inline">
-            <Button variant="outline-dark" onClick={handleCloseCashbox} disabled={savingClose}>
-              {savingClose ? 'Cerrando...' : 'Cerrar caja'}
-            </Button>
+              <div className="caja-close-box">
+                <div className="caja-close-box-copy">
+                  <span>Acción sensible</span>
+                  <small>Cerrar caja requiere confirmación.</small>
+                </div>
+                <Button variant="danger" onClick={openCloseConfirmModal} disabled={savingClose}>
+                  {savingClose ? 'Cerrando...' : 'Cerrar caja'}
+                </Button>
+              </div>
+            </article>
           </div>
         </>
       ) : null}
@@ -639,6 +684,33 @@ function CajaPage() {
           </Button>
           <Button variant="dark" onClick={handleOpenCashbox} disabled={savingOpen}>
             {savingOpen ? 'Abriendo...' : 'Abrir'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      <Modal show={closeConfirmOpen} onHide={closeCloseConfirmModal} centered restoreFocus={false}>
+        <Modal.Header closeButton>
+          <Modal.Title>Confirmar cierre</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <div className="caja-close-confirm">
+            <strong>Querés cerrar la caja?</strong>
+            <p>Esta acción termina la caja abierta y bloquea nuevos movimientos hasta que se abra otra.</p>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="outline-secondary" onClick={closeCloseConfirmModal} disabled={savingClose}>
+            Cancelar
+          </Button>
+          <Button
+            variant="danger"
+            onClick={async () => {
+              closeCloseConfirmModal();
+              await handleCloseCashbox();
+            }}
+            disabled={savingClose}
+          >
+            {savingClose ? 'Cerrando...' : 'Sí, cerrar caja'}
           </Button>
         </Modal.Footer>
       </Modal>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Button, Form, Modal } from 'react-bootstrap';
 import { useSelector } from 'react-redux';
 import toast from 'react-hot-toast';
+import { syncScannerLiveState } from '../services/api';
 import {
   createManualProductFromBarcode,
   fetchClients,
@@ -27,12 +28,15 @@ function resolveProductImage(imageValue) {
 }
 
 function ScannerPage() {
-  const userRole = useSelector((state) => state.auth.user?.role);
+  const user = useSelector((state) => state.auth.user);
+  const userRole = user?.role;
   const barcodeInputRef = useRef(null);
   const manualPriceRef = useRef(null);
   const unknownPriceRef = useRef(null);
   const editPriceRef = useRef(null);
   const pressTimerRef = useRef(null);
+  const liveSyncTimerRef = useRef(null);
+  const userRef = useRef(user);
   const suppressNextClickRef = useRef(false);
   const [barcode, setBarcode] = useState('');
   const [clients, setClients] = useState([]);
@@ -150,6 +154,75 @@ function ScannerPage() {
 
   const totalAmount = items.reduce((accumulator, item) => accumulator + item.total, 0);
   const selectedClientData = userRole === 'admin' ? selectedClient : null;
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  useEffect(() => {
+    if (!userRole) {
+      return undefined;
+    }
+
+    if (liveSyncTimerRef.current) {
+      window.clearTimeout(liveSyncTimerRef.current);
+    }
+
+    liveSyncTimerRef.current = window.setTimeout(() => {
+      syncScannerLiveState({
+        state: items.length > 0 ? 'active' : 'idle',
+        source: 'scanner',
+        total: totalAmount,
+        items: items.map((item) => ({
+          barcode: item.barcode,
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price,
+          total: item.total,
+          source: item.source
+        })),
+        operator: {
+          id: user?.id || null,
+          name: user?.name || null,
+          role: userRole || null
+        }
+      }).catch((error) => {
+        if (error?.status !== 401 && error?.status !== 403) {
+          // Ignore transient sync failures; live-state is best-effort only.
+        }
+      });
+    }, 120);
+
+    return () => {
+      if (liveSyncTimerRef.current) {
+        window.clearTimeout(liveSyncTimerRef.current);
+      }
+    };
+  }, [items, totalAmount, user, userRole]);
+
+  useEffect(() => {
+    return () => {
+      if (liveSyncTimerRef.current) {
+        window.clearTimeout(liveSyncTimerRef.current);
+      }
+
+      const currentUser = userRef.current;
+
+      if (currentUser?.role) {
+        syncScannerLiveState({
+          state: 'idle',
+          source: 'scanner',
+          total: 0,
+          items: [],
+          operator: {
+            id: currentUser?.id || null,
+            name: currentUser?.name || null,
+            role: currentUser?.role || null
+          }
+        }).catch(() => {});
+      }
+    };
+  }, []);
 
   const addItem = (nextItem) => {
     setItems((current) => {
