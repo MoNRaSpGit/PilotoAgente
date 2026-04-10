@@ -1,0 +1,42 @@
+.login-secret-page {
+  min-height: calc(100vh - 5rem);
+  display: grid;
+  place-items: center;
+  gap: 0;
+}
+
+.login-secret-logo {
+  border: 0;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #334155;
+  padding: 0.3rem 0.45rem;
+  border-radius: 10px;
+  cursor: auto !important;
+}
+
+.login-secret-logo:hover {
+  background: transparent;
+}
+
+.login-secret-logo:active {
+  transform: none;
+}
+
+.login-secret-logo:focus,
+.login-secret-logo:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.login-secret-logo span {
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.login-secret-panel {
+  width: min(100%, 560px);
+}

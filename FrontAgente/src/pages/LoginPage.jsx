@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Button, Form } from 'react-bootstrap';
 import toast from 'react-hot-toast';
+import { BotMessageSquare } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { loginRequest } from '../services/api';
@@ -28,6 +29,8 @@ function LoginPage() {
     password: QUICK_LOGINS.admin.password
   });
   const [loading, setLoading] = useState(false);
+  const [, setLogoTapCount] = useState(0);
+  const [panelUnlocked, setPanelUnlocked] = useState(false);
 
   useEffect(() => {
     if (!sessionToken || !sessionUserRole) {
@@ -84,38 +87,82 @@ function LoginPage() {
     }
   };
 
+  const handleLogoTap = () => {
+    if (panelUnlocked) {
+      return;
+    }
+
+    setLogoTapCount((current) => {
+      const next = current + 1;
+
+      if (next >= 7) {
+        setPanelUnlocked(true);
+        toast.success('Panel de login habilitado');
+        return 7;
+      }
+
+      return next;
+    });
+  };
+
   return (
-    <section className="page-section narrow-section">
-      <div className="card-panel">
+    <section className="page-section login-secret-page">
+      <div className="card-panel login-secret-panel">
         <div className="panel-heading">
-          <h1>Ingresar</h1>
-          <p>Login conectado al backend con roles.</p>
+          <div>
+            <h1>Ingresar</h1>
+            <p>Acceso al panel operativo.</p>
+          </div>
+          <button type="button" className="login-secret-logo" onClick={handleLogoTap} aria-label="FrontAgente">
+            <BotMessageSquare size={20} />
+            <span>FrontAgente</span>
+          </button>
         </div>
 
-        <div className="d-flex gap-2 mb-3 flex-wrap">
-          <Button type="button" variant="dark" disabled={loading} onClick={() => handleQuickLogin('admin')}>
-            Entrar como admin
-          </Button>
-          <Button type="button" variant="outline-dark" disabled={loading} onClick={() => handleQuickLogin('operario')}>
-            Entrar como operario
-          </Button>
-        </div>
+        {panelUnlocked ? (
+          <>
+          <div className="d-flex gap-2 mb-3 flex-wrap">
+            <Button type="button" variant="dark" disabled={loading} onClick={() => handleQuickLogin('admin')}>
+              Entrar como admin
+            </Button>
+            <Button type="button" variant="outline-dark" disabled={loading} onClick={() => handleQuickLogin('operario')}>
+              Entrar como operario
+            </Button>
+          </div>
 
-        <Form onSubmit={handleSubmit}>
-          <Form.Group className="mb-3">
-            <Form.Label>Email</Form.Label>
-            <Form.Control type="email" name="email" value={form.email} onChange={handleChange} />
-          </Form.Group>
+          <Form onSubmit={handleSubmit}>
+            <Form.Group className="mb-3">
+              <Form.Label>Email</Form.Label>
+              <Form.Control type="email" name="email" value={form.email} onChange={handleChange} />
+            </Form.Group>
 
-          <Form.Group className="mb-3">
-            <Form.Label>Password</Form.Label>
-            <Form.Control type="password" name="password" value={form.password} onChange={handleChange} />
-          </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Password</Form.Label>
+              <Form.Control type="password" name="password" value={form.password} onChange={handleChange} />
+            </Form.Group>
 
-          <Button type="submit" disabled={loading}>
-            {loading ? 'Ingresando...' : 'Iniciar sesion'}
-          </Button>
-        </Form>
+            <Button type="submit" disabled={loading}>
+              {loading ? 'Ingresando...' : 'Iniciar sesion'}
+            </Button>
+          </Form>
+          </>
+        ) : (
+          <Form onSubmit={(event) => event.preventDefault()}>
+            <Form.Group className="mb-3">
+              <Form.Label>Email</Form.Label>
+              <Form.Control type="email" value="usuario@empresa.com" disabled readOnly />
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label>Password</Form.Label>
+              <Form.Control type="password" value="********" disabled readOnly />
+            </Form.Group>
+
+            <Button type="submit" disabled>
+              Iniciar sesion
+            </Button>
+          </Form>
+        )}
       </div>
     </section>
   );
