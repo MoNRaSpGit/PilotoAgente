@@ -698,67 +698,6 @@
   color: #64748b;
 }
 
-.caja-history-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 88px;
-  min-height: 32px;
-  padding: 0.35rem 0.75rem;
-  border-radius: 999px;
-  color: #0f172a;
-  letter-spacing: 0.02em;
-  transition: background-color 0.45s ease, border-color 0.45s ease, box-shadow 0.45s ease, color 0.45s ease;
-}
-
-.caja-history-badge.is-idle {
-  background: #e2e8f0;
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  box-shadow: 0 10px 22px rgba(100, 116, 139, 0.12);
-}
-
-.caja-history-badge.is-fresh {
-  background: #15803d;
-  border: 1px solid rgba(21, 128, 61, 0.2);
-  box-shadow: 0 10px 22px rgba(21, 128, 61, 0.18);
-}
-
-.caja-history-badge.is-fresh-soft {
-  background: #4ade80;
-  border: 1px solid rgba(34, 197, 94, 0.24);
-  box-shadow: 0 10px 22px rgba(34, 197, 94, 0.15);
-}
-
-.caja-history-badge.is-warmup {
-  background: #bef264;
-  border: 1px solid rgba(132, 204, 22, 0.24);
-  box-shadow: 0 10px 22px rgba(132, 204, 22, 0.14);
-}
-
-.caja-history-badge.is-alert {
-  background: #facc15;
-  border: 1px solid rgba(202, 138, 4, 0.24);
-  box-shadow: 0 10px 22px rgba(202, 138, 4, 0.16);
-}
-
-.caja-history-badge.is-alert-strong {
-  background: #f59e0b;
-  border: 1px solid rgba(217, 119, 6, 0.24);
-  box-shadow: 0 10px 22px rgba(217, 119, 6, 0.16);
-}
-
-.caja-history-badge.is-danger-soft {
-  background: #fca5a5;
-  border: 1px solid rgba(239, 68, 68, 0.24);
-  box-shadow: 0 10px 22px rgba(239, 68, 68, 0.14);
-}
-
-.caja-history-badge.is-danger {
-  background: #ef4444;
-  border: 1px solid rgba(185, 28, 28, 0.24);
-  box-shadow: 0 10px 22px rgba(185, 28, 28, 0.18);
-}
-
 .caja-movements-list {
   display: grid;
   gap: 0.65rem;

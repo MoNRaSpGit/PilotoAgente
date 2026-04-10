@@ -111,16 +111,16 @@ function formatClock(value) {
   });
 }
 
-function hasRecentScannerActivity(updatedAt, now = new Date()) {
+function getScannerIdleMinutes(updatedAt, now = new Date()) {
   const updatedAtDate = parseApiDate(updatedAt);
   const updatedAtMs = updatedAtDate?.getTime() || Number.NaN;
   const nowMs = now instanceof Date ? now.getTime() : new Date(now).getTime();
 
   if (Number.isNaN(updatedAtMs) || Number.isNaN(nowMs)) {
-    return false;
+    return null;
   }
 
-  return nowMs - updatedAtMs < 5 * 60 * 1000;
+  return Math.max(0, (nowMs - updatedAtMs) / 60000);
 }
 
 function normalizeLiveSale(payload) {
@@ -169,46 +169,26 @@ function formatSaleAmount(value) {
   return `+ ${money(value)}`;
 }
 
-function getHistoryTone(createdAt, now) {
-  if (!createdAt) {
-    return 'is-idle';
+function getScannerStatusBadge(updatedAt, hasItems, now = new Date()) {
+  const idleMinutes = getScannerIdleMinutes(updatedAt, now);
+
+  if (idleMinutes === null && hasItems) {
+    return { label: 'Activo', bg: 'success', text: 'light' };
   }
 
-  const createdAtDate = parseApiDate(createdAt);
-  const createdAtMs = createdAtDate?.getTime() || Number.NaN;
-  const nowMs = now instanceof Date ? now.getTime() : new Date(now).getTime();
-
-  if (Number.isNaN(createdAtMs) || Number.isNaN(nowMs)) {
-    return 'is-idle';
+  if (idleMinutes !== null && idleMinutes < 5) {
+    return { label: 'Activo', bg: 'success', text: 'light' };
   }
 
-  const minutesElapsed = Math.max(0, (nowMs - createdAtMs) / 60000);
-
-  if (minutesElapsed < 5) {
-    return 'is-fresh';
+  if (idleMinutes !== null && idleMinutes < 10) {
+    return { label: 'Inactivo', bg: 'secondary', text: 'light' };
   }
 
-  if (minutesElapsed < 10) {
-    return 'is-fresh-soft';
+  if (idleMinutes !== null && idleMinutes < 20) {
+    return { label: 'Inactivo', bg: 'warning', text: 'dark' };
   }
 
-  if (minutesElapsed < 15) {
-    return 'is-warmup';
-  }
-
-  if (minutesElapsed < 20) {
-    return 'is-alert';
-  }
-
-  if (minutesElapsed < 25) {
-    return 'is-alert-strong';
-  }
-
-  if (minutesElapsed < 30) {
-    return 'is-danger-soft';
-  }
-
-  return 'is-danger';
+  return { label: 'Inactivo', bg: 'danger', text: 'light' };
 }
 
 function CajaPage() {
@@ -495,10 +475,11 @@ function CajaPage() {
     previous: { sales_total: 0 },
     comparison_percent: null
   };
-  const latestMovement = liveSales[0] || null;
-  const historyToneClass = getHistoryTone(latestMovement?.createdAt, historyNow);
-  const scannerIsActive =
-    hasRecentScannerActivity(scannerLiveState.updated_at, historyNow) || (scannerLiveState.items.length > 0 && !scannerLiveState.updated_at);
+  const scannerStatusBadge = getScannerStatusBadge(
+    scannerLiveState.updated_at,
+    scannerLiveState.items.length > 0,
+    historyNow
+  );
 
   const closeOpenModal = () => {
     setOpenModal(false);
@@ -765,10 +746,10 @@ function CajaPage() {
                   </div>
                 <Badge
                   className="caja-panel-status-badge"
-                  bg={scannerIsActive ? 'success' : 'secondary'}
-                  text="light"
+                  bg={scannerStatusBadge.bg}
+                  text={scannerStatusBadge.text}
                 >
-                  {scannerIsActive ? 'Activo' : 'Inactivo'}
+                  {scannerStatusBadge.label}
                 </Badge>
               </div>
 
@@ -825,7 +806,6 @@ function CajaPage() {
                     <p>Resumen compacto de las ventas confirmadas.</p>
                   </div>
                   <div className="caja-movements-tools">
-                    <span className={`caja-history-badge ${historyToneClass}`}>Historial</span>
                     <div className="caja-movements-actions">
                       {movementsMode === 'recent' ? (
                         <button type="button" className="caja-inline-link" onClick={() => loadMovements('top10')} disabled={movementsLoading}>

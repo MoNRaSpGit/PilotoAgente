@@ -104,6 +104,10 @@ function ScannerPage() {
         }
 
         setItems(normalizeDraftItems(snapshot.items));
+        const snapshotVersion = Number(snapshot.version);
+        if (Number.isFinite(snapshotVersion) && snapshotVersion >= 0) {
+          liveSyncVersionRef.current = snapshotVersion;
+        }
       })
       .catch(() => {
         if (active) {
