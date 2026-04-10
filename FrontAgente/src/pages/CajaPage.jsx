@@ -57,6 +57,20 @@ function yesterdayDate() {
   return date.toISOString().slice(0, 10);
 }
 
+function formatShortDate(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return todayDate();
+  }
+
+  return date.toLocaleDateString('es-UY', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  });
+}
+
 function metricValue(current, previous) {
   return `${money(current)} · ${money(previous)}`;
 }
@@ -1013,7 +1027,7 @@ function CajaPage() {
                 <div className="panel-heading">
                   <div className="caja-panel-copy">
                     <h3>Ranking</h3>
-                    <p>Productos mas vendidos de hoy.</p>
+                    <p>Ranking del {formatShortDate(new Date())}</p>
                   </div>
                   <div className="caja-movements-tools">
                     <div className="caja-movements-actions">
