@@ -431,33 +431,113 @@
   font-size: 0.82rem;
 }
 
+.caja-live-sale-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
 .caja-live-sale-total {
-  color: #0f172a;
+  color: #15803d;
   font-size: 1.2rem;
   font-weight: 800;
   white-space: nowrap;
 }
 
-.caja-live-sale-items {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
+.caja-live-sale-toggle {
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 999px;
+  background: #fff;
+  color: #0f172a;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
 }
 
-.caja-live-sale-items span {
-  display: inline-flex;
+.caja-live-sale-toggle:hover {
+  background: #f8fafc;
+  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.08);
+}
+
+.caja-live-sale-arrow {
+  display: inline-block;
+  font-size: 1rem;
+  line-height: 1;
+  transform: translateY(-1px);
+  transition: transform 0.2s ease;
+}
+
+.caja-live-sale-arrow.is-open {
+  transform: rotate(180deg) translateY(1px);
+}
+
+.caja-live-sale-general {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.caja-live-sale-general span {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 14px;
+  background: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.caja-live-sale-general small {
+  color: #64748b;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+}
+
+.caja-live-sale-general strong {
+  color: #0f172a;
+  font-size: 0.92rem;
+}
+
+.caja-live-sale-items {
+  display: grid;
+  gap: 0.45rem;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: max-height 0.22s ease, opacity 0.22s ease, transform 0.22s ease;
+}
+
+.caja-live-sale-items.is-open {
+  max-height: 480px;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.caja-live-sale-item-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
   align-items: center;
-  padding: 0.32rem 0.6rem;
-  border-radius: 999px;
+  padding: 0.55rem 0.65rem;
+  border-radius: 12px;
   background: #eef2f7;
-  color: #334155;
-  font-size: 0.82rem;
+}
+
+.caja-live-sale-item-name {
+  color: #0f172a;
+  font-size: 0.88rem;
   font-weight: 600;
 }
 
-.caja-live-sale-more {
-  background: #dbeafe !important;
-  color: #1e3a8a !important;
+.caja-live-sale-item-total {
+  color: #15803d;
+  font-size: 0.88rem;
+  font-weight: 800;
 }
 
 .caja-live-sale-foot {
@@ -1451,6 +1531,14 @@
   .caja-live-sale-foot {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .caja-live-sale-general {
+    grid-template-columns: 1fr;
+  }
+
+  .caja-live-sale-head-actions {
+    align-self: flex-end;
   }
 }
 

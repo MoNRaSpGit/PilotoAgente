@@ -94,6 +94,10 @@ function normalizeLiveSale(payload) {
   };
 }
 
+function formatSaleAmount(value) {
+  return `+ ${money(value)}`;
+}
+
 function CajaPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -111,6 +115,7 @@ function CajaPage() {
   });
   const [savingPayment, setSavingPayment] = useState(false);
   const [comparisonExpanded, setComparisonExpanded] = useState(false);
+  const [expandedSales, setExpandedSales] = useState([]);
   const dashboardRef = useRef(null);
   const loadDashboardRef = useRef(null);
 
@@ -217,6 +222,7 @@ function CajaPage() {
         setLiveSales((current) => [liveSale, ...current].slice(0, 6));
       } else if (payload.type === 'open' || payload.type === 'close') {
         setLiveSales([]);
+        setExpandedSales([]);
       }
 
       if (loadDashboardRef.current) {
@@ -260,6 +266,12 @@ function CajaPage() {
     setOpeningAmount('');
   };
 
+  const toggleSale = (saleId) => {
+    setExpandedSales((current) =>
+      current.includes(saleId) ? current.filter((id) => id !== saleId) : [saleId, ...current]
+    );
+  };
+
   const handleOpenCashbox = async () => {
     const amount = Number.parseFloat(openingAmount);
 
@@ -284,6 +296,7 @@ function CajaPage() {
         }
       }));
       setLiveSales([]);
+      setExpandedSales([]);
       toast.success('Caja abierta');
       closeOpenModal();
     } catch (error) {
@@ -325,6 +338,7 @@ function CajaPage() {
       }));
       setComparisonExpanded(false);
       setLiveSales([]);
+      setExpandedSales([]);
       toast.success('Caja cerrada');
     } catch (error) {
       if (error.status === 401) {
@@ -365,7 +379,9 @@ function CajaPage() {
           sales_total: updatedCashbox.sales_total,
           payments_total: updatedCashbox.payments_total,
           current_amount: updatedCashbox.current_amount,
-          profit_amount: Number(((Number(updatedCashbox.sales_total || 0) - Number(updatedCashbox.payments_total || 0)) * 0.2).toFixed(2))
+          profit_amount: Number(
+            ((Number(updatedCashbox.sales_total || 0) - Number(updatedCashbox.payments_total || 0)) * 0.2).toFixed(2)
+          )
         }
       }));
       setPaymentForm({
@@ -384,8 +400,6 @@ function CajaPage() {
       setSavingPayment(false);
     }
   };
-
-  const recentSale = liveSales[0] || null;
 
   return (
     <section className="page-section caja-page">
@@ -472,28 +486,11 @@ function CajaPage() {
             <article className="card-panel caja-live-panel">
               <div className="panel-heading">
                 <div>
-                  <h3>Caja en vivo</h3>
-                  <p>Espejo de las ventas confirmadas desde el escaner.</p>
+                  <h3>Movimientos</h3>
+                  <p>Ventas confirmadas en tiempo real desde el escaner.</p>
                 </div>
                 <Badge bg="dark">SSE</Badge>
               </div>
-
-              {recentSale ? (
-                <div className="caja-live-pulse">
-                  <div>
-                    <span>Ultima venta</span>
-                    <strong>{money(recentSale.amount)}</strong>
-                  </div>
-                  <div>
-                    <span>Productos</span>
-                    <strong>{recentSale.items.length}</strong>
-                  </div>
-                  <div>
-                    <span>Hora</span>
-                    <strong>{formatClock(recentSale.createdAt)}</strong>
-                  </div>
-                </div>
-              ) : null}
 
               {liveSales.length === 0 ? (
                 <div className="caja-live-empty">
@@ -502,35 +499,68 @@ function CajaPage() {
                 </div>
               ) : (
                 <div className="caja-live-feed">
-                  {liveSales.map((sale) => (
-                    <article className="caja-live-sale" key={sale.id}>
-                      <div className="caja-live-sale-head">
-                        <div>
-                          <strong>Venta confirmada</strong>
+                  {liveSales.map((sale) => {
+                    const isExpanded = expandedSales.includes(sale.id);
+
+                    return (
+                      <article className={`caja-live-sale ${isExpanded ? 'is-expanded' : ''}`} key={sale.id}>
+                        <div className="caja-live-sale-head">
+                          <div>
+                            <strong>Venta confirmada</strong>
+                            <span>
+                              {sale.operatorName} · {formatClock(sale.createdAt)}
+                            </span>
+                          </div>
+
+                          <div className="caja-live-sale-head-actions">
+                            <div className="caja-live-sale-total">{formatSaleAmount(sale.amount)}</div>
+                            <button
+                              type="button"
+                              className="caja-live-sale-toggle"
+                              onClick={() => toggleSale(sale.id)}
+                              aria-expanded={isExpanded}
+                              aria-label={isExpanded ? 'Ocultar productos' : 'Ver productos'}
+                            >
+                              <span className={`caja-live-sale-arrow ${isExpanded ? 'is-open' : ''}`}>⌄</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="caja-live-sale-general">
                           <span>
-                            {sale.operatorName} · {formatClock(sale.createdAt)}
+                            <small>Operario</small>
+                            <strong>{sale.operatorName}</strong>
+                          </span>
+                          <span>
+                            <small>Fecha</small>
+                            <strong>{formatClock(sale.createdAt)}</strong>
+                          </span>
+                          <span>
+                            <small>Items</small>
+                            <strong>{sale.items.length}</strong>
                           </span>
                         </div>
-                        <div className="caja-live-sale-total">{money(sale.amount)}</div>
-                      </div>
 
-                      <div className="caja-live-sale-items">
-                        {sale.items.slice(0, 4).map((item, index) => (
-                          <span key={`${sale.id}-${index}`}>
-                            {item.quantity} x {item.name}
-                          </span>
-                        ))}
-                        {sale.items.length > 4 ? <span className="caja-live-sale-more">+{sale.items.length - 4} mas</span> : null}
-                      </div>
+                        <div className={`caja-live-sale-items ${isExpanded ? 'is-open' : ''}`}>
+                          {sale.items.map((item, index) => (
+                            <div className="caja-live-sale-item-row" key={`${sale.id}-${index}`}>
+                              <span className="caja-live-sale-item-name">
+                                {item.quantity} x {item.name}
+                              </span>
+                              <span className="caja-live-sale-item-total">{money(item.total)}</span>
+                            </div>
+                          ))}
+                        </div>
 
-                      <div className="caja-live-sale-foot">
-                        <Badge bg="light" text="dark">
-                          {sale.items.length} productos
-                        </Badge>
-                        <small>{sale.description}</small>
-                      </div>
-                    </article>
-                  ))}
+                        <div className="caja-live-sale-foot">
+                          <Badge bg="light" text="dark">
+                            {sale.items.length} productos
+                          </Badge>
+                          <small>{sale.description}</small>
+                        </div>
+                      </article>
+                    );
+                  })}
                 </div>
               )}
             </article>
