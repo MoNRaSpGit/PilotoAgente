@@ -800,7 +800,7 @@ async function loadRecentSaleMovements(connection, startDate, endDateExclusive, 
   const sql = `
       SELECT ${CASHBOX_MOVEMENT_COLUMNS}
       FROM ops_caja_movimientos
-      WHERE type = 'sale'
+      WHERE type IN ('sale', 'payment')
         AND created_at >= ?
         AND created_at < ?
       ORDER BY created_at DESC, id DESC
@@ -823,7 +823,7 @@ async function loadRecentSaleMovements(connection, startDate, endDateExclusive, 
     movement_id: row.id,
     type: row.type,
     amount: Number(row.amount || 0),
-    description: row.description || 'Venta desde escaner',
+    description: row.description || (row.type === 'payment' ? 'Pago registrado' : 'Venta desde escaner'),
     source: row.source || 'scanner',
     operator: {
       id: row.operator_id || null,

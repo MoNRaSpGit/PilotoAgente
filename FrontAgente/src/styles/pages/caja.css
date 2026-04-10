@@ -776,9 +776,57 @@
   font-size: 0.82rem;
 }
 
+.caja-movement-description {
+  margin: 0.2rem 0 0;
+  color: #475569;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.caja-movement-kind {
+  color: #991b1b !important;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.78rem;
+}
+
+.caja-movement-kind.is-sale {
+  color: #166534 !important;
+}
+
+.caja-movement-meta {
+  display: block;
+  margin-top: 0.08rem;
+}
+
+.caja-movement-description.is-highlighted {
+  margin-top: 0.28rem;
+  display: block;
+  width: fit-content;
+  padding: 0.2rem 0.5rem;
+  border-radius: 10px;
+  background: rgba(153, 27, 27, 0.08);
+  border: 1px solid rgba(153, 27, 27, 0.2);
+  color: #7f1d1d;
+  font-weight: 700;
+}
+
+.caja-movement-description.is-highlighted.is-sale {
+  background: rgba(22, 101, 52, 0.08);
+  border-color: rgba(22, 101, 52, 0.2);
+  color: #14532d;
+}
+
 .caja-movement-amount {
-  color: #15803d !important;
   white-space: nowrap;
+}
+
+.caja-movement-amount.is-sale {
+  color: #166534 !important;
+}
+
+.caja-movement-amount.is-payment {
+  color: #991b1b !important;
 }
 
 .caja-movement-row .caja-live-sale-items {

@@ -111,6 +111,27 @@ function formatClock(value) {
   });
 }
 
+function formatDateTime(value) {
+  const date = parseApiDate(value);
+
+  if (!date) {
+    return 'Ahora';
+  }
+
+  const day = date.toLocaleDateString('es-UY', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  });
+  const time = date.toLocaleTimeString('es-UY', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+
+  return `${day} · ${time}`;
+}
+
 function getScannerIdleMinutes(updatedAt, now = new Date()) {
   const updatedAtDate = parseApiDate(updatedAt);
   const updatedAtMs = updatedAtDate?.getTime() || Number.NaN;
@@ -136,8 +157,9 @@ function normalizeLiveSale(payload) {
 
   return {
     id: payload?.movement_id || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    type: payload?.type || 'sale',
     amount: Number(payload?.amount || 0),
-    description: payload?.description || 'Venta desde escaner',
+    description: payload?.description || (payload?.type === 'payment' ? 'Pago registrado' : 'Venta desde escaner'),
     source: payload?.source || 'scanner',
     operatorName: payload?.operator?.name || payload?.operator_name || 'Operario',
     operatorRole: payload?.operator?.role || payload?.operator_role || null,
@@ -153,6 +175,7 @@ function normalizeRecentMovements(items = []) {
 
   return items.map((payload) => normalizeLiveSale({
     movement_id: payload?.movement_id || payload?.id,
+    type: payload?.type,
     amount: payload?.amount,
     description: payload?.description,
     source: payload?.source,
@@ -165,8 +188,9 @@ function normalizeRecentMovements(items = []) {
   }));
 }
 
-function formatSaleAmount(value) {
-  return `+ ${money(value)}`;
+function formatMovementAmount(value, type = 'sale') {
+  const formatted = money(value);
+  return type === 'payment' ? `- ${formatted}` : `+ ${formatted}`;
 }
 
 function getScannerStatusBadge(updatedAt, hasItems, now = new Date()) {
@@ -803,7 +827,7 @@ function CajaPage() {
                 <div className="panel-heading">
                   <div className="caja-panel-copy">
                     <h3>Movimientos</h3>
-                    <p>Resumen compacto de las ventas confirmadas.</p>
+                    <p>Resumen compacto de ventas y pagos confirmados.</p>
                   </div>
                   <div className="caja-movements-tools">
                     <div className="caja-movements-actions">
@@ -838,11 +862,28 @@ function CajaPage() {
                       <div className="caja-movement-row" key={`movement-${sale.id}`}>
                         <div className="caja-movement-head">
                           <div>
-                            <strong>{sale.operatorName}</strong>
-                            <span>{formatClock(sale.createdAt)}</span>
+                            {sale.type === 'payment' ? (
+                              <>
+                                <strong className="caja-movement-kind">Pago</strong>
+                                <span className="caja-movement-meta">{`${sale.operatorName} · ${formatDateTime(sale.createdAt)}`}</span>
+                                <p className="caja-movement-description is-highlighted">
+                                  {sale.description || 'Pago registrado'}
+                                </p>
+                              </>
+                            ) : (
+                              <>
+                                <strong className="caja-movement-kind is-sale">Venta</strong>
+                                <span className="caja-movement-meta">{`${sale.operatorName} Â· ${formatDateTime(sale.createdAt)}`}</span>
+                                <p className="caja-movement-description is-highlighted is-sale">
+                                  {sale.description || 'Venta desde escaner'}
+                                </p>
+                              </>
+                            )}
                           </div>
                           <div className="caja-live-sale-head-actions">
-                            <strong className="caja-movement-amount">{formatSaleAmount(sale.amount)}</strong>
+                            <strong className={`caja-movement-amount ${sale.type === 'payment' ? 'is-payment' : 'is-sale'}`}>
+                              {formatMovementAmount(sale.amount, sale.type)}
+                            </strong>
                             {sale.items.length > 0 ? (
                               <button
                                 type="button"
