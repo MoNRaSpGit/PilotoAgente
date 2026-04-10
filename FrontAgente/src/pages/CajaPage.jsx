@@ -3,16 +3,9 @@ import { Badge, Button, Form, Modal } from 'react-bootstrap';
 import toast from 'react-hot-toast';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import {
-  closeCashbox,
-  fetchCashboxSummary,
-  fetchExpensesSummary,
-  openCashbox,
-  registerCashboxPayment
-} from '../services/api';
+import { closeCashbox, fetchCashboxSummary, openCashbox, registerCashboxPayment } from '../services/api';
 import { clearSession } from '../store/slices/authSlice';
-import { clearAuthSession } from '../utils/authSession';
-import { getAuthToken } from '../utils/authSession';
+import { clearAuthSession, getAuthToken } from '../utils/authSession';
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -60,11 +53,53 @@ function metricValue(current, previous) {
   return `${money(current)} · ${money(previous)}`;
 }
 
+function formatClock(value) {
+  if (!value) {
+    return 'Ahora';
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return 'Ahora';
+  }
+
+  return date.toLocaleTimeString('es-UY', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+}
+
+function normalizeLiveSale(payload) {
+  const items = Array.isArray(payload?.items)
+    ? payload.items.map((item) => ({
+        barcode: item.barcode || null,
+        name: item.product_name || item.name || 'Producto',
+        quantity: Number(item.quantity || 1),
+        unitPrice: Number(item.unit_price || item.price || 0),
+        total: Number(item.total || 0)
+      }))
+    : [];
+
+  return {
+    id: payload?.movement_id || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    amount: Number(payload?.amount || 0),
+    description: payload?.description || 'Venta desde escaner',
+    source: payload?.source || 'scanner',
+    operatorName: payload?.operator?.name || payload?.operator_name || 'Operario',
+    operatorRole: payload?.operator?.role || payload?.operator_role || null,
+    items,
+    createdAt: new Date().toISOString()
+  };
+}
+
 function CajaPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const user = useSelector((state) => state.auth.user);
   const [dashboard, setDashboard] = useState(null);
+  const [liveSales, setLiveSales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openModal, setOpenModal] = useState(false);
   const [openingAmount, setOpeningAmount] = useState('');
@@ -102,16 +137,7 @@ function CajaPage() {
         forceRefresh: Boolean(options.forceRefresh)
       });
 
-      let expensesSummary = dashboardRef.current?.expenses_summary || null;
-
-      if (!quiet || !expensesSummary) {
-        expensesSummary = await fetchExpensesSummary();
-      }
-
-      setDashboard({
-        ...data,
-        expenses_summary: expensesSummary
-      });
+      setDashboard(data);
     } catch (error) {
       if (error.status === 401) {
         handleSessionExpired();
@@ -136,19 +162,13 @@ function CajaPage() {
     const run = async () => {
       try {
         setLoading(true);
-        const [data, expensesSummary] = await Promise.all([
-          fetchCashboxSummary({
-            date: todayDate(),
-            compareTo: yesterdayDate()
-          }),
-          fetchExpensesSummary()
-        ]);
+        const data = await fetchCashboxSummary({
+          date: todayDate(),
+          compareTo: yesterdayDate()
+        });
 
         if (active) {
-          setDashboard({
-            ...data,
-            expenses_summary: expensesSummary
-          });
+          setDashboard(data);
         }
       } catch (error) {
         if (error.status === 401) {
@@ -182,7 +202,23 @@ function CajaPage() {
 
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
     const eventSource = new EventSource(`${apiUrl}/api/caja/stream?token=${encodeURIComponent(token)}`);
-    const handleCashboxUpdate = () => {
+
+    const handleCashboxUpdate = (event) => {
+      let payload = {};
+
+      try {
+        payload = event?.data ? JSON.parse(event.data) : {};
+      } catch (_error) {
+        payload = {};
+      }
+
+      if (payload.type === 'sale') {
+        const liveSale = normalizeLiveSale(payload);
+        setLiveSales((current) => [liveSale, ...current].slice(0, 6));
+      } else if (payload.type === 'open' || payload.type === 'close') {
+        setLiveSales([]);
+      }
+
       if (loadDashboardRef.current) {
         loadDashboardRef.current(true, { forceRefresh: true });
       }
@@ -218,22 +254,6 @@ function CajaPage() {
     previous: { sales_total: 0 },
     comparison_percent: null
   };
-  const expenseTotals = dashboard?.expenses_summary?.totals || {
-    daily_total: 0,
-    monthly_total: 0,
-    business_daily_total: 0,
-    business_monthly_total: 0,
-    home_daily_total: 0,
-    home_monthly_total: 0
-  };
-  const businessBaseResult = Number(
-    (
-      Number(selectedDay.sales_total || 0) -
-      Number(selectedDay.payments_total || 0) -
-      Number(expenseTotals.business_daily_total || 0)
-    ).toFixed(2)
-  );
-  const estimatedBusinessProfit = Number((businessBaseResult * 0.22).toFixed(2));
 
   const closeOpenModal = () => {
     setOpenModal(false);
@@ -263,6 +283,7 @@ function CajaPage() {
           current_amount: openedCashbox.current_amount
         }
       }));
+      setLiveSales([]);
       toast.success('Caja abierta');
       closeOpenModal();
     } catch (error) {
@@ -298,10 +319,12 @@ function CajaPage() {
           opening_amount: 0,
           sales_total: 0,
           payments_total: 0,
-          current_amount: 0
+          current_amount: 0,
+          profit_amount: 0
         }
       }));
       setComparisonExpanded(false);
+      setLiveSales([]);
       toast.success('Caja cerrada');
     } catch (error) {
       if (error.status === 401) {
@@ -341,7 +364,8 @@ function CajaPage() {
           opening_amount: updatedCashbox.opening_amount,
           sales_total: updatedCashbox.sales_total,
           payments_total: updatedCashbox.payments_total,
-          current_amount: updatedCashbox.current_amount
+          current_amount: updatedCashbox.current_amount,
+          profit_amount: Number(((Number(updatedCashbox.sales_total || 0) - Number(updatedCashbox.payments_total || 0)) * 0.2).toFixed(2))
         }
       }));
       setPaymentForm({
@@ -360,6 +384,8 @@ function CajaPage() {
       setSavingPayment(false);
     }
   };
+
+  const recentSale = liveSales[0] || null;
 
   return (
     <section className="page-section caja-page">
@@ -385,138 +411,178 @@ function CajaPage() {
 
       {isOpen ? (
         <>
-      <div className="caja-grid">
-        <article className="card-panel caja-stat-card caja-metric-card">
-          <span>Caja inicial</span>
-          <strong>{money(selectedDay.opening_amount)}</strong>
-        </article>
-        <article className="card-panel caja-stat-card caja-metric-card">
-          <span>Ventas del dia</span>
-          <strong>{money(selectedDay.sales_total)}</strong>
-        </article>
-        <article className="card-panel caja-stat-card caja-metric-card">
-          <span>Ganancia diaria negocio</span>
-          <strong>{money(estimatedBusinessProfit)}</strong>
-        </article>
-        <article className="card-panel caja-stat-card caja-metric-card caja-metric-card-accent">
-          <span>Monto Actual</span>
-          <strong>{money(selectedDay.current_amount)}</strong>
-        </article>
-        <article className="card-panel caja-stat-card caja-metric-card">
-          <span>Pagos registrados</span>
-          <strong>{money(selectedDay.payments_total)}</strong>
-        </article>
-        <article className={`card-panel caja-trend-card caja-trend-card-compact ${comparisonExpanded ? 'is-expanded' : ''}`}>
-          <span>Comparaciones</span>
-          <div className="caja-trend-list">
-            <div className="caja-trend-item caja-trend-item-main">
-              <small>Hoy vs ayer</small>
-              <strong className={trendClass(dashboard?.comparison_percent)}>
-                {trendLabel(dashboard?.comparison_percent)}
-              </strong>
-              <p>{metricValue(selectedDay.sales_total, compareDay.sales_total)}</p>
-            </div>
-            <div className={`caja-trend-flyout ${comparisonExpanded ? 'is-open' : ''}`}>
-              <div className="caja-trend-item caja-trend-item-compact">
-                <small>Semana pasada</small>
-                <strong className={trendClass(weeklySummary.comparison_percent)}>
-                  {trendLabel(weeklySummary.comparison_percent)}
-                </strong>
-                <p>{metricValue(weeklySummary.current.sales_total, weeklySummary.previous.sales_total)}</p>
+          <div className="caja-grid">
+            <article className="card-panel caja-stat-card caja-metric-card">
+              <span>Caja inicial</span>
+              <strong>{money(selectedDay.opening_amount)}</strong>
+            </article>
+            <article className="card-panel caja-stat-card caja-metric-card">
+              <span>Ventas del dia</span>
+              <strong>{money(selectedDay.sales_total)}</strong>
+            </article>
+            <article className="card-panel caja-stat-card caja-metric-card">
+              <span>Ganancia diaria</span>
+              <strong>{money(selectedDay.profit_amount)}</strong>
+            </article>
+            <article className="card-panel caja-stat-card caja-metric-card caja-metric-card-accent">
+              <span>Monto actual</span>
+              <strong>{money(selectedDay.current_amount)}</strong>
+            </article>
+            <article className="card-panel caja-stat-card caja-metric-card">
+              <span>Pagos registrados</span>
+              <strong>{money(selectedDay.payments_total)}</strong>
+            </article>
+            <article className={`card-panel caja-trend-card caja-trend-card-compact ${comparisonExpanded ? 'is-expanded' : ''}`}>
+              <span>Comparaciones</span>
+              <div className="caja-trend-list">
+                <div className="caja-trend-item caja-trend-item-main">
+                  <small>Hoy vs ayer</small>
+                  <strong className={trendClass(dashboard?.comparison_percent)}>{trendLabel(dashboard?.comparison_percent)}</strong>
+                  <p>{metricValue(selectedDay.sales_total, compareDay.sales_total)}</p>
+                </div>
+                <div className={`caja-trend-flyout ${comparisonExpanded ? 'is-open' : ''}`}>
+                  <div className="caja-trend-item caja-trend-item-compact">
+                    <small>Semana pasada</small>
+                    <strong className={trendClass(weeklySummary.comparison_percent)}>{trendLabel(weeklySummary.comparison_percent)}</strong>
+                    <p>{metricValue(weeklySummary.current.sales_total, weeklySummary.previous.sales_total)}</p>
+                  </div>
+                  <div className="caja-trend-item caja-trend-item-compact">
+                    <small>Mes pasado</small>
+                    <strong className={trendClass(monthlySummary.comparison_percent)}>{trendLabel(monthlySummary.comparison_percent)}</strong>
+                    <p>{metricValue(monthlySummary.current.sales_total, monthlySummary.previous.sales_total)}</p>
+                  </div>
+                </div>
               </div>
-              <div className="caja-trend-item caja-trend-item-compact">
-                <small>Mes pasado</small>
-                <strong className={trendClass(monthlySummary.comparison_percent)}>
-                  {trendLabel(monthlySummary.comparison_percent)}
-                </strong>
-                <p>{metricValue(monthlySummary.current.sales_total, monthlySummary.previous.sales_total)}</p>
+              <div className="caja-trend-footer">
+                <span className="caja-trend-footer-label">{comparisonExpanded ? 'Ocultar detalle' : 'Ver semana y mes'}</span>
+                <button
+                  type="button"
+                  className="caja-trend-toggle"
+                  onClick={() => setComparisonExpanded((current) => !current)}
+                  aria-expanded={comparisonExpanded}
+                  aria-label={comparisonExpanded ? 'Contraer comparaciones' : 'Expandir comparaciones'}
+                >
+                  <span className={`caja-trend-arrow ${comparisonExpanded ? 'is-open' : ''}`}>⌄</span>
+                </button>
               </div>
-            </div>
+            </article>
           </div>
-          <div className="caja-trend-footer">
-            <span className="caja-trend-footer-label">{comparisonExpanded ? 'Ocultar detalle' : 'Ver semana y mes'}</span>
-            <button
-              type="button"
-              className="caja-trend-toggle"
-              onClick={() => setComparisonExpanded((current) => !current)}
-              aria-expanded={comparisonExpanded}
-              aria-label={comparisonExpanded ? 'Contraer comparaciones' : 'Expandir comparaciones'}
-            >
-              <span className={`caja-trend-arrow ${comparisonExpanded ? 'is-open' : ''}`}>⌄</span>
-            </button>
+
+          <div className="caja-bottom-grid">
+            <article className="card-panel caja-live-panel">
+              <div className="panel-heading">
+                <div>
+                  <h3>Caja en vivo</h3>
+                  <p>Espejo de las ventas confirmadas desde el escaner.</p>
+                </div>
+                <Badge bg="dark">SSE</Badge>
+              </div>
+
+              {recentSale ? (
+                <div className="caja-live-pulse">
+                  <div>
+                    <span>Ultima venta</span>
+                    <strong>{money(recentSale.amount)}</strong>
+                  </div>
+                  <div>
+                    <span>Productos</span>
+                    <strong>{recentSale.items.length}</strong>
+                  </div>
+                  <div>
+                    <span>Hora</span>
+                    <strong>{formatClock(recentSale.createdAt)}</strong>
+                  </div>
+                </div>
+              ) : null}
+
+              {liveSales.length === 0 ? (
+                <div className="caja-live-empty">
+                  <strong>Sin ventas confirmadas todavia</strong>
+                  <p>Cuando el operario confirme una venta, se va a mostrar aca en tiempo real.</p>
+                </div>
+              ) : (
+                <div className="caja-live-feed">
+                  {liveSales.map((sale) => (
+                    <article className="caja-live-sale" key={sale.id}>
+                      <div className="caja-live-sale-head">
+                        <div>
+                          <strong>Venta confirmada</strong>
+                          <span>
+                            {sale.operatorName} · {formatClock(sale.createdAt)}
+                          </span>
+                        </div>
+                        <div className="caja-live-sale-total">{money(sale.amount)}</div>
+                      </div>
+
+                      <div className="caja-live-sale-items">
+                        {sale.items.slice(0, 4).map((item, index) => (
+                          <span key={`${sale.id}-${index}`}>
+                            {item.quantity} x {item.name}
+                          </span>
+                        ))}
+                        {sale.items.length > 4 ? <span className="caja-live-sale-more">+{sale.items.length - 4} mas</span> : null}
+                      </div>
+
+                      <div className="caja-live-sale-foot">
+                        <Badge bg="light" text="dark">
+                          {sale.items.length} productos
+                        </Badge>
+                        <small>{sale.description}</small>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </article>
+
+            <article className="card-panel caja-payment-panel caja-payment-panel-compact caja-payment-side">
+              <div className="panel-heading">
+                <div>
+                  <h3>Registrar pago</h3>
+                  <p>Movimientos manuales, en formato liviano.</p>
+                </div>
+              </div>
+
+              <form className="caja-payment-form caja-payment-form-compact" onSubmit={handlePaymentSubmit}>
+                <input
+                  className="form-control"
+                  type="text"
+                  inputMode="decimal"
+                  pattern="\d*\.?\d*"
+                  placeholder="Monto"
+                  value={paymentForm.amount}
+                  onChange={(event) => {
+                    const nextValue = event.target.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1');
+                    setPaymentForm((current) => ({
+                      ...current,
+                      amount: nextValue
+                    }));
+                  }}
+                />
+                <input
+                  className="form-control"
+                  type="text"
+                  placeholder="Descripcion"
+                  value={paymentForm.description}
+                  onChange={(event) => {
+                    setPaymentForm((current) => ({
+                      ...current,
+                      description: event.target.value
+                    }));
+                  }}
+                />
+                <Button type="submit" variant="dark" disabled={savingPayment || !isOpen}>
+                  {savingPayment ? 'Guardando...' : 'Agregar pago'}
+                </Button>
+              </form>
+            </article>
           </div>
-        </article>
-      </div>
 
-      <div className="card-panel caja-expenses-panel">
-        <div className="panel-heading">
-          <div>
-            <h3>Gastos estimados</h3>
-            <p>Base diaria de negocio y hogar tomada desde la configuración editable.</p>
+          <div className="caja-actions-inline">
+            <Button variant="outline-dark" onClick={handleCloseCashbox} disabled={savingClose}>
+              {savingClose ? 'Cerrando...' : 'Cerrar caja'}
+            </Button>
           </div>
-        </div>
-        <div className="caja-expenses-summary">
-          <article>
-            <span>Gastos negocio</span>
-            <strong>{money(expenseTotals.business_daily_total)}</strong>
-          </article>
-          <article>
-            <span>Ventas del dia</span>
-            <strong>{money(selectedDay.sales_total)}</strong>
-          </article>
-          <article className="caja-expense-highlight">
-            <span>Resultado negocio</span>
-            <strong>{money(estimatedBusinessProfit)}</strong>
-          </article>
-        </div>
-      </div>
-
-      <div className="card-panel caja-payment-panel caja-payment-panel-compact">
-        <div className="panel-heading">
-          <div>
-            <h3>Registrar pago</h3>
-          </div>
-        </div>
-
-        <form className="caja-payment-form" onSubmit={handlePaymentSubmit}>
-          <input
-            className="form-control"
-            type="text"
-            inputMode="decimal"
-            pattern="\d*\.?\d*"
-            placeholder="Monto"
-            value={paymentForm.amount}
-            onChange={(event) => {
-              const nextValue = event.target.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1');
-              setPaymentForm((current) => ({
-                ...current,
-                amount: nextValue
-              }));
-            }}
-          />
-          <input
-            className="form-control"
-            type="text"
-            placeholder="Descripcion"
-            value={paymentForm.description}
-            onChange={(event) => {
-              setPaymentForm((current) => ({
-                ...current,
-                description: event.target.value
-              }));
-            }}
-          />
-          <Button type="submit" variant="dark" disabled={savingPayment || !isOpen}>
-            {savingPayment ? 'Guardando...' : 'Agregar pago'}
-          </Button>
-        </form>
-      </div>
-
-      <div className="caja-actions-inline">
-        <Button variant="outline-dark" onClick={handleCloseCashbox} disabled={savingClose}>
-          {savingClose ? 'Cerrando...' : 'Cerrar caja'}
-        </Button>
-      </div>
         </>
       ) : null}
 

@@ -339,11 +339,175 @@
   padding: 0.9rem 1rem;
 }
 
+.caja-bottom-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.75fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.caja-live-panel {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.caja-live-panel .panel-heading {
+  margin-bottom: 0;
+}
+
+.caja-live-pulse {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.94));
+  color: #fff;
+}
+
+.caja-live-pulse span {
+  display: block;
+  color: rgba(226, 232, 240, 0.72);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+}
+
+.caja-live-pulse strong {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 1rem;
+  color: #fff;
+}
+
+.caja-live-empty {
+  display: grid;
+  gap: 0.2rem;
+  padding: 1rem 1.05rem;
+  border-radius: 18px;
+  background: rgba(248, 250, 252, 0.92);
+  border: 1px dashed rgba(148, 163, 184, 0.22);
+  color: #475569;
+}
+
+.caja-live-empty strong {
+  color: #0f172a;
+}
+
+.caja-live-feed {
+  display: grid;
+  gap: 0.75rem;
+  max-height: 360px;
+  overflow: auto;
+  padding-right: 0.15rem;
+}
+
+.caja-live-sale {
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.95rem 1rem;
+  border-radius: 18px;
+  background: rgba(248, 250, 252, 0.98);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+}
+
+.caja-live-sale-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.9rem;
+  align-items: flex-start;
+}
+
+.caja-live-sale-head strong {
+  display: block;
+  color: #0f172a;
+  font-size: 0.98rem;
+}
+
+.caja-live-sale-head span {
+  color: #64748b;
+  font-size: 0.82rem;
+}
+
+.caja-live-sale-total {
+  color: #0f172a;
+  font-size: 1.2rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.caja-live-sale-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.caja-live-sale-items span {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.32rem 0.6rem;
+  border-radius: 999px;
+  background: #eef2f7;
+  color: #334155;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.caja-live-sale-more {
+  background: #dbeafe !important;
+  color: #1e3a8a !important;
+}
+
+.caja-live-sale-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.caja-live-sale-foot small {
+  color: #64748b;
+}
+
+.caja-payment-side {
+  align-self: start;
+}
+
+.caja-payment-form-compact .form-control {
+  min-height: 42px;
+  font-size: 0.92rem;
+}
+
+.caja-payment-form-compact .btn {
+  min-height: 42px;
+  border-radius: 14px;
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+
+.caja-payment-panel-compact .panel-heading {
+  margin-bottom: 0.2rem;
+}
+
+.caja-payment-panel-compact .panel-heading h3 {
+  font-size: 0.95rem;
+}
+
+.caja-payment-panel-compact .panel-heading p {
+  font-size: 0.84rem;
+}
+
 .caja-payment-form {
   display: grid;
   gap: 0.75rem;
   grid-template-columns: 1fr 1.3fr auto;
   align-items: end;
+}
+
+.caja-payment-form.caja-payment-form-compact {
+  grid-template-columns: 1fr;
 }
 
 .caja-payment-panel-compact .panel-heading {
@@ -1134,6 +1298,10 @@
     grid-template-columns: 1fr;
   }
 
+  .caja-bottom-grid {
+    grid-template-columns: 1fr;
+  }
+
   .caja-payment-panel-compact {
     padding: 0.9rem;
   }
@@ -1273,6 +1441,16 @@
   .scanner-charge-footer .btn {
     min-width: 96px;
     min-height: 44px;
+  }
+
+  .caja-live-pulse {
+    grid-template-columns: 1fr;
+  }
+
+  .caja-live-sale-head,
+  .caja-live-sale-foot {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 

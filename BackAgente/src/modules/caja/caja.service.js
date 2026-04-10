@@ -102,8 +102,14 @@ export async function addCashboxSale(payload, user) {
   });
 
   broadcastCashboxUpdate({
-    type: 'cashbox:sale',
-    source: payload?.source || 'scanner'
+    type: 'sale',
+    source: payload?.source || 'scanner',
+    description: payload?.description || 'Venta desde escaner',
+    amount,
+    items,
+    operator,
+    caja: result.caja,
+    movement_id: result.movement_id
   });
 
   return {
