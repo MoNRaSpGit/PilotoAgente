@@ -383,6 +383,14 @@
   gap: 1rem;
 }
 
+.caja-right-stack {
+  display: grid;
+  gap: 1rem;
+  align-self: start;
+  position: sticky;
+  top: 5.6rem;
+}
+
 .caja-live-panel {
   display: grid;
   gap: 0.85rem;
@@ -706,6 +714,82 @@
 .caja-movements-list {
   display: grid;
   gap: 0.65rem;
+}
+
+.caja-ranking-panel {
+  gap: 0.75rem;
+}
+
+.caja-ranking-list {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.caja-ranking-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.72rem 0.85rem;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.95), rgba(255, 255, 255, 0.98));
+}
+
+.caja-ranking-main {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.caja-ranking-main strong {
+  color: #0f172a;
+  font-size: 0.93rem;
+}
+
+.caja-ranking-product {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.caja-ranking-product-copy {
+  display: grid;
+  gap: 0.05rem;
+}
+
+.caja-ranking-image {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  object-fit: cover;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: #fff;
+}
+
+.caja-ranking-image-fallback {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  background: #e2e8f0;
+  color: #475569;
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+
+.caja-ranking-sales {
+  color: #166534;
+  font-weight: 800;
+  font-size: 0.9rem;
+  min-width: 44px;
+  text-align: right;
+}
+
+.caja-ranking-barcode {
+  color: #64748b;
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
 }
 
 .caja-movements-tools {
@@ -1057,6 +1141,11 @@
   }
 
   .caja-payment-side {
+    position: static;
+    top: auto;
+  }
+
+  .caja-right-stack {
     position: static;
     top: auto;
   }

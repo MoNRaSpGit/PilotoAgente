@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   closeCashbox,
   fetchCashboxMovements,
+  fetchCashboxRanking,
   fetchCashboxSummary,
   fetchScannerLiveState,
   openCashbox,
@@ -188,6 +189,37 @@ function normalizeRecentMovements(items = []) {
   }));
 }
 
+function normalizeRankingItems(items = []) {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
+  return items.map((item, index) => ({
+    rank: Number(item?.rank || index + 1),
+    productName: item?.product_name || 'Producto',
+    barcode: item?.barcode || null,
+    totalQuantity: Number(item?.total_quantity || 0),
+    imageUrl: resolveProductImage(item?.product_image),
+    hasImage: Boolean(item?.has_image && item?.product_image)
+  }));
+}
+
+function resolveProductImage(imageValue) {
+  if (!imageValue) {
+    return '';
+  }
+
+  if (
+    imageValue.startsWith('http://') ||
+    imageValue.startsWith('https://') ||
+    imageValue.startsWith('data:image/')
+  ) {
+    return imageValue;
+  }
+
+  return `data:image/jpeg;base64,${imageValue}`;
+}
+
 function formatMovementAmount(value, type = 'sale') {
   const formatted = money(value);
   return type === 'payment' ? `- ${formatted}` : `+ ${formatted}`;
@@ -223,6 +255,9 @@ function CajaPage() {
     updated_at: null
   });
   const [loading, setLoading] = useState(true);
+  const [rankingItems, setRankingItems] = useState([]);
+  const [rankingMode, setRankingMode] = useState('top5');
+  const [rankingLoading, setRankingLoading] = useState(false);
   const [openModal, setOpenModal] = useState(false);
   const [openingAmount, setOpeningAmount] = useState('');
   const [savingOpen, setSavingOpen] = useState(false);
@@ -242,6 +277,8 @@ function CajaPage() {
   const loadDashboardRef = useRef(null);
   const loadMovementsRef = useRef(null);
   const movementsModeRef = useRef('recent');
+  const loadRankingRef = useRef(null);
+  const rankingModeRef = useRef('top5');
 
   useEffect(() => {
     dashboardRef.current = dashboard;
@@ -266,7 +303,9 @@ function CajaPage() {
           : options.movementsMode === 'top10'
             ? 10
             : 3;
-      const [data, liveState, movementData] = await Promise.all([
+      const resolvedRankingMode = options.rankingMode || rankingMode;
+      const rankingLimit = resolvedRankingMode === 'all' ? 'all' : resolvedRankingMode === 'top10' ? 10 : 5;
+      const [data, liveState, movementData, rankingData] = await Promise.all([
         fetchCashboxSummary({
           date: todayDate(),
           compareTo: yesterdayDate(),
@@ -276,11 +315,14 @@ function CajaPage() {
         fetchCashboxMovements({
           date: todayDate(),
           limit: movementLimit
-        })
+        }),
+        fetchCashboxRanking({ limit: rankingLimit })
       ]);
 
       setDashboard(data);
       setLiveSales(normalizeRecentMovements(movementData?.items));
+      setRankingItems(normalizeRankingItems(rankingData?.items));
+      setRankingMode(resolvedRankingMode);
       setScannerLiveState({
         items: Array.isArray(liveState?.items) ? liveState.items : [],
         total: Number(liveState?.total || 0),
@@ -302,6 +344,7 @@ function CajaPage() {
     } finally {
       setLoading(false);
       setMovementsLoading(false);
+      setRankingLoading(false);
     }
   };
 
@@ -338,9 +381,39 @@ function CajaPage() {
     loadMovementsRef.current = loadMovements;
   }, [loadMovements]);
 
+  const loadRanking = async (mode = rankingMode, quiet = false) => {
+    const rankingLimit = mode === 'all' ? 'all' : mode === 'top10' ? 10 : 5;
+
+    try {
+      if (!quiet) {
+        setRankingLoading(true);
+      }
+
+      const rankingData = await fetchCashboxRanking({ limit: rankingLimit });
+      setRankingItems(normalizeRankingItems(rankingData?.items));
+      setRankingMode(mode);
+    } catch (error) {
+      if (!quiet) {
+        toast.error(error.message);
+      }
+    } finally {
+      if (!quiet) {
+        setRankingLoading(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    loadRankingRef.current = loadRanking;
+  }, [loadRanking]);
+
   useEffect(() => {
     movementsModeRef.current = movementsMode;
   }, [movementsMode]);
+
+  useEffect(() => {
+    rankingModeRef.current = rankingMode;
+  }, [rankingMode]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -359,7 +432,8 @@ function CajaPage() {
       try {
         setLoading(true);
         const movementLimit = movementsMode === 'all' ? 'all' : movementsMode === 'top10' ? 10 : 3;
-        const [data, liveState, movementData] = await Promise.all([
+        const rankingLimit = rankingMode === 'all' ? 'all' : rankingMode === 'top10' ? 10 : 5;
+        const [data, liveState, movementData, rankingData] = await Promise.all([
           fetchCashboxSummary({
             date: todayDate(),
             compareTo: yesterdayDate()
@@ -368,12 +442,14 @@ function CajaPage() {
           fetchCashboxMovements({
             date: todayDate(),
             limit: movementLimit
-          })
+          }),
+          fetchCashboxRanking({ limit: rankingLimit })
         ]);
 
         if (active) {
           setDashboard(data);
           setLiveSales(normalizeRecentMovements(movementData?.items));
+          setRankingItems(normalizeRankingItems(rankingData?.items));
           setScannerLiveState({
             items: Array.isArray(liveState?.items) ? liveState.items : [],
             total: Number(liveState?.total || 0),
@@ -443,8 +519,12 @@ function CajaPage() {
         if (loadMovementsRef.current) {
           loadMovementsRef.current(movementsModeRef.current, true);
         }
+        if (loadRankingRef.current) {
+          loadRankingRef.current(rankingModeRef.current, true);
+        }
       } else if (payload.type === 'cashbox:opened' || payload.type === 'cashbox:closed') {
         setLiveSales([]);
+        setRankingItems([]);
         setScannerLiveState({
           items: [],
           total: 0,
@@ -544,6 +624,7 @@ function CajaPage() {
         }
       }));
       setLiveSales([]);
+      setRankingItems([]);
       setScannerLiveState({
         items: [],
         total: 0,
@@ -594,6 +675,7 @@ function CajaPage() {
       }));
       setComparisonExpanded(false);
       setLiveSales([]);
+      setRankingItems([]);
       setScannerLiveState({
         items: [],
         total: 0,
@@ -923,55 +1005,114 @@ function CajaPage() {
                   </div>
                 )}
               </article>
+
             </div>
 
-            <article className="card-panel caja-payment-panel caja-payment-panel-compact caja-payment-side">
-              <div className="panel-heading">
-                <div className="caja-panel-copy">
-                  <h3>Registrar pago</h3>
-                  <p>Movimientos manuales, en formato liviano.</p>
+            <div className="caja-right-stack">
+              <article className="card-panel caja-live-panel caja-ranking-panel">
+                <div className="panel-heading">
+                  <div className="caja-panel-copy">
+                    <h3>Ranking</h3>
+                    <p>Productos mas vendidos de hoy.</p>
+                  </div>
+                  <div className="caja-movements-tools">
+                    <div className="caja-movements-actions">
+                      {rankingMode === 'top5' ? (
+                        <button type="button" className="caja-inline-link" onClick={() => loadRanking('top10')} disabled={rankingLoading}>
+                          Ver mas
+                        </button>
+                      ) : null}
+                      {rankingMode === 'top10' ? (
+                        <button type="button" className="caja-inline-link" onClick={() => loadRanking('all')} disabled={rankingLoading}>
+                          Ver todo
+                        </button>
+                      ) : null}
+                      {rankingMode === 'all' ? (
+                        <button type="button" className="caja-inline-link" onClick={() => loadRanking('top5')} disabled={rankingLoading}>
+                          Volver a 5
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
                 </div>
-              </div>
 
-              <form className="caja-payment-form caja-payment-form-compact" onSubmit={handlePaymentSubmit}>
-                <input
-                  className="form-control"
-                  type="text"
-                  inputMode="decimal"
-                  pattern="\d*\.?\d*"
-                  placeholder="Monto"
-                  value={paymentForm.amount}
-                  onChange={(event) => {
-                    const nextValue = event.target.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1');
-                    setPaymentForm((current) => ({
-                      ...current,
-                      amount: nextValue
-                    }));
-                  }}
-                />
-                <input
-                  className="form-control"
-                  type="text"
-                  placeholder="Descripcion"
-                  value={paymentForm.description}
-                  onChange={(event) => {
-                    setPaymentForm((current) => ({
-                      ...current,
-                      description: event.target.value
-                    }));
-                  }}
-                />
-                <Button type="submit" variant="dark" className="caja-payment-submit" disabled={savingPayment || !isOpen}>
-                  {savingPayment ? 'Guardando...' : 'Agregar pago'}
-                </Button>
-              </form>
+                {rankingItems.length === 0 ? (
+                  <div className="caja-live-empty">
+                    <strong>Sin ranking disponible</strong>
+                    <p>El ranking aparece cuando se registran ventas con productos.</p>
+                  </div>
+                ) : (
+                  <div className="caja-ranking-list">
+                    {rankingItems.map((item) => (
+                      <div className="caja-ranking-row" key={`${item.rank}-${item.productName}-${item.barcode || 'sin-codigo'}`}>
+                        <div className="caja-ranking-main">
+                          <div className="caja-ranking-product">
+                            {item.hasImage ? (
+                              <img className="caja-ranking-image" src={item.imageUrl} alt={item.productName} loading="lazy" />
+                            ) : (
+                              <span className="caja-ranking-image-fallback">IMG</span>
+                            )}
+                            <div className="caja-ranking-product-copy">
+                              <strong>{item.productName}</strong>
+                              <small className="caja-ranking-barcode">COD: {item.barcode || 'sin-codigo'}</small>
+                            </div>
+                          </div>
+                        </div>
+                        <span className="caja-ranking-sales">{item.totalQuantity}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </article>
 
-              <div className="caja-close-box">
-                <Button variant="dark" onClick={openCloseConfirmModal} disabled={savingClose}>
-                  {savingClose ? 'Cerrando...' : 'Cerrar caja'}
-                </Button>
-              </div>
-            </article>
+              <article className="card-panel caja-payment-panel caja-payment-panel-compact">
+                <div className="panel-heading">
+                  <div className="caja-panel-copy">
+                    <h3>Registrar pago</h3>
+                    <p>Movimientos manuales, en formato liviano.</p>
+                  </div>
+                </div>
+
+                <form className="caja-payment-form caja-payment-form-compact" onSubmit={handlePaymentSubmit}>
+                  <input
+                    className="form-control"
+                    type="text"
+                    inputMode="decimal"
+                    pattern="\d*\.?\d*"
+                    placeholder="Monto"
+                    value={paymentForm.amount}
+                    onChange={(event) => {
+                      const nextValue = event.target.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1');
+                      setPaymentForm((current) => ({
+                        ...current,
+                        amount: nextValue
+                      }));
+                    }}
+                  />
+                  <input
+                    className="form-control"
+                    type="text"
+                    placeholder="Descripcion"
+                    value={paymentForm.description}
+                    onChange={(event) => {
+                      setPaymentForm((current) => ({
+                        ...current,
+                        description: event.target.value
+                      }));
+                    }}
+                  />
+                  <Button type="submit" variant="dark" className="caja-payment-submit" disabled={savingPayment || !isOpen}>
+                    {savingPayment ? 'Guardando...' : 'Agregar pago'}
+                  </Button>
+                </form>
+
+                <div className="caja-close-box">
+                  <Button variant="dark" onClick={openCloseConfirmModal} disabled={savingClose}>
+                    {savingClose ? 'Cerrando...' : 'Cerrar caja'}
+                  </Button>
+                </div>
+              </article>
+            </div>
           </div>
         </>
       ) : null}
@@ -1045,6 +1186,7 @@ function CajaPage() {
 }
 
 export default CajaPage;
+
 
 
 

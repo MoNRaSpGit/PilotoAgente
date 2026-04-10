@@ -497,6 +497,33 @@ export async function fetchCashboxMovements(params = {}) {
   return data;
 }
 
+export async function fetchCashboxRanking(params = {}) {
+  const searchParams = new URLSearchParams();
+
+  if (params.limit === 'all') {
+    searchParams.set('limit', 'all');
+  } else if (Number.isFinite(Number(params.limit)) && Number(params.limit) > 0) {
+    searchParams.set('limit', String(Math.floor(Number(params.limit))));
+  }
+
+  const query = searchParams.toString();
+  const response = await fetch(`${API_URL}/api/caja/ranking${query ? `?${query}` : ''}`, {
+    headers: {
+      ...getAuthHeaders()
+    }
+  });
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    const error = new Error(data.message || 'No se pudo obtener el ranking');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  return data;
+}
+
 export async function closeCashbox() {
   const response = await fetch(`${API_URL}/api/caja/close`, {
     method: 'POST',
