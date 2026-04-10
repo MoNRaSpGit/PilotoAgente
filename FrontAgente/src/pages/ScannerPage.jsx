@@ -340,15 +340,20 @@ function ScannerPage() {
 
     pressTimerRef.current = window.setTimeout(() => {
       pressTimerRef.current = null;
-      suppressNextClickRef.current = true;
-      setEditItem(item);
-      setEditName(item.name);
-      setEditPrice(String(item.price));
-      setManualOpen(false);
-      setUnknownOpen(false);
-      setChargeOpen(false);
-      setEditOpen(true);
+      openItemEditor(item);
     }, 2000);
+  };
+
+  const openItemEditor = (item) => {
+    suppressNextClickRef.current = true;
+    clearItemPress();
+    setEditItem(item);
+    setEditName(item.name);
+    setEditPrice(String(item.price));
+    setManualOpen(false);
+    setUnknownOpen(false);
+    setChargeOpen(false);
+    setEditOpen(true);
   };
 
   const clearItemPress = () => {
@@ -759,6 +764,21 @@ function ScannerPage() {
                       <span className="scanner-item-price">${item.price.toFixed(2)}</span>
                     </div>
                   </div>
+
+                  <button
+                    type="button"
+                    className="scanner-item-edit"
+                    aria-label={`Editar ${item.name}`}
+                    onPointerDown={(event) => {
+                      event.stopPropagation();
+                    }}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openItemEditor(item);
+                    }}
+                  >
+                    Editar
+                  </button>
 
                   <div className="scanner-item-meta">
                     <span className="scanner-meta-pill scanner-meta-pill-soft">x{item.quantity}</span>
