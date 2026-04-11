@@ -11,7 +11,24 @@ import { broadcastCashboxUpdate } from './caja.realtime.js';
 import { getScannerLiveState, saveScannerLiveState } from './scannerLiveState.store.js';
 import { performance } from 'node:perf_hooks';
 import { env } from '../../config/env.js';
-import { queueSaleStockDiscount } from '../stock/stock.service.js';
+
+let stockDiscountModulePromise = null;
+
+async function queueSaleStockDiscountSafe(payload) {
+  if (!stockDiscountModulePromise) {
+    stockDiscountModulePromise = import('../stock/stock.service.js')
+      .then((module) => module?.queueSaleStockDiscount || null)
+      .catch(() => null);
+  }
+
+  const queueSaleStockDiscount = await stockDiscountModulePromise;
+
+  if (typeof queueSaleStockDiscount !== 'function') {
+    return;
+  }
+
+  queueSaleStockDiscount(payload);
+}
 
 function createServiceError(message, status) {
   const error = new Error(message);
@@ -255,7 +272,7 @@ export async function addCashboxSale(payload, user) {
   const broadcastMs = Number((performance.now() - broadcastStartedAt).toFixed(2));
   const totalMs = Number((performance.now() - startedAt).toFixed(2));
 
-  queueSaleStockDiscount({
+  void queueSaleStockDiscountSafe({
     items,
     movementId: result.movement_id,
     operator
