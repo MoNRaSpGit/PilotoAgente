@@ -3,7 +3,7 @@
 }
 
 .scanner-shell {
-  width: min(100%, 980px);
+  width: min(100%, 1060px);
   display: grid;
   gap: 1.35rem;
   justify-items: center;
@@ -203,7 +203,7 @@
 }
 
 .scanner-charge-modal .modal-dialog {
-  max-width: 420px;
+  max-width: 520px;
 }
 
 .scanner-charge-modal .modal-body {
@@ -211,15 +211,19 @@
 }
 
 .scanner-charge-footer {
-  justify-content: center;
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
 }
 
 .scanner-charge-footer .btn {
-  min-width: 104px;
-  min-height: 46px;
-  padding-inline: 0.9rem;
+  width: 100%;
+  min-height: 56px;
+  padding-inline: 1rem;
   border-radius: 14px;
+  font-size: 1rem;
+  font-weight: 800;
 }
 
 .scanner-charge-footer .btn-outline-secondary {
@@ -256,7 +260,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 1.15rem;
-  padding: 1.08rem 1.2rem;
+  padding: 1.08rem 1.35rem;
   min-height: 100px;
   border-radius: 20px;
   background: rgba(248, 250, 252, 0.97);
@@ -282,7 +286,7 @@
   gap: 1.05rem;
   min-width: 0;
   flex: 1 1 auto;
-  max-width: calc(100% - 240px);
+  max-width: calc(100% - 250px);
 }
 
 .scanner-product-image,
@@ -474,20 +478,19 @@
   }
 
   .scanner-charge-modal .modal-dialog {
-    max-width: calc(100% - 1.5rem);
+    max-width: calc(100% - 1rem);
     margin-left: auto;
     margin-right: auto;
   }
 
   .scanner-charge-footer .btn {
-    min-width: 96px;
-    min-height: 44px;
+    min-height: 52px;
   }
 }
 
 @media (min-width: 992px) {
   .scanner-shell {
-    width: min(100%, 1040px);
+    width: min(100%, 1120px);
   }
 
   .scanner-list {
