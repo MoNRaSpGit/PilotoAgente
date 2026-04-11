@@ -1,6 +1,7 @@
 import {
   createCashbox,
   closeCashbox,
+  getCashboxObjectivesSummary,
   getCashboxSummary,
   listCashboxSaleMovements,
   recordCashboxPayment,
@@ -9,6 +10,7 @@ import {
 import { broadcastCashboxUpdate } from './caja.realtime.js';
 import { getScannerLiveState, saveScannerLiveState } from './scannerLiveState.store.js';
 import { performance } from 'node:perf_hooks';
+import { env } from '../../config/env.js';
 
 function createServiceError(message, status) {
   const error = new Error(message);
@@ -34,6 +36,84 @@ export async function fetchCashboxDashboard(query = {}) {
     date: query?.date,
     compareTo: query?.compare_to || query?.compareTo
   });
+}
+
+function roundMoney(value) {
+  return Number(Number(value || 0).toFixed(2));
+}
+
+function resolveGoalLevel(currentSales, standardAmount, objectiveAmount, recordAmount) {
+  const hasStandard = Number.isFinite(standardAmount) && standardAmount > 0;
+  const hasObjective = Number.isFinite(objectiveAmount) && objectiveAmount > 0;
+  const hasRecord = Number.isFinite(recordAmount) && recordAmount > 0;
+
+  if (hasRecord && currentSales >= recordAmount) {
+    return {
+      key: 'record',
+      label: 'Record alcanzado'
+    };
+  }
+
+  if (hasObjective && currentSales >= objectiveAmount) {
+    return {
+      key: 'objetivo',
+      label: 'Objetivo alcanzado'
+    };
+  }
+
+  if (hasStandard && currentSales >= standardAmount) {
+    return {
+      key: 'estandar',
+      label: 'Nivel estandar alcanzado'
+    };
+  }
+
+  return {
+    key: 'en_curso',
+    label: 'En curso'
+  };
+}
+
+export async function fetchCashboxObjectives(query = {}) {
+  const summary = await getCashboxObjectivesSummary({
+    date: query?.date,
+    compareTo: query?.compare_to || query?.compareTo
+  });
+
+  const openingAmount = roundMoney(summary?.selected_day?.opening_amount);
+  const dailySales = roundMoney(summary?.selected_day?.sales_total);
+  const yesterdaySales = roundMoney(summary?.previous_day?.sales_total);
+  const standardAmount = roundMoney(env.objectivesStandardAmount);
+  const recordExtraAmount = roundMoney(env.objectivesRecordExtraAmount);
+  const objectiveAmount = yesterdaySales;
+  const recordAmount = roundMoney(objectiveAmount + recordExtraAmount);
+
+  const level = resolveGoalLevel(dailySales, standardAmount, objectiveAmount, recordAmount);
+
+  return {
+    selected_date: summary?.selected_date || null,
+    comparison_date: summary?.comparison_date || null,
+    is_open: Boolean(summary?.is_open),
+    cashbox: {
+      opening_amount: openingAmount,
+      daily_sales: dailySales,
+      comparison_percent: summary?.comparison_percent ?? null
+    },
+    goals: {
+      standard: standardAmount,
+      objective: objectiveAmount,
+      record: recordAmount,
+      record_extra: recordExtraAmount
+    },
+    progress: {
+      level: level.key,
+      level_label: level.label,
+      current_sales: dailySales,
+      remaining_to_standard: Math.max(0, roundMoney(standardAmount - dailySales)),
+      remaining_to_objective: Math.max(0, roundMoney(objectiveAmount - dailySales)),
+      remaining_to_record: Math.max(0, roundMoney(recordAmount - dailySales))
+    }
+  };
 }
 
 export async function fetchCashboxMovements(query = {}) {

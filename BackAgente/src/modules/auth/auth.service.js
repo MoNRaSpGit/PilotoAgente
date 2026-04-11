@@ -9,7 +9,7 @@ function buildAuthUser(userRow) {
     id: userRow.id,
     name: userRow.nombre,
     email: userRow.email,
-    role: userRow.role
+    role: String(userRow.role || '').trim().toLowerCase()
   };
 }
 

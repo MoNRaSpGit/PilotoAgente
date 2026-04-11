@@ -9,6 +9,8 @@ export const env = {
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || 'refresh-secret-key',
   accessTokenTtl: process.env.ACCESS_TOKEN_TTL || '30d',
   refreshTokenTtlDays: Number(process.env.REFRESH_TOKEN_TTL_DAYS || 30),
+  objectivesStandardAmount: Number(process.env.OBJECTIVES_STANDARD_AMOUNT || 12000),
+  objectivesRecordExtraAmount: Number(process.env.OBJECTIVES_RECORD_EXTRA_AMOUNT || 2000),
   vapidSubject: process.env.VAPID_SUBJECT || '',
   vapidPublicKey: process.env.VAPID_PUBLIC_KEY || '',
   vapidPrivateKey: process.env.VAPID_PRIVATE_KEY || '',

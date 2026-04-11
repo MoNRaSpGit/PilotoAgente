@@ -466,6 +466,35 @@ export async function fetchCashboxSummary(params = {}) {
   return data;
 }
 
+export async function fetchCashboxObjectives(params = {}) {
+  const searchParams = new URLSearchParams();
+
+  if (params.date) {
+    searchParams.set('date', params.date);
+  }
+
+  if (params.compareTo) {
+    searchParams.set('compare_to', params.compareTo);
+  }
+
+  const query = searchParams.toString();
+  const response = await fetch(`${API_URL}/api/caja/objetivos${query ? `?${query}` : ''}`, {
+    headers: {
+      ...getAuthHeaders()
+    }
+  });
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    const error = new Error(data.message || 'No se pudieron obtener los objetivos');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  return data;
+}
+
 export async function fetchCashboxMovements(params = {}) {
   const searchParams = new URLSearchParams();
 

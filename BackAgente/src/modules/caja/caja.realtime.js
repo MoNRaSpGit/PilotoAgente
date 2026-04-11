@@ -4,6 +4,10 @@ import { env } from '../../config/env.js';
 const listeners = new Set();
 let heartbeatId = null;
 
+function normalizeRole(role) {
+  return String(role || '').trim().toLowerCase();
+}
+
 function getStreamToken(req) {
   const authHeader = req.headers.authorization;
 
@@ -29,14 +33,18 @@ export function authenticateCashboxStream(req) {
 
   try {
     const user = jwt.verify(token, env.jwtAccessSecret);
+    const normalizedRole = normalizeRole(user.role);
 
-    if (!['admin', 'operario'].includes(user.role)) {
+    if (!['admin', 'operario'].includes(normalizedRole)) {
       const error = new Error('No autorizado');
       error.status = 403;
       throw error;
     }
 
-    return user;
+    return {
+      ...user,
+      role: normalizedRole
+    };
   } catch (error) {
     if (error.status) {
       throw error;

@@ -3,6 +3,7 @@ import {
   addCashboxSale,
   closeOpenCashbox,
   fetchCashboxMovements,
+  fetchCashboxObjectives,
   fetchCashboxDashboard,
   fetchScannerLiveState,
   openCashbox,
@@ -25,6 +26,15 @@ export async function getCashboxSummaryController(_req, res) {
     return res.json(data);
   } catch (error) {
     return handleServiceError(res, error, 'No se pudo obtener la caja');
+  }
+}
+
+export async function getCashboxObjectivesController(req, res) {
+  try {
+    const data = await fetchCashboxObjectives(req.query);
+    return res.json(data);
+  } catch (error) {
+    return handleServiceError(res, error, 'No se pudieron obtener los objetivos');
   }
 }
 

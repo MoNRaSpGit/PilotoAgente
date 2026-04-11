@@ -1,6 +1,10 @@
 import jwt from 'jsonwebtoken';
 import { env } from '../../config/env.js';
 
+function normalizeRole(role) {
+  return String(role || '').trim().toLowerCase();
+}
+
 export function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
   const queryToken = typeof req.query?.token === 'string' ? req.query.token : null;
@@ -22,20 +26,23 @@ export function authMiddleware(req, res, next) {
 
 export function requireRole(...allowedRoles) {
   return (req, res, next) => {
-    const userRole = req.user?.role;
+    const userRole = normalizeRole(req.user?.role);
+    const normalizedAllowedRoles = allowedRoles.map((role) => normalizeRole(role));
     const debugPath = req.originalUrl || req.path || '';
     const isScannerRoute =
       debugPath.includes('/products/scan/') ||
       debugPath.includes('/products/manual-from-scan') ||
       debugPath.includes('/caja/sales') ||
-      debugPath.includes('/caja/live-state');
+      debugPath.includes('/caja/live-state') ||
+      debugPath.includes('/caja/stream') ||
+      debugPath.includes('/caja/objetivos');
     const scannerOverride = isScannerRoute && userRole === 'operario';
 
     if (scannerOverride) {
       return next();
     }
 
-    if (!userRole || !allowedRoles.includes(userRole)) {
+    if (!userRole || !normalizedAllowedRoles.includes(userRole)) {
       return res.status(403).json({ message: 'No autorizado' });
     }
 

@@ -39,8 +39,10 @@ const CASHBOX_ITEM_COLUMNS = `
 `;
 
 const CASHBOX_SUMMARY_CACHE_TTL_MS = 5000;
+const CASHBOX_OBJECTIVES_CACHE_TTL_MS = 15000;
 let cashboxTablesPromise = null;
 const cashboxSummaryCache = new Map();
+const cashboxObjectivesCache = new Map();
 
 async function withTransaction(work) {
   const connection = await pool.getConnection();
@@ -100,6 +102,7 @@ function diffInDays(startDate, endDate) {
 
 function clearCashboxSummaryCache() {
   cashboxSummaryCache.clear();
+  cashboxObjectivesCache.clear();
 }
 
 function getCashboxSummaryCacheKey(date, compareTo) {
@@ -123,6 +126,30 @@ function setCachedCashboxSummary(date, compareTo, value) {
   cashboxSummaryCache.set(key, {
     value,
     expiresAt: Date.now() + CASHBOX_SUMMARY_CACHE_TTL_MS
+  });
+}
+
+function getCashboxObjectivesCacheKey(date, compareTo) {
+  return `${date || ''}::${compareTo || ''}`;
+}
+
+function getCachedCashboxObjectives(date, compareTo) {
+  const key = getCashboxObjectivesCacheKey(date, compareTo);
+  const entry = cashboxObjectivesCache.get(key);
+
+  if (!entry || entry.expiresAt <= Date.now()) {
+    cashboxObjectivesCache.delete(key);
+    return null;
+  }
+
+  return entry.value;
+}
+
+function setCachedCashboxObjectives(date, compareTo, value) {
+  const key = getCashboxObjectivesCacheKey(date, compareTo);
+  cashboxObjectivesCache.set(key, {
+    value,
+    expiresAt: Date.now() + CASHBOX_OBJECTIVES_CACHE_TTL_MS
   });
 }
 
@@ -874,6 +901,54 @@ export async function getCashboxSummary({ date, compareTo } = {}) {
   };
 
   setCachedCashboxSummary(selectedDate, comparisonDate, result);
+
+  return result;
+}
+
+export async function getCashboxObjectivesSummary({ date, compareTo } = {}) {
+  await ensureCashboxTables();
+
+  const selectedDate = normalizeDateInput(date) || new Date().toISOString().slice(0, 10);
+  const comparisonDate = normalizeDateInput(compareTo) || addDays(selectedDate, -1);
+
+  const cached = getCachedCashboxObjectives(selectedDate, comparisonDate);
+  if (cached) {
+    return cached;
+  }
+
+  const comparisonDayEnd = addDays(comparisonDate, 1);
+
+  const [yesterdayRows] = await pool.query(
+    `
+      SELECT COALESCE(SUM(sales_total), 0) AS sales_total
+      FROM ops_cajas
+      WHERE opened_at >= ?
+        AND opened_at < ?
+    `,
+    [`${comparisonDate} 00:00:00`, `${comparisonDayEnd} 00:00:00`]
+  );
+
+  const openCashbox = await findOpenCashbox();
+  const yesterday = yesterdayRows[0] || {};
+  const currentSales = Number(openCashbox?.sales_total || 0);
+  const previousSales = Number(yesterday.sales_total || 0);
+
+  const result = {
+    selected_date: selectedDate,
+    comparison_date: comparisonDate,
+    is_open: Boolean(openCashbox),
+    selected_day: {
+      opening_amount: Number(openCashbox?.opening_amount || 0),
+      sales_total: currentSales,
+      payments_total: Number(openCashbox?.payments_total || 0)
+    },
+    previous_day: {
+      sales_total: previousSales
+    },
+    comparison_percent: calculateComparisonPercent(currentSales, previousSales)
+  };
+
+  setCachedCashboxObjectives(selectedDate, comparisonDate, result);
 
   return result;
 }

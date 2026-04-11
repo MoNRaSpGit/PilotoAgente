@@ -1,5 +1,5 @@
 import { Container, Nav, Navbar } from 'react-bootstrap';
-import { Barcode, BotMessageSquare } from 'lucide-react';
+import { Barcode, BotMessageSquare, Target } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import DashboardPage from './pages/DashboardPage';
@@ -7,6 +7,7 @@ import ClientsPage from './pages/ClientsPage';
 import CajaPage from './pages/CajaPage';
 import GastosPage from './pages/GastosPage';
 import LoginPage from './pages/LoginPage';
+import ObjetivosPage from './pages/ObjetivosPage';
 import ScannerPage from './pages/ScannerPage';
 import { clearSession } from './store/slices/authSlice';
 import { clearAuthSession } from './utils/authSession';
@@ -16,6 +17,7 @@ import './styles/pages/caja.css';
 import './styles/pages/clients.css';
 import './styles/pages/gastos.css';
 import './styles/pages/login.css';
+import './styles/pages/objetivos.css';
 import './styles/pages/scanner.css';
 
 function RoleGate({ children, allow = ['admin'] }) {
@@ -70,7 +72,14 @@ function App() {
                     Gastos
                   </Nav.Link>
                 </>
-              ) : null}
+              ) : (
+                <Nav.Link as={NavLink} to="/objetivos">
+                  <span className="nav-icon-wrap">
+                    <Target size={16} />
+                    Objetivos
+                  </span>
+                </Nav.Link>
+              )}
               <Nav.Link as={NavLink} to="/scanner">
                 <span className="nav-icon-wrap">
                   <Barcode size={16} />
@@ -122,8 +131,16 @@ function App() {
             <Route
               path="/caja"
               element={
-                <RoleGate allow={['admin', 'operario']}>
+                <RoleGate allow={['admin']}>
                   <CajaPage />
+                </RoleGate>
+              }
+            />
+            <Route
+              path="/objetivos"
+              element={
+                <RoleGate allow={['operario']}>
+                  <ObjetivosPage />
                 </RoleGate>
               }
             />

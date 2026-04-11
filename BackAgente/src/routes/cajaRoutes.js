@@ -6,6 +6,7 @@ import {
   closeCashboxController,
   cashboxStreamController,
   getCashboxMovementsController,
+  getCashboxObjectivesController,
   getScannerLiveStateController,
   getCashboxSummaryController,
   openCashboxController,
@@ -20,6 +21,7 @@ router.use(authMiddleware);
 router.get('/caja/stream', requireRole('admin', 'operario'), cashboxStreamController);
 router.get('/caja/live-state', requireRole('admin', 'operario'), getScannerLiveStateController);
 router.post('/caja/live-state', requireRole('admin', 'operario'), syncScannerLiveStateController);
+router.get('/caja/objetivos', requireRole('admin', 'operario'), getCashboxObjectivesController);
 router.get('/caja', requireRole('admin'), getCashboxSummaryController);
 router.get('/caja/movements', requireRole('admin'), getCashboxMovementsController);
 router.get('/caja/ranking', requireRole('admin'), getCashboxRankingController);
