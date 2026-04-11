@@ -8,15 +8,6 @@
   backdrop-filter: blur(10px);
 }
 
-.app-navbar .navbar-toggler {
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  box-shadow: none;
-}
-
-.app-navbar .navbar-toggler:focus {
-  box-shadow: 0 0 0 0.18rem rgba(15, 118, 110, 0.12);
-}
-
 .brand {
   display: inline-flex;
   align-items: center;
@@ -25,6 +16,10 @@
 }
 
 .app-nav-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
   gap: 0.25rem;
 }
 
@@ -65,7 +60,7 @@
 
   .app-nav-links {
     gap: 0.5rem;
-    padding-top: 0.75rem;
+    padding-top: 0.25rem;
   }
 
   .app-nav-links .nav-link {

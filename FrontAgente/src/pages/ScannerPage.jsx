@@ -101,8 +101,39 @@ function ScannerPage() {
       };
     });
 
+  const isTouchLikeDevice = () => {
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+      return false;
+    }
+
+    const coarsePointer = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+    return coarsePointer || Number(navigator.maxTouchPoints || 0) > 0;
+  };
+
+  const focusScanner = ({ avoidVirtualKeyboard = true } = {}) => {
+    window.setTimeout(() => {
+      const input = barcodeInputRef.current;
+
+      if (!input) {
+        return;
+      }
+
+      if (avoidVirtualKeyboard && isTouchLikeDevice()) {
+        const previousReadOnly = input.readOnly;
+        input.readOnly = true;
+        input.focus();
+        window.setTimeout(() => {
+          input.readOnly = previousReadOnly;
+        }, 60);
+        return;
+      }
+
+      input.focus();
+    }, 0);
+  };
+
   useEffect(() => {
-    barcodeInputRef.current?.focus();
+    focusScanner();
 
     return () => {
       if (pressTimerRef.current) {
@@ -200,10 +231,6 @@ function ScannerPage() {
 
     return () => window.clearTimeout(timeoutId);
   }, [clientQuery, clients, userRole]);
-
-  const focusScanner = () => {
-    window.setTimeout(() => barcodeInputRef.current?.focus(), 0);
-  };
 
   const closeManualModal = () => {
     setManualOpen(false);

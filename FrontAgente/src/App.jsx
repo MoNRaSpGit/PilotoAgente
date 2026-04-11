@@ -41,56 +41,53 @@ function App() {
   const handleLogout = () => {
     dispatch(clearSession());
     clearAuthSession();
-    navigate('/login', { replace: true });
+    navigate('/login', { replace: true, state: { resetLoginPanel: true, at: Date.now() } });
   };
 
   return (
     <div className="app-shell">
       {!hideNavbar ? (
-        <Navbar expand="lg" className="app-navbar" sticky="top" collapseOnSelect>
+        <Navbar className="app-navbar" sticky="top">
           <Container>
             <Navbar.Brand as={NavLink} to={homePath} className="brand">
               <BotMessageSquare size={20} />
               <span>FrontAgente</span>
             </Navbar.Brand>
-            <Navbar.Toggle aria-controls="app-navbar-nav" />
-            <Navbar.Collapse id="app-navbar-nav">
-              <Nav className="ms-auto app-nav-links">
-                {isAdmin ? (
-                  <>
-                    <Nav.Link as={NavLink} to="/" end>
-                      Dashboard
-                    </Nav.Link>
-                    <Nav.Link as={NavLink} to="/clientes">
-                      Clientes
-                    </Nav.Link>
-                    <Nav.Link as={NavLink} to="/gastos">
-                      Gastos
-                    </Nav.Link>
-                  </>
-                ) : null}
-                <Nav.Link as={NavLink} to="/scanner">
-                  <span className="nav-icon-wrap">
-                    <Barcode size={16} />
-                    Escaner
-                  </span>
+            <Nav className="ms-auto app-nav-links">
+              {isAdmin ? (
+                <>
+                  <Nav.Link as={NavLink} to="/" end>
+                    Dashboard
+                  </Nav.Link>
+                  <Nav.Link as={NavLink} to="/clientes">
+                    Clientes
+                  </Nav.Link>
+                  <Nav.Link as={NavLink} to="/gastos">
+                    Gastos
+                  </Nav.Link>
+                </>
+              ) : null}
+              <Nav.Link as={NavLink} to="/scanner">
+                <span className="nav-icon-wrap">
+                  <Barcode size={16} />
+                  Escaner
+                </span>
+              </Nav.Link>
+              {isAdmin ? (
+                <Nav.Link as={NavLink} to="/caja">
+                  Caja
                 </Nav.Link>
-                {isAdmin ? (
-                  <Nav.Link as={NavLink} to="/caja">
-                    Caja
-                  </Nav.Link>
-                ) : null}
-                {isLoggedIn ? (
-                  <Nav.Link as="button" type="button" onClick={handleLogout} className="nav-logout-link">
-                    Salir
-                  </Nav.Link>
-                ) : (
-                  <Nav.Link as={NavLink} to="/login">
-                    Login
-                  </Nav.Link>
-                )}
-              </Nav>
-            </Navbar.Collapse>
+              ) : null}
+              {isLoggedIn ? (
+                <Nav.Link as="button" type="button" onClick={handleLogout} className="nav-logout-link">
+                  Salir
+                </Nav.Link>
+              ) : (
+                <Nav.Link as={NavLink} to="/login">
+                  Login
+                </Nav.Link>
+              )}
+            </Nav>
           </Container>
         </Navbar>
       ) : null}

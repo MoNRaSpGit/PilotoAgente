@@ -3,7 +3,7 @@ import { Button, Form } from 'react-bootstrap';
 import toast from 'react-hot-toast';
 import { BotMessageSquare } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { loginRequest } from '../services/api';
 import { setSession } from '../store/slices/authSlice';
 import { saveAuthSession } from '../utils/authSession';
@@ -22,6 +22,7 @@ const QUICK_LOGINS = {
 function LoginPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
   const sessionUserRole = useSelector((state) => state.auth.user?.role);
   const sessionToken = useSelector((state) => state.auth.token);
   const [form, setForm] = useState({
@@ -39,6 +40,16 @@ function LoginPage() {
 
     navigate(sessionUserRole === 'admin' ? '/caja' : '/scanner', { replace: true });
   }, [navigate, sessionToken, sessionUserRole]);
+
+  useEffect(() => {
+    if (!location.state?.resetLoginPanel) {
+      return;
+    }
+
+    setPanelUnlocked(false);
+    setLogoTapCount(0);
+    navigate('/login', { replace: true, state: null });
+  }, [location.state, navigate]);
 
   useEffect(() => {
     if (panelUnlocked || logoTapCount < 7) {

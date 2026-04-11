@@ -698,6 +698,18 @@
 .caja-live-scanner-row {
   background: #f5fbf6;
   border: 1px solid rgba(34, 197, 94, 0.16);
+  min-height: 62px;
+  padding: 0.78rem 0.9rem;
+  border-radius: 14px;
+}
+
+.caja-live-scanner-row .caja-live-sale-item-name {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.caja-live-scanner-row .caja-live-sale-item-total {
+  font-size: 1rem;
 }
 
 .caja-live-sale-foot {
