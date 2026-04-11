@@ -16,6 +16,14 @@ function progressPercent(current, goal) {
   return Math.min(100, Math.max(0, Number(((current / goal) * 100).toFixed(1))));
 }
 
+function formatMoney(value) {
+  return new Intl.NumberFormat('es-UY', {
+    style: 'currency',
+    currency: 'UYU',
+    maximumFractionDigits: 0
+  }).format(Number(value || 0));
+}
+
 function levelTone(level) {
   if (level === 'record') {
     return 'record';
@@ -164,11 +172,17 @@ function ObjetivosPage() {
   const record = Number(goals.record || 0);
   const objective = Number(goals.objective || 0);
   const fillPercent = progressPercent(currentSales, record);
-  const objectiveVisualPercent = 70;
+  const objectiveProgressPercent = progressPercent(currentSales, objective);
+  const remainingToObjective = Math.max(0, Number(progress.remaining_to_objective || objective - currentSales || 0));
+  const remainingToRecord = Math.max(0, Number(progress.remaining_to_record || record - currentSales || 0));
+  const objectiveVisualPercentRaw = record > 0
+    ? Math.min(100, Math.max(0, Number(((objective / record) * 100).toFixed(1))))
+    : 100;
+  const objectiveVisualPercent = Math.min(objectiveVisualPercentRaw, 84);
   const tone = levelTone(progress.level);
   const selectedDate = data?.selected_date || todayDate();
   const hasObjectiveGoal = objective > 0;
-  const objectiveUnlocked = objective > 0 && fillPercent >= objectiveVisualPercent;
+  const objectiveUnlocked = objective > 0 && currentSales >= objective;
   const recordUnlocked = record > 0 && fillPercent >= 100;
   const activeReward = rewardConfig(celebrateType);
   const infoReward = rewardConfig(infoType);
@@ -229,6 +243,24 @@ function ObjetivosPage() {
       <article className="card-panel objectives-progress-card">
         <div className="objectives-progress-head">
           <h3>Ventas hoy</h3>
+          <span className="objectives-head-target">{formatMoney(objective)}</span>
+        </div>
+
+        <div className="objectives-kpi-grid">
+          <div className="objectives-kpi-item">
+            <small>Objetivo del dia</small>
+            <strong>{formatMoney(objective)}</strong>
+          </div>
+          <div className="objectives-kpi-item">
+            <small>Progreso</small>
+            <strong>{formatMoney(currentSales)}</strong>
+            <span>{objectiveProgressPercent}% del objetivo</span>
+          </div>
+          <div className="objectives-kpi-item">
+            <small>Te falta</small>
+            <strong>{formatMoney(remainingToObjective)}</strong>
+            <span>Record: faltan {formatMoney(remainingToRecord)}</span>
+          </div>
         </div>
 
         <div className="objectives-single-progress">
