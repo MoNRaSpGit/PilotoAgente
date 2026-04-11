@@ -21,8 +21,12 @@ import './styles/pages/scanner.css';
 function RoleGate({ children, allow = ['admin'] }) {
   const userRole = useSelector((state) => state.auth.user?.role);
 
-  if (!userRole || !allow.includes(userRole)) {
-    return <Navigate to="/scanner" replace />;
+  if (!userRole) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!allow.includes(userRole)) {
+    return <Navigate to={userRole === 'admin' ? '/caja' : '/scanner'} replace />;
   }
 
   return children;
@@ -56,7 +60,7 @@ function App() {
             <Nav className="ms-auto app-nav-links">
               {isAdmin ? (
                 <>
-                  <Nav.Link as={NavLink} to="/" end>
+                  <Nav.Link as={NavLink} to="/dashboard">
                     Dashboard
                   </Nav.Link>
                   <Nav.Link as={NavLink} to="/clientes">
@@ -97,6 +101,10 @@ function App() {
           <Routes>
             <Route
               path="/"
+              element={<Navigate to={isLoggedIn ? (isAdmin ? '/caja' : '/scanner') : '/login'} replace />}
+            />
+            <Route
+              path="/dashboard"
               element={
                 <RoleGate allow={['admin']}>
                   <DashboardPage />

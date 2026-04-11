@@ -222,7 +222,7 @@
   min-height: 56px;
   padding-inline: 1rem;
   border-radius: 14px;
-  font-size: 1rem;
+  font-size: 1.06rem;
   font-weight: 800;
 }
 
@@ -320,7 +320,7 @@
 }
 
 .scanner-item-name {
-  font-size: clamp(1.1rem, 1.3vw, 1.32rem);
+  font-size: clamp(1.16rem, 1.36vw, 1.38rem);
   font-weight: 800;
   line-height: 1.14;
   color: #0f172a;
@@ -330,7 +330,7 @@
 }
 
 .scanner-item-price {
-  font-size: clamp(1.24rem, 1.52vw, 1.42rem);
+  font-size: clamp(1.3rem, 1.58vw, 1.48rem);
   font-weight: 800;
   color: #0f766e;
   letter-spacing: 0.01em;
