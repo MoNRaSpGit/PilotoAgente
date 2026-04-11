@@ -592,6 +592,7 @@ export async function registerCashboxPayment(payload) {
 }
 
 export async function registerCashboxSale(payload) {
+  const startedAt = performance.now();
   const response = await fetch(`${API_URL}/api/caja/sales`, {
     method: 'POST',
     headers: {
@@ -610,8 +611,22 @@ export async function registerCashboxSale(payload) {
     throw error;
   }
 
+  const clientDurationMs = Number((performance.now() - startedAt).toFixed(2));
+  const serverTotalMs = Number(data?.meta?.total_ms);
+  const networkAndClientOverheadMs = Number.isFinite(serverTotalMs)
+    ? Number((clientDurationMs - serverTotalMs).toFixed(2))
+    : null;
+
+  const result = {
+    ...data,
+    meta: {
+      ...(data?.meta || {}),
+      client_duration_ms: clientDurationMs,
+      network_and_client_overhead_ms: networkAndClientOverheadMs
+    }
+  };
   clearCashboxCache();
-  return data.item;
+  return result;
 }
 
 export async function syncScannerLiveState(payload) {

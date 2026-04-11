@@ -29,7 +29,7 @@ function LoginPage() {
     password: QUICK_LOGINS.admin.password
   });
   const [loading, setLoading] = useState(false);
-  const [, setLogoTapCount] = useState(0);
+  const [logoTapCount, setLogoTapCount] = useState(0);
   const [panelUnlocked, setPanelUnlocked] = useState(false);
 
   useEffect(() => {
@@ -39,6 +39,15 @@ function LoginPage() {
 
     navigate(sessionUserRole === 'admin' ? '/caja' : '/scanner', { replace: true });
   }, [navigate, sessionToken, sessionUserRole]);
+
+  useEffect(() => {
+    if (panelUnlocked || logoTapCount < 7) {
+      return;
+    }
+
+    setPanelUnlocked(true);
+    toast.success('Panel de login habilitado');
+  }, [logoTapCount, panelUnlocked]);
 
   const handleChange = (event) => {
     setForm((current) => ({
@@ -92,17 +101,7 @@ function LoginPage() {
       return;
     }
 
-    setLogoTapCount((current) => {
-      const next = current + 1;
-
-      if (next >= 7) {
-        setPanelUnlocked(true);
-        toast.success('Panel de login habilitado');
-        return 7;
-      }
-
-      return next;
-    });
+    setLogoTapCount((current) => Math.min(current + 1, 7));
   };
 
   return (

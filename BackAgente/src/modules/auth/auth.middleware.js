@@ -15,7 +15,7 @@ export function authMiddleware(req, res, next) {
   try {
     req.user = jwt.verify(token, env.jwtAccessSecret);
     return next();
-  } catch (_error) {
+  } catch {
     return res.status(401).json({ message: 'Token invalido' });
   }
 }

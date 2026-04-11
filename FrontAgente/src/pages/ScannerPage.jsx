@@ -27,6 +27,29 @@ function resolveProductImage(imageValue) {
   return `data:image/jpeg;base64,${imageValue}`;
 }
 
+function elapsedMs(startedAt) {
+  return Number((performance.now() - startedAt).toFixed(2));
+}
+
+function logChargeTiming(step, startedAt, details = {}) {
+  const durationMs = elapsedMs(startedAt);
+  console.info('[scanner:cobro:timing]', { step, durationMs, ...details });
+}
+
+function cloneSaleItems(items = []) {
+  return (Array.isArray(items) ? items : []).map((item) => ({
+    key: item.key,
+    barcode: item.barcode,
+    name: item.name,
+    price: item.price,
+    quantity: item.quantity,
+    total: item.total,
+    imageUrl: item.imageUrl,
+    hasImage: item.hasImage,
+    source: item.source
+  }));
+}
+
 function ScannerPage() {
   const user = useSelector((state) => state.auth.user);
   const userRole = user?.role;
@@ -55,7 +78,6 @@ function ScannerPage() {
   const [chargeOpen, setChargeOpen] = useState(false);
   const [chargeClientConfirmOpen, setChargeClientConfirmOpen] = useState(false);
   const [chargeSnapshotTotal, setChargeSnapshotTotal] = useState(0);
-  const [loading, setLoading] = useState(false);
   const [items, setItems] = useState([]);
   const [scannerStateReady, setScannerStateReady] = useState(false);
 
@@ -416,8 +438,6 @@ function ScannerPage() {
       return;
     }
 
-    setLoading(true);
-
     try {
       const { item } = await scanProductByBarcode(barcode);
       const price = Number(item.precio_venta);
@@ -447,7 +467,6 @@ function ScannerPage() {
 
       toast.error(error.message);
     } finally {
-      setLoading(false);
       if (shouldRefocusScanner) {
         focusScanner();
       }
@@ -488,17 +507,12 @@ function ScannerPage() {
     setEditOpen(false);
   };
 
-  const recordBoxSale = async (saleItems, saleAmount) => {
+  const recordBoxSale = async (saleItems, saleAmount, context = 'general') => {
+    const registerSaleStartedAt = performance.now();
     const clearLiveStateVersion = liveSyncVersionRef.current + 1;
     liveSyncVersionRef.current = clearLiveStateVersion;
 
-    console.log('[scanner:charge]', {
-      user_role: userRole || null,
-      items: saleItems.length,
-      amount: Number(saleAmount || 0)
-    });
-
-    await registerCashboxSale({
+    const response = await registerCashboxSale({
       amount: saleAmount,
       items: saleItems.map((item) => ({
         barcode: item.barcode,
@@ -512,29 +526,73 @@ function ScannerPage() {
       source: 'scanner',
       description: 'Venta desde escaner'
     });
+
+    logChargeTiming('registerCashboxSale', registerSaleStartedAt, {
+      context,
+      userRole: userRole || null,
+      items: saleItems.length,
+      amount: Number(saleAmount || 0),
+      serverMs: Number(response?.meta?.total_ms || 0),
+      networkAndClientOverheadMs: response?.meta?.network_and_client_overhead_ms ?? null,
+      serverRegisterSaleMs: Number(response?.meta?.register_sale_ms || 0)
+    });
   };
 
   const handleChargeConfirm = async () => {
+    const totalFlowStartedAt = performance.now();
+
     if (selectedClientData) {
       setChargeSnapshotTotal(totalAmount);
       closeChargeModal();
       setChargeClientConfirmOpen(true);
+      logChargeTiming('openClientConfirmModal', totalFlowStartedAt, {
+        context: 'with-client',
+        amount: Number(totalAmount || 0),
+        items: items.length
+      });
       return;
     }
 
-    try {
-      await recordBoxSale(items, totalAmount);
-      setItems([]);
-      setBarcode('');
-      setManualPrice('');
-      setClientQuery('');
-      setSelectedClient(null);
-      closeChargeModal();
-      setManualOpen(false);
-      setEditOpen(false);
-    } catch (error) {
-      toast.error(error.message);
-    }
+    const saleItemsSnapshot = cloneSaleItems(items);
+    const amountSnapshot = Number(totalAmount || 0);
+    const itemCountSnapshot = saleItemsSnapshot.length;
+
+    const clearUiStartedAt = performance.now();
+    setItems([]);
+    setBarcode('');
+    setManualPrice('');
+    setClientQuery('');
+    setSelectedClient(null);
+    closeChargeModal();
+    setManualOpen(false);
+    setEditOpen(false);
+    focusScanner();
+    logChargeTiming('clearScannerUI', clearUiStartedAt, {
+      context: 'without-client'
+    });
+    logChargeTiming('uiReadyForNextScan', totalFlowStartedAt, {
+      context: 'without-client',
+      amount: amountSnapshot,
+      items: itemCountSnapshot
+    });
+
+    void recordBoxSale(saleItemsSnapshot, amountSnapshot, 'without-client')
+      .then(() => {
+        logChargeTiming('totalFlow', totalFlowStartedAt, {
+          context: 'without-client',
+          mode: 'background-sale',
+          amount: amountSnapshot,
+          items: itemCountSnapshot
+        });
+      })
+      .catch((error) => {
+        logChargeTiming('error', totalFlowStartedAt, {
+          context: 'without-client',
+          mode: 'background-sale',
+          message: error?.message || 'Error desconocido'
+        });
+        toast.error(`No se pudo registrar el cobro: ${error?.message || 'error desconocido'}`);
+      });
   };
 
   const handleChargeCancel = () => {
@@ -548,6 +606,8 @@ function ScannerPage() {
   };
 
   const handleChargeToClientConfirm = async () => {
+    const totalFlowStartedAt = performance.now();
+
     if (!selectedClientData || chargeSnapshotTotal <= 0) {
       closeChargeClientConfirm();
       focusScanner();
@@ -556,7 +616,8 @@ function ScannerPage() {
 
     try {
       const today = new Date().toISOString().slice(0, 10);
-      await recordBoxSale(items, chargeSnapshotTotal);
+      await recordBoxSale(items, chargeSnapshotTotal, 'with-client');
+      const updateClientStartedAt = performance.now();
       const updated = await updateClientCharge(selectedClientData.id, {
         charge_amount: chargeSnapshotTotal,
         ultima_fecha_pago: today,
@@ -567,7 +628,12 @@ function ScannerPage() {
           total: item.total
         }))
       });
+      logChargeTiming('updateClientCharge', updateClientStartedAt, {
+        context: 'with-client',
+        clientId: selectedClientData.id
+      });
 
+      const clearUiStartedAt = performance.now();
       setClients((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
       setItems([]);
       setBarcode('');
@@ -579,7 +645,22 @@ function ScannerPage() {
       setManualOpen(false);
       setEditOpen(false);
       focusScanner();
+      logChargeTiming('clearScannerUI', clearUiStartedAt, {
+        context: 'with-client',
+        clientId: selectedClientData.id
+      });
+      logChargeTiming('totalFlow', totalFlowStartedAt, {
+        context: 'with-client',
+        clientId: selectedClientData.id,
+        amount: Number(chargeSnapshotTotal || 0),
+        items: items.length
+      });
     } catch (error) {
+      logChargeTiming('error', totalFlowStartedAt, {
+        context: 'with-client',
+        clientId: selectedClientData?.id || null,
+        message: error?.message || 'Error desconocido'
+      });
       toast.error(error.message);
       closeChargeClientConfirm();
       focusScanner();

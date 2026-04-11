@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Badge, Button, Form, Modal } from 'react-bootstrap';
 import toast from 'react-hot-toast';
 import { useDispatch, useSelector } from 'react-redux';
@@ -298,14 +298,14 @@ function CajaPage() {
     dashboardRef.current = dashboard;
   }, [dashboard]);
 
-  const handleSessionExpired = () => {
+  const handleSessionExpired = useCallback(() => {
     dispatch(clearSession());
     clearAuthSession();
     navigate('/login', { replace: true });
     toast.error('Sesion vencida, volve a ingresar');
-  };
+  }, [dispatch, navigate]);
 
-  const loadDashboard = async (quiet = false, options = {}) => {
+  const loadDashboard = useCallback(async (quiet = false, options = {}) => {
     try {
       if (!quiet) {
         setLoading(true);
@@ -360,13 +360,13 @@ function CajaPage() {
       setMovementsLoading(false);
       setRankingLoading(false);
     }
-  };
+  }, [handleSessionExpired, rankingMode]);
 
   useEffect(() => {
     loadDashboardRef.current = loadDashboard;
   }, [loadDashboard]);
 
-  const loadMovements = async (mode = movementsMode, quiet = false) => {
+  const loadMovements = useCallback(async (mode = movementsMode, quiet = false) => {
     const movementLimit = mode === 'all' ? 'all' : mode === 'top10' ? 10 : 3;
 
     try {
@@ -389,13 +389,13 @@ function CajaPage() {
         setMovementsLoading(false);
       }
     }
-  };
+  }, [movementsMode]);
 
   useEffect(() => {
     loadMovementsRef.current = loadMovements;
   }, [loadMovements]);
 
-  const loadRanking = async (mode = rankingMode, quiet = false) => {
+  const loadRanking = useCallback(async (mode = rankingMode, quiet = false) => {
     const rankingLimit = mode === 'all' ? 'all' : mode === 'top10' ? 10 : 5;
 
     try {
@@ -415,7 +415,7 @@ function CajaPage() {
         setRankingLoading(false);
       }
     }
-  };
+  }, [rankingMode]);
 
   useEffect(() => {
     loadRankingRef.current = loadRanking;
@@ -445,8 +445,10 @@ function CajaPage() {
     const run = async () => {
       try {
         setLoading(true);
-        const movementLimit = movementsMode === 'all' ? 'all' : movementsMode === 'top10' ? 10 : 3;
-        const rankingLimit = rankingMode === 'all' ? 'all' : rankingMode === 'top10' ? 10 : 5;
+        const currentMovementsMode = movementsModeRef.current;
+        const currentRankingMode = rankingModeRef.current;
+        const movementLimit = currentMovementsMode === 'all' ? 'all' : currentMovementsMode === 'top10' ? 10 : 3;
+        const rankingLimit = currentRankingMode === 'all' ? 'all' : currentRankingMode === 'top10' ? 10 : 5;
         const [data, liveState, movementData, rankingData] = await Promise.all([
           fetchCashboxSummary({
             date: todayDate(),
@@ -495,7 +497,7 @@ function CajaPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [handleSessionExpired]);
 
   useEffect(() => {
     const token = getAuthToken();

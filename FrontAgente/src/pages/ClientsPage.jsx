@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Form, Modal } from 'react-bootstrap';
 import toast from 'react-hot-toast';
 import { createClient, fetchClientHistory, fetchClients, updateClientDelivery, updateClientPayment } from '../services/api';
@@ -218,7 +218,7 @@ function ClientsPage() {
     }
   };
 
-  const loadHistory = async () => {
+  const loadHistory = useCallback(async () => {
     if (!historyClient) {
       return;
     }
@@ -235,19 +235,15 @@ function ClientsPage() {
     } finally {
       setHistoryLoading(false);
     }
-  };
+  }, [historyClient, historyRange.from, historyRange.to]);
 
   useEffect(() => {
-    if (!historyClient) {
-      return undefined;
-    }
-
     const timeoutId = window.setTimeout(() => {
       loadHistory();
     }, 150);
 
     return () => window.clearTimeout(timeoutId);
-  }, [historyClient, historyRange.from, historyRange.to]);
+  }, [loadHistory]);
 
   const editingPreview = useMemo(() => {
     if (!editingClient) {

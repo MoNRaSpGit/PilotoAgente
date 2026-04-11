@@ -28,22 +28,6 @@ const EXPENSE_CACHE_TTL_MS = 60 * 1000;
 const expenseListCache = { value: null, expiresAt: 0 };
 const expenseSummaryCache = { value: null, expiresAt: 0 };
 
-async function withTransaction(work) {
-  const connection = await pool.getConnection();
-
-  try {
-    await connection.beginTransaction();
-    const result = await work(connection);
-    await connection.commit();
-    return result;
-  } catch (error) {
-    await connection.rollback();
-    throw error;
-  } finally {
-    connection.release();
-  }
-}
-
 function normalizeExpenseFrequency(value) {
   const frequency = String(value || 'monthly').toLowerCase();
 

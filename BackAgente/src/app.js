@@ -11,14 +11,6 @@ import { env } from './config/env.js';
 
 const app = express();
 
-if (process.env.NODE_ENV !== 'production') {
-  console.log('[app:init]', {
-    env: process.env.NODE_ENV || 'development',
-    clientUrl: env.clientUrl,
-    apiPort: env.port
-  });
-}
-
 app.use(
   cors({
     origin: env.clientUrl

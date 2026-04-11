@@ -8,6 +8,7 @@ import {
 } from './caja.repository.js';
 import { broadcastCashboxUpdate } from './caja.realtime.js';
 import { getScannerLiveState, saveScannerLiveState } from './scannerLiveState.store.js';
+import { performance } from 'node:perf_hooks';
 
 function createServiceError(message, status) {
   const error = new Error(message);
@@ -106,6 +107,7 @@ export async function addCashboxPayment(payload, user) {
 }
 
 export async function addCashboxSale(payload, user) {
+  const startedAt = performance.now();
   const amount = Number(payload?.amount ?? payload?.total ?? 0);
   const items = Array.isArray(payload?.items) ? payload.items : [];
   const shouldClearLiveState = Boolean(payload?.clear_live_state);
@@ -121,15 +123,20 @@ export async function addCashboxSale(payload, user) {
     role: user?.role
   };
 
+  const registerSaleStartedAt = performance.now();
   const result = await recordCashboxSale({
     amount,
     items,
     source: payload?.source || 'scanner',
     description: payload?.description || 'Venta desde escaner',
-    operator
+    operator,
+    includeCashbox: false
   });
+  const registerSaleMs = Number((performance.now() - registerSaleStartedAt).toFixed(2));
 
+  let clearLiveStateMs = 0;
   if (shouldClearLiveState) {
+    const clearLiveStateStartedAt = performance.now();
     const clearedSnapshot = saveScannerLiveState({
       type: 'scanner:state',
       source: payload?.source || 'scanner',
@@ -148,8 +155,10 @@ export async function addCashboxSale(payload, user) {
       type: 'scanner:state',
       ...clearedSnapshot
     });
+    clearLiveStateMs = Number((performance.now() - clearLiveStateStartedAt).toFixed(2));
   }
 
+  const broadcastStartedAt = performance.now();
   broadcastCashboxUpdate({
     type: 'sale',
     source: payload?.source || 'scanner',
@@ -157,12 +166,21 @@ export async function addCashboxSale(payload, user) {
     amount,
     items,
     operator,
-    caja: result.caja,
+    caja_id: result.caja_id,
     movement_id: result.movement_id
   });
+  const broadcastMs = Number((performance.now() - broadcastStartedAt).toFixed(2));
+  const totalMs = Number((performance.now() - startedAt).toFixed(2));
 
   return {
-    item: result.caja
+    item: result.caja || null,
+    movement_id: result.movement_id,
+    meta: {
+      total_ms: totalMs,
+      register_sale_ms: registerSaleMs,
+      clear_live_state_ms: clearLiveStateMs,
+      broadcast_ms: broadcastMs
+    }
   };
 }
 

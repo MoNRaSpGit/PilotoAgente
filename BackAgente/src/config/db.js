@@ -16,7 +16,7 @@ export async function checkDatabaseConnection() {
     const connection = await pool.getConnection();
     connection.release();
     return true;
-  } catch (error) {
+  } catch {
     return false;
   }
 }

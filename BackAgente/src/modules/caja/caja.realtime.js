@@ -67,7 +67,7 @@ function ensureHeartbeat() {
     for (const res of listeners) {
       try {
         res.write(`event: ping\ndata: {}\n\n`);
-      } catch (_error) {
+      } catch {
         listeners.delete(res);
       }
     }
@@ -123,7 +123,7 @@ export function broadcastCashboxUpdate(payload = {}) {
   for (const res of [...listeners]) {
     try {
       writeSse(res, 'cashbox:update', payload);
-    } catch (_error) {
+    } catch {
       listeners.delete(res);
     }
   }

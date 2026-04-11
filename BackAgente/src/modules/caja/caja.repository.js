@@ -266,21 +266,6 @@ async function loadCashboxById(connection, cajaId) {
   return toCashboxViewModel(rows[0] || null);
 }
 
-async function loadCashboxByOpenedDate(connection, date) {
-  const [rows] = await connection.query(
-    `
-      SELECT ${CASHBOX_COLUMNS}
-      FROM ops_cajas
-      WHERE DATE(opened_at) = ?
-      ORDER BY opened_at DESC, id DESC
-      LIMIT 1
-    `,
-    [date]
-  );
-
-  return toCashboxViewModel(rows[0] || null);
-}
-
 async function loadCashboxRowsInRange(connection, startDate, endDateExclusive) {
   const [rows] = await connection.query(
     `
@@ -512,7 +497,14 @@ export async function closeCashbox({ operator }) {
   return result;
 }
 
-export async function recordCashboxSale({ amount, items = [], operator, source = 'scanner', description = 'Venta desde escaner' }) {
+export async function recordCashboxSale({
+  amount,
+  items = [],
+  operator,
+  source = 'scanner',
+  description = 'Venta desde escaner',
+  includeCashbox = true
+}) {
   const saleItems = Array.isArray(items)
     ? items.map((item) => ({
         barcode: item.barcode || null,
@@ -564,9 +556,9 @@ export async function recordCashboxSale({ amount, items = [], operator, source =
       operatorName: operator?.name || null,
       operatorRole: operator?.role || null,
       metadata: JSON.stringify({
-        items: saleItems,
         amount: saleAmount,
-        source
+        source,
+        items_count: saleItems.length
       })
     });
 
@@ -583,8 +575,11 @@ export async function recordCashboxSale({ amount, items = [], operator, source =
       [saleAmount, caja.id]
     );
 
+    const cajaView = includeCashbox ? await loadCashboxById(connection, caja.id) : null;
+
     return {
-      caja: await loadCashboxById(connection, caja.id),
+      caja: cajaView,
+      caja_id: caja.id,
       movement_id: movementId
     };
   });
@@ -690,59 +685,6 @@ function enrichPeriodSummary(date, rangeStart, rangeEnd, caja) {
     opened_by_name: caja.opened_by_name,
     opened_by_role: caja.opened_by_role
   };
-}
-
-async function loadPeriodSummary(connection, startDate, endDateExclusive) {
-  const [rows] = await connection.query(
-    `
-      SELECT
-        COALESCE(SUM(sales_total), 0) AS sales_total,
-        COALESCE(SUM(payments_total), 0) AS payments_total,
-        MAX(closed_at) AS closed_at,
-        SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) AS open_count
-      FROM ops_cajas
-      WHERE opened_at >= ? AND opened_at < ?
-    `,
-    [`${startDate} 00:00:00`, `${endDateExclusive} 00:00:00`]
-  );
-
-  const [latestRows] = await connection.query(
-    `
-      SELECT
-        opening_amount,
-        opened_at,
-        status
-      FROM ops_cajas
-      WHERE opened_at >= ? AND opened_at < ?
-      ORDER BY opened_at DESC, id DESC
-      LIMIT 1
-    `,
-    [`${startDate} 00:00:00`, `${endDateExclusive} 00:00:00`]
-  );
-
-  const row = rows[0] || {};
-  const latestRow = latestRows[0] || {};
-  const openingAmount = Number(latestRow.opening_amount || 0);
-  const salesTotal = Number(row.sales_total || 0);
-  const paymentsTotal = Number(row.payments_total || 0);
-  const currentAmount = Number((openingAmount + salesTotal - paymentsTotal).toFixed(2));
-  const hasData = openingAmount > 0 || salesTotal > 0 || paymentsTotal > 0;
-
-  return hasData
-    ? {
-        date: startDate,
-        range_start: startDate,
-        range_end: endDateExclusive,
-        opening_amount: openingAmount,
-        sales_total: salesTotal,
-        payments_total: paymentsTotal,
-        profit_amount: calculateProfitAmount(salesTotal, paymentsTotal),
-        current_amount: currentAmount,
-        status: latestRow.status || (Number(row.open_count || 0) > 0 ? 'open' : 'closed'),
-        opened_at: latestRow.opened_at || null,
-        closed_at: row.closed_at
-      }
-    : buildEmptyPeriodSummary(startDate, startDate, endDateExclusive);
 }
 
 function calculateComparisonPercent(currentSales, previousSales) {
@@ -861,7 +803,6 @@ export async function getCashboxSummary({ date, compareTo } = {}) {
     return cached;
   }
 
-  const startedAt = Date.now();
   const selectedDayEnd = addDays(selectedDate, 1);
   const comparisonDayEnd = addDays(comparisonDate, 1);
 

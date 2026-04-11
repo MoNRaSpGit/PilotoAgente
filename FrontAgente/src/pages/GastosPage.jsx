@@ -19,10 +19,6 @@ function frequencyLabel(value) {
   return 'Mensual';
 }
 
-function scopeLabel(value) {
-  return value === 'home' ? 'Hogar' : 'Negocio';
-}
-
 const EMPTY_FORM = {
   name: '',
   amount: '',
