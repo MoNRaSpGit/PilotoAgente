@@ -8,10 +8,6 @@ import { API_URL, fetchCashboxObjectives } from '../services/api';
 import { clearSession } from '../store/slices/authSlice';
 import { clearAuthSession, getAuthToken } from '../utils/authSession';
 
-function money(value) {
-  return `$${Number(value || 0).toFixed(2)}`;
-}
-
 function progressPercent(current, goal) {
   if (!Number.isFinite(goal) || goal <= 0) {
     return current > 0 ? 100 : 0;

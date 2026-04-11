@@ -1,5 +1,6 @@
-import { Container, Nav, Navbar } from 'react-bootstrap';
+import { Button, Container, Modal, Nav, Navbar } from 'react-bootstrap';
 import { Barcode, BotMessageSquare, Target } from 'lucide-react';
+import { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import DashboardPage from './pages/DashboardPage';
@@ -20,14 +21,19 @@ import './styles/pages/login.css';
 import './styles/pages/objetivos.css';
 import './styles/pages/scanner.css';
 
+function normalizeRole(role) {
+  return String(role || '').trim().toLowerCase();
+}
+
 function RoleGate({ children, allow = ['admin'] }) {
-  const userRole = useSelector((state) => state.auth.user?.role);
+  const userRole = normalizeRole(useSelector((state) => state.auth.user?.role));
+  const allowedRoles = allow.map((role) => normalizeRole(role));
 
   if (!userRole) {
     return <Navigate to="/login" replace />;
   }
 
-  if (!allow.includes(userRole)) {
+  if (!allowedRoles.includes(userRole)) {
     return <Navigate to={userRole === 'admin' ? '/caja' : '/scanner'} replace />;
   }
 
@@ -38,15 +44,17 @@ function App() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const location = useLocation();
-  const userRole = useSelector((state) => state.auth.user?.role);
+  const userRole = normalizeRole(useSelector((state) => state.auth.user?.role));
   const isAdmin = userRole === 'admin';
   const isLoggedIn = Boolean(userRole);
   const homePath = isAdmin ? '/caja' : '/scanner';
   const hideNavbar = location.pathname === '/login';
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
 
-  const handleLogout = () => {
+  const handleLogoutConfirm = () => {
     dispatch(clearSession());
     clearAuthSession();
+    setLogoutConfirmOpen(false);
     navigate('/login', { replace: true, state: { resetLoginPanel: true, at: Date.now() } });
   };
 
@@ -92,7 +100,7 @@ function App() {
                 </Nav.Link>
               ) : null}
               {isLoggedIn ? (
-                <Nav.Link as="button" type="button" onClick={handleLogout} className="nav-logout-link">
+                <Nav.Link as="button" type="button" onClick={() => setLogoutConfirmOpen(true)} className="nav-logout-link">
                   Salir
                 </Nav.Link>
               ) : (
@@ -164,6 +172,23 @@ function App() {
           </Routes>
         </Container>
       </main>
+
+      <Modal show={logoutConfirmOpen} onHide={() => setLogoutConfirmOpen(false)} centered restoreFocus={false}>
+        <Modal.Header closeButton>
+          <Modal.Title>Confirmar salida</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p className="mb-0">Seguro que queres salir?</p>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="outline-secondary" onClick={() => setLogoutConfirmOpen(false)}>
+            Cancelar
+          </Button>
+          <Button variant="dark" onClick={handleLogoutConfirm}>
+            Salir
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 }

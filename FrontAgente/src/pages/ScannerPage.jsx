@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, Form, Modal } from 'react-bootstrap';
 import { useSelector } from 'react-redux';
 import toast from 'react-hot-toast';
@@ -101,16 +101,16 @@ function ScannerPage() {
       };
     });
 
-  const isTouchLikeDevice = () => {
+  const isTouchLikeDevice = useCallback(() => {
     if (typeof window === 'undefined' || typeof navigator === 'undefined') {
       return false;
     }
 
     const coarsePointer = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
     return coarsePointer || Number(navigator.maxTouchPoints || 0) > 0;
-  };
+  }, []);
 
-  const focusScanner = ({ avoidVirtualKeyboard = true } = {}) => {
+  const focusScanner = useCallback(({ avoidVirtualKeyboard = true } = {}) => {
     window.setTimeout(() => {
       const input = barcodeInputRef.current;
 
@@ -130,7 +130,7 @@ function ScannerPage() {
 
       input.focus();
     }, 0);
-  };
+  }, [isTouchLikeDevice]);
 
   useEffect(() => {
     focusScanner();
@@ -140,7 +140,7 @@ function ScannerPage() {
         window.clearTimeout(pressTimerRef.current);
       }
     };
-  }, []);
+  }, [focusScanner]);
 
   useEffect(() => {
     let active = true;
@@ -230,7 +230,7 @@ function ScannerPage() {
     }, 1500);
 
     return () => window.clearTimeout(timeoutId);
-  }, [clientQuery, clients, userRole]);
+  }, [clientQuery, clients, focusScanner, userRole]);
 
   const closeManualModal = () => {
     setManualOpen(false);

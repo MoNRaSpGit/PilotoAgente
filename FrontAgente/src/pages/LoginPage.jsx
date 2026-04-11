@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button, Form } from 'react-bootstrap';
 import toast from 'react-hot-toast';
 import { BotMessageSquare } from 'lucide-react';
@@ -19,6 +19,10 @@ const QUICK_LOGINS = {
   }
 };
 
+function normalizeRole(role) {
+  return String(role || '').trim().toLowerCase();
+}
+
 function LoginPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -32,24 +36,30 @@ function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [logoTapCount, setLogoTapCount] = useState(0);
   const [panelUnlocked, setPanelUnlocked] = useState(false);
+  const handledResetRef = useRef(false);
 
   useEffect(() => {
     if (!sessionToken || !sessionUserRole) {
       return;
     }
 
-    navigate(sessionUserRole === 'admin' ? '/caja' : '/scanner', { replace: true });
+    navigate(normalizeRole(sessionUserRole) === 'admin' ? '/caja' : '/scanner', { replace: true });
   }, [navigate, sessionToken, sessionUserRole]);
 
   useEffect(() => {
     if (!location.state?.resetLoginPanel) {
+      handledResetRef.current = false;
       return;
     }
 
+    if (handledResetRef.current) {
+      return;
+    }
+
+    handledResetRef.current = true;
     setPanelUnlocked(false);
     setLogoTapCount(0);
-    navigate('/login', { replace: true, state: null });
-  }, [location.state, navigate]);
+  }, [location.state]);
 
   useEffect(() => {
     if (panelUnlocked || logoTapCount < 7) {
@@ -76,7 +86,7 @@ function LoginPage() {
       dispatch(setSession(data));
       saveAuthSession(data);
       toast.success('Sesion iniciada');
-      navigate(data.user?.role === 'admin' ? '/caja' : '/scanner', { replace: true });
+      navigate(normalizeRole(data.user?.role) === 'admin' ? '/caja' : '/scanner', { replace: true });
     } catch (error) {
       toast.error(error.message);
     } finally {
@@ -99,7 +109,7 @@ function LoginPage() {
       dispatch(setSession(data));
       saveAuthSession(data);
       toast.success('Sesion iniciada');
-      navigate(data.user?.role === 'admin' ? '/caja' : '/scanner', { replace: true });
+      navigate(normalizeRole(data.user?.role) === 'admin' ? '/caja' : '/scanner', { replace: true });
     } catch (error) {
       toast.error(error.message);
     } finally {
