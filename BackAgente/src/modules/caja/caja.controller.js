@@ -85,7 +85,7 @@ export async function syncScannerLiveStateController(req, res) {
 
 export async function getScannerLiveStateController(req, res) {
   try {
-    const data = await fetchScannerLiveState(req.user);
+    const data = await fetchScannerLiveState(req.user, req.query);
     return res.json(data);
   } catch (error) {
     return handleServiceError(res, error, 'No se pudo obtener el estado del escaner');

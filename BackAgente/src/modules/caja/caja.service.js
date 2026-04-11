@@ -11,6 +11,7 @@ import { broadcastCashboxUpdate } from './caja.realtime.js';
 import { getScannerLiveState, saveScannerLiveState } from './scannerLiveState.store.js';
 import { performance } from 'node:perf_hooks';
 import { env } from '../../config/env.js';
+import { queueSaleStockDiscount } from '../stock/stock.service.js';
 
 function createServiceError(message, status) {
   const error = new Error(message);
@@ -125,9 +126,11 @@ export async function fetchCashboxMovements(query = {}) {
   });
 }
 
-export async function fetchScannerLiveState(user) {
+export async function fetchScannerLiveState(user, query = {}) {
   return {
-    item: getScannerLiveState(user)
+    item: getScannerLiveState(user, {
+      scope: query?.scope
+    })
   };
 }
 
@@ -251,6 +254,12 @@ export async function addCashboxSale(payload, user) {
   });
   const broadcastMs = Number((performance.now() - broadcastStartedAt).toFixed(2));
   const totalMs = Number((performance.now() - startedAt).toFixed(2));
+
+  queueSaleStockDiscount({
+    items,
+    movementId: result.movement_id,
+    operator
+  });
 
   return {
     item: result.caja || null,

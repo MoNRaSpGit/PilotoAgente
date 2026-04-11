@@ -117,31 +117,53 @@ export function saveScannerLiveState(snapshot = {}) {
   return normalizedSnapshot;
 }
 
-export function getScannerLiveState(requester = null) {
+function sortByUpdatedAtDesc(items = []) {
+  return [...items].sort((left, right) => {
+    const leftTime = new Date(left.updated_at || 0).getTime();
+    const rightTime = new Date(right.updated_at || 0).getTime();
+    return rightTime - leftTime;
+  });
+}
+
+function pickPrioritizedSnapshot(items = []) {
+  const sortedItems = sortByUpdatedAtDesc(items);
+
+  if (sortedItems.length === 0) {
+    return null;
+  }
+
+  const prioritized = sortedItems.find(
+    (entry) => entry.state === 'editing' || entry.state === 'manual' || entry.state === 'active' || entry.items.length > 0
+  );
+
+  return prioritized || sortedItems[0];
+}
+
+export function getScannerLiveState(requester = null, options = {}) {
   pruneExpiredStates();
 
+  const scope = String(options?.scope || '').trim().toLowerCase();
   const requesterKey = getOperatorKey(requester);
+  const wantsOwnScope = scope === 'own';
+
+  if (wantsOwnScope && requesterKey) {
+    const ownEntry = operatorStates.get(requesterKey);
+    return ownEntry?.snapshot || createEmptyState();
+  }
 
   if (requester?.role !== 'admin' && requesterKey) {
     const ownEntry = operatorStates.get(requesterKey);
     return ownEntry?.snapshot || createEmptyState();
   }
 
-  const entries = [...operatorStates.values()]
-    .map((entry) => entry.snapshot)
-    .sort((left, right) => {
-      const leftTime = new Date(left.updated_at || 0).getTime();
-      const rightTime = new Date(right.updated_at || 0).getTime();
-      return rightTime - leftTime;
-    });
+  const entries = [...operatorStates.values()].map((entry) => entry.snapshot);
 
-  if (entries.length === 0) {
-    return createEmptyState();
+  if (requester?.role === 'admin') {
+    const operarioEntries = entries.filter((entry) => entry?.operator?.role === 'operario');
+    const operarioSnapshot = pickPrioritizedSnapshot(operarioEntries);
+    return operarioSnapshot || createEmptyState();
   }
 
-  const prioritized = entries.find(
-    (entry) => entry.state === 'editing' || entry.state === 'manual' || entry.state === 'active' || entry.items.length > 0
-  );
-
-  return prioritized || entries[0];
+  const snapshot = pickPrioritizedSnapshot(entries);
+  return snapshot || createEmptyState();
 }

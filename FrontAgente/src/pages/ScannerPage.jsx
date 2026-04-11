@@ -153,7 +153,7 @@ function ScannerPage() {
       return undefined;
     }
 
-    fetchScannerLiveState()
+    fetchScannerLiveState({ scope: 'own' })
       .then((snapshot) => {
         if (!active || !snapshot) {
           return;

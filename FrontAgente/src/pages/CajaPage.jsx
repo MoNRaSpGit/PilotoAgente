@@ -519,6 +519,10 @@ function CajaPage() {
       }
 
       if (payload.type === 'scanner:state') {
+        if (payload?.operator?.role !== 'operario') {
+          return;
+        }
+
         setScannerLiveState({
           items: Array.isArray(payload.items) ? payload.items : [],
           total: Number(payload.total || 0),

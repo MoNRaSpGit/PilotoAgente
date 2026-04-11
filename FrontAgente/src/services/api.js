@@ -680,8 +680,14 @@ export async function syncScannerLiveState(payload) {
   return data;
 }
 
-export async function fetchScannerLiveState() {
-  const response = await fetch(`${API_URL}/api/caja/live-state`, {
+export async function fetchScannerLiveState(options = {}) {
+  const searchParams = new URLSearchParams();
+  if (typeof options?.scope === 'string' && options.scope.trim()) {
+    searchParams.set('scope', options.scope.trim());
+  }
+  const query = searchParams.toString();
+
+  const response = await fetch(`${API_URL}/api/caja/live-state${query ? `?${query}` : ''}`, {
     headers: {
       ...getAuthHeaders()
     }
