@@ -1,4 +1,4 @@
-import { createManualProduct, scanProduct } from './product.service.js';
+import { createManualProduct, scanProduct, updateProduct } from './product.service.js';
 
 function handleServiceError(res, error, fallbackMessage) {
   const status = error.status || 500;
@@ -26,5 +26,14 @@ export async function createManualProductController(req, res) {
     return res.status(201).json(data);
   } catch (error) {
     return handleServiceError(res, error, 'No se pudo guardar el producto manual');
+  }
+}
+
+export async function updateProductController(req, res) {
+  try {
+    const data = await updateProduct(req.params.productId, req.body);
+    return res.json(data);
+  } catch (error) {
+    return handleServiceError(res, error, 'No se pudo actualizar el producto');
   }
 }

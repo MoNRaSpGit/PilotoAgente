@@ -8,7 +8,8 @@ import {
   fetchClients,
   registerCashboxSale,
   scanProductByBarcode,
-  updateClientCharge
+  updateClientCharge,
+  updateProduct
 } from '../services/api';
 
 function resolveProductImage(imageValue) {
@@ -39,6 +40,7 @@ function logChargeTiming(step, startedAt, details = {}) {
 function cloneSaleItems(items = []) {
   return (Array.isArray(items) ? items : []).map((item) => ({
     key: item.key,
+    productId: item.productId,
     barcode: item.barcode,
     name: item.name,
     price: item.price,
@@ -90,6 +92,7 @@ function ScannerPage() {
 
       return {
         key: item?.key || fallbackKey,
+        productId: item?.productId || null,
         barcode: item?.barcode || fallbackKey,
         name: item?.name || 'Producto',
         price: Number(price.toFixed(2)),
@@ -278,6 +281,7 @@ function ScannerPage() {
       source: 'scanner',
       total: totalAmount,
       items: items.map((item) => ({
+        productId: item.productId,
         barcode: item.barcode,
         name: item.name,
         quantity: item.quantity,
@@ -423,7 +427,7 @@ function ScannerPage() {
     focusScanner();
   };
 
-  const handleEditConfirm = () => {
+  const handleEditConfirm = async () => {
     const price = Number.parseFloat(editPrice);
     const name = editName.trim();
 
@@ -435,6 +439,20 @@ function ScannerPage() {
     if (!Number.isFinite(price) || price <= 0) {
       toast.error('Ingresa un valor valido');
       return;
+    }
+
+    const shouldPersistProduct = Number.isFinite(Number(editItem?.productId)) && Number(editItem?.productId) > 0;
+
+    if (shouldPersistProduct) {
+      try {
+        await updateProduct(Number(editItem.productId), {
+          nombre: name,
+          precioVenta: price
+        });
+      } catch (error) {
+        toast.error(error.message || 'No se pudo actualizar el producto en la base');
+        return;
+      }
     }
 
     setItems((current) =>
@@ -472,6 +490,7 @@ function ScannerPage() {
 
       addItem({
         key: normalizedBarcode,
+        productId: item.id || null,
         barcode: normalizedBarcode,
         name: item.nombre,
         price,
@@ -513,6 +532,7 @@ function ScannerPage() {
 
     addItem({
       key: manualKey,
+      productId: null,
       barcode: manualKey,
       name: 'Producto manual',
       price,
@@ -542,6 +562,7 @@ function ScannerPage() {
     const response = await registerCashboxSale({
       amount: saleAmount,
       items: saleItems.map((item) => ({
+        productId: item.productId,
         barcode: item.barcode,
         name: item.name,
         quantity: item.quantity,
@@ -711,6 +732,7 @@ function ScannerPage() {
 
       addItem({
         key: item.barcode_normalized || item.barcode || unknownBarcode,
+        productId: item.id || null,
         barcode: item.barcode_normalized || item.barcode || unknownBarcode,
         name: item.nombre,
         price: Number(item.precio_venta),
@@ -730,6 +752,7 @@ function ScannerPage() {
 
         addItem({
           key: item.barcode_normalized || item.barcode || unknownBarcode,
+          productId: item.id || null,
           barcode: item.barcode_normalized || item.barcode || unknownBarcode,
           name: item.nombre,
           price: Number(item.precio_venta),

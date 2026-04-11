@@ -1,7 +1,8 @@
 import {
   findProductByBarcode,
   findProductById,
-  insertManualProductFromScan
+  insertManualProductFromScan,
+  updateProductById
 } from './product.repository.js';
 import { getCachedProduct, getProductCacheStats, normalizeBarcode, setCachedProduct } from '../../utils/productCache.js';
 
@@ -101,4 +102,49 @@ export async function createManualProduct(barcode, precioVenta) {
       cache: getProductCacheStats()
     }
   };
+}
+
+export async function updateProduct(productId, payload) {
+  const parsedProductId = Number(productId);
+
+  if (!Number.isFinite(parsedProductId) || parsedProductId <= 0) {
+    throw createServiceError('Producto invalido', 400);
+  }
+
+  const hasNombre = Object.prototype.hasOwnProperty.call(payload || {}, 'nombre');
+  const hasPrecioVenta = Object.prototype.hasOwnProperty.call(payload || {}, 'precioVenta')
+    || Object.prototype.hasOwnProperty.call(payload || {}, 'precio_venta');
+
+  const nombre = hasNombre ? String(payload?.nombre || '').trim() : undefined;
+  const rawPrecio = payload?.precioVenta ?? payload?.precio_venta;
+  const precioVenta = hasPrecioVenta ? Number(rawPrecio) : undefined;
+
+  if (hasNombre && !nombre) {
+    throw createServiceError('Nombre requerido', 400);
+  }
+
+  if (hasPrecioVenta && (!Number.isFinite(precioVenta) || precioVenta <= 0)) {
+    throw createServiceError('Precio valido requerido', 400);
+  }
+
+  if (!hasNombre && !hasPrecioVenta) {
+    throw createServiceError('No hay cambios para actualizar', 400);
+  }
+
+  const item = await updateProductById({
+    productId: parsedProductId,
+    nombre,
+    precioVenta
+  });
+
+  if (!item) {
+    throw createServiceError('Producto no encontrado', 404);
+  }
+
+  const productBarcode = normalizeBarcode(item.barcode_normalized || item.barcode || '');
+  if (productBarcode) {
+    setCachedProduct(productBarcode, item);
+  }
+
+  return { item };
 }

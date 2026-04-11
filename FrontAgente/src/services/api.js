@@ -699,6 +699,226 @@ export async function fetchScannerLiveState() {
   return data.item || null;
 }
 
+export async function fetchStockDashboard(params = {}) {
+  const searchParams = new URLSearchParams();
+
+  if (params.includeHealthy) {
+    searchParams.set('include_healthy', 'true');
+  }
+
+  const query = searchParams.toString();
+  const response = await fetch(`${API_URL}/api/stock/dashboard${query ? `?${query}` : ''}`, {
+    headers: {
+      ...getAuthHeaders()
+    }
+  });
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    const error = new Error(data.message || 'No se pudo cargar el tablero de stock');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  return data;
+}
+
+export async function fetchStockControls() {
+  const response = await fetch(`${API_URL}/api/stock/controls`, {
+    headers: {
+      ...getAuthHeaders()
+    }
+  });
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    const error = new Error(data.message || 'No se pudo cargar la configuracion de stock');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  return data.items || [];
+}
+
+export async function saveStockControl(payload) {
+  const response = await fetch(`${API_URL}/api/stock/controls`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders()
+    },
+    body: JSON.stringify(payload)
+  });
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    const error = new Error(data.message || 'No se pudo guardar la configuracion de stock');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  return data.item;
+}
+
+export async function registerStockEntry(payload) {
+  const response = await fetch(`${API_URL}/api/stock/entries`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders()
+    },
+    body: JSON.stringify(payload)
+  });
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    const error = new Error(data.message || 'No se pudo registrar el ingreso de stock');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  return data.item;
+}
+
+export async function searchStockProducts(params = {}) {
+  const searchParams = new URLSearchParams();
+  if (params.query) {
+    searchParams.set('query', params.query);
+  }
+  if (Number.isFinite(Number(params.limit)) && Number(params.limit) > 0) {
+    searchParams.set('limit', String(Math.floor(Number(params.limit))));
+  }
+
+  const query = searchParams.toString();
+  const response = await fetch(`${API_URL}/api/stock/products${query ? `?${query}` : ''}`, {
+    headers: {
+      ...getAuthHeaders()
+    }
+  });
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    const error = new Error(data.message || 'No se pudo buscar productos');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  return data.items || [];
+}
+
+export async function fetchSuppliers() {
+  const response = await fetch(`${API_URL}/api/suppliers`, {
+    headers: {
+      ...getAuthHeaders()
+    }
+  });
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    const error = new Error(data.message || 'No se pudieron cargar proveedores');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  return data.items || [];
+}
+
+export async function createSupplier(payload) {
+  const response = await fetch(`${API_URL}/api/suppliers`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders()
+    },
+    body: JSON.stringify(payload)
+  });
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    const error = new Error(data.message || 'No se pudo crear el proveedor');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  return data.item;
+}
+
+export async function fetchSuppliersAgenda(params = {}) {
+  const searchParams = new URLSearchParams();
+  if (params.date) {
+    searchParams.set('date', params.date);
+  }
+  const query = searchParams.toString();
+
+  const response = await fetch(`${API_URL}/api/suppliers/agenda${query ? `?${query}` : ''}`, {
+    headers: {
+      ...getAuthHeaders()
+    }
+  });
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    const error = new Error(data.message || 'No se pudo cargar la agenda de proveedores');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  return data;
+}
+
+export async function fetchSupplierOrders(params = {}) {
+  const searchParams = new URLSearchParams();
+  if (Number.isFinite(Number(params.limit)) && Number(params.limit) > 0) {
+    searchParams.set('limit', String(Math.floor(Number(params.limit))));
+  }
+  const query = searchParams.toString();
+
+  const response = await fetch(`${API_URL}/api/suppliers/orders${query ? `?${query}` : ''}`, {
+    headers: {
+      ...getAuthHeaders()
+    }
+  });
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    const error = new Error(data.message || 'No se pudieron cargar pedidos de proveedores');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  return data.items || [];
+}
+
+export async function createSupplierOrder(payload) {
+  const response = await fetch(`${API_URL}/api/suppliers/orders`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders()
+    },
+    body: JSON.stringify(payload)
+  });
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    const error = new Error(data.message || 'No se pudo registrar el pedido al proveedor');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  return data.item;
+}
+
 export async function scanProductByBarcode(barcode) {
   const normalizedBarcode = normalizeBarcode(barcode);
 
@@ -778,6 +998,40 @@ export async function createManualProductFromBarcode({ barcode, precioVenta }) {
   }
 
   setCachedScannerProduct(normalizedBarcode, data.item);
+  return data;
+}
+
+export async function updateProduct(productId, payload) {
+  const parsedProductId = Number(productId);
+
+  if (!Number.isFinite(parsedProductId) || parsedProductId <= 0) {
+    throw new Error('Producto invalido');
+  }
+
+  const response = await fetch(`${API_URL}/api/products/${parsedProductId}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders()
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    const error = new Error(data.message || 'No se pudo actualizar el producto');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  const product = data?.item || null;
+  const normalizedBarcode = normalizeBarcode(product?.barcode_normalized || product?.barcode || '');
+  if (normalizedBarcode && product) {
+    setCachedScannerProduct(normalizedBarcode, product);
+  }
+
   return data;
 }
 
