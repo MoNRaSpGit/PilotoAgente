@@ -15,6 +15,33 @@ import {
 import { clearSession } from '../store/slices/authSlice';
 import { clearAuthSession, getAuthToken } from '../utils/authSession';
 
+const BUSINESS_TIMEZONE = 'America/Montevideo';
+
+function getBusinessDateParts(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: BUSINESS_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+  const parts = formatter.formatToParts(date);
+  const year = parts.find((part) => part.type === 'year')?.value;
+  const month = parts.find((part) => part.type === 'month')?.value;
+  const day = parts.find((part) => part.type === 'day')?.value;
+
+  if (!year || !month || !day) {
+    return null;
+  }
+
+  return { year, month, day };
+}
+
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
 }
@@ -48,13 +75,26 @@ function trendLabel(value) {
 }
 
 function todayDate() {
-  return new Date().toISOString().slice(0, 10);
+  const parts = getBusinessDateParts(new Date());
+
+  if (!parts) {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
 function yesterdayDate() {
-  const date = new Date();
-  date.setDate(date.getDate() - 1);
-  return date.toISOString().slice(0, 10);
+  const today = todayDate();
+  const baseDate = new Date(`${today}T00:00:00`);
+  baseDate.setDate(baseDate.getDate() - 1);
+  const parts = getBusinessDateParts(baseDate);
+
+  if (!parts) {
+    return baseDate.toISOString().slice(0, 10);
+  }
+
+  return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
 function formatShortDate(value = new Date()) {
@@ -65,6 +105,7 @@ function formatShortDate(value = new Date()) {
   }
 
   return date.toLocaleDateString('es-UY', {
+    timeZone: BUSINESS_TIMEZONE,
     day: '2-digit',
     month: '2-digit',
     year: 'numeric'
@@ -83,6 +124,7 @@ function formatLongDate(value = new Date()) {
   }
 
   return date.toLocaleDateString('es-UY', {
+    timeZone: BUSINESS_TIMEZONE,
     weekday: 'long',
     day: 'numeric',
     month: 'long'
@@ -120,6 +162,7 @@ function formatClock(value) {
   }
 
   return date.toLocaleTimeString('es-UY', {
+    timeZone: BUSINESS_TIMEZONE,
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit'
@@ -134,11 +177,13 @@ function formatDateTime(value) {
   }
 
   const day = date.toLocaleDateString('es-UY', {
+    timeZone: BUSINESS_TIMEZONE,
     day: '2-digit',
     month: '2-digit',
     year: 'numeric'
   });
   const time = date.toLocaleTimeString('es-UY', {
+    timeZone: BUSINESS_TIMEZONE,
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit'

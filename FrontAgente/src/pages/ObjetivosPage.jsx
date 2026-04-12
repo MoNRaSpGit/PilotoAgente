@@ -8,6 +8,8 @@ import { API_URL, fetchCashboxObjectives } from '../services/api';
 import { clearSession } from '../store/slices/authSlice';
 import { clearAuthSession, getAuthToken } from '../utils/authSession';
 
+const BUSINESS_TIMEZONE = 'America/Montevideo';
+
 function progressPercent(current, goal) {
   if (!Number.isFinite(goal) || goal <= 0) {
     return current > 0 ? 100 : 0;
@@ -40,14 +42,33 @@ function levelTone(level) {
   return 'curso';
 }
 
+function toLocalIsoDate(date) {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: BUSINESS_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+  const parts = formatter.formatToParts(date);
+  const year = parts.find((part) => part.type === 'year')?.value;
+  const month = parts.find((part) => part.type === 'month')?.value;
+  const day = parts.find((part) => part.type === 'day')?.value;
+
+  if (!year || !month || !day) {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  return `${year}-${month}-${day}`;
+}
+
 function todayDate() {
-  return new Date().toISOString().slice(0, 10);
+  return toLocalIsoDate(new Date());
 }
 
 function yesterdayDate() {
   const date = new Date();
   date.setDate(date.getDate() - 1);
-  return date.toISOString().slice(0, 10);
+  return toLocalIsoDate(date);
 }
 
 function rewardConfig(type) {
