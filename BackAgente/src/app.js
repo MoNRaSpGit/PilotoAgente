@@ -12,6 +12,6 @@ app.use(
 );
 app.use(express.json());
 
-registerAppRoutes(app);
+await registerAppRoutes(app);
 
 export default app;
