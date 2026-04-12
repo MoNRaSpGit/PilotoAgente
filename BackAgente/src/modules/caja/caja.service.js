@@ -103,8 +103,8 @@ export async function fetchCashboxObjectives(query = {}) {
   const yesterdaySales = roundMoney(summary?.previous_day?.sales_total);
   const standardAmount = roundMoney(env.objectivesStandardAmount);
   const recordExtraAmount = roundMoney(env.objectivesRecordExtraAmount);
-  const objectiveAmount = yesterdaySales;
-  const recordAmount = roundMoney(objectiveAmount + recordExtraAmount);
+  const recordAmount = yesterdaySales;
+  const objectiveAmount = Math.max(0, roundMoney(recordAmount - recordExtraAmount));
 
   const level = resolveGoalLevel(dailySales, standardAmount, objectiveAmount, recordAmount);
 
