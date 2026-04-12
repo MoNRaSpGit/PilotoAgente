@@ -326,7 +326,7 @@ export async function syncScannerLiveState(payload, user) {
   };
 }
 
-export async function closeOpenCashbox(user) {
+export async function closeCashboxSession(user) {
   const operator = {
     id: user?.id,
     name: user?.name,

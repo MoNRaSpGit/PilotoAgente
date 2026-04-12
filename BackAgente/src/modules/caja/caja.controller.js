@@ -1,7 +1,7 @@
 import {
   addCashboxPayment,
   addCashboxSale,
-  closeOpenCashbox,
+  closeCashboxSession,
   fetchCashboxMovements,
   fetchCashboxObjectives,
   fetchCashboxDashboard,
@@ -94,7 +94,7 @@ export async function getScannerLiveStateController(req, res) {
 
 export async function closeCashboxController(req, res) {
   try {
-    const data = await closeOpenCashbox(req.user);
+    const data = await closeCashboxSession(req.user);
     return res.json(data);
   } catch (error) {
     return handleServiceError(res, error, 'No se pudo cerrar la caja');
