@@ -936,25 +936,38 @@ export async function getCashboxObjectivesSummary({ date, compareTo } = {}) {
 
   const openCashbox = await findOpenCashbox();
   const selectedDate = String(openCashbox?.opened_at || requestedSelectedDate).slice(0, 10);
-  const comparisonCutoff = `${selectedDate} 00:00:00`;
+  const [previousClosedRows] = openCashbox
+    ? await pool.query(
+        `
+          SELECT
+            DATE_FORMAT(closed_at, '%Y-%m-%d') AS closed_date,
+            sales_total
+          FROM ops_cajas
+          WHERE status = 'closed'
+            AND closed_at IS NOT NULL
+            AND closed_at <= ?
+          ORDER BY closed_at DESC, id DESC
+          LIMIT 1
+        `,
+        [openCashbox.opened_at]
+      )
+    : await pool.query(
+        `
+          SELECT
+            DATE_FORMAT(closed_at, '%Y-%m-%d') AS closed_date,
+            sales_total
+          FROM ops_cajas
+          WHERE status = 'closed'
+            AND closed_at IS NOT NULL
+          ORDER BY closed_at DESC, id DESC
+          LIMIT 1
+        `
+      );
 
-  const [previousSalesRows] = await pool.query(
-    `
-      SELECT DATE_FORMAT(created_at, '%Y-%m-%d') AS sales_date, COALESCE(SUM(amount), 0) AS sales_total
-      FROM ops_caja_movimientos
-      WHERE type = 'sale'
-        AND created_at < ?
-      GROUP BY DATE(created_at)
-      ORDER BY sales_date DESC
-      LIMIT 1
-    `,
-    [comparisonCutoff]
-  );
-
-  const previousSales = previousSalesRows[0] || {};
-  const comparisonDate = previousSales?.sales_date || requestedComparisonDate;
+  const previousClosed = previousClosedRows[0] || {};
+  const comparisonDate = previousClosed?.closed_date || requestedComparisonDate;
   const currentSales = Number(openCashbox?.sales_total || 0);
-  const comparisonSales = Number(previousSales.sales_total || 0);
+  const comparisonSales = Number(previousClosed.sales_total || 0);
 
   const result = {
     selected_date: selectedDate,
