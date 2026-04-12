@@ -2,6 +2,7 @@
 import toast from 'react-hot-toast';
 import {
   createSupplierOrder,
+  fetchSupplierProducts,
   fetchSupplierOrders,
   fetchSuppliers,
   fetchSuppliersAgenda
@@ -10,6 +11,7 @@ import { useSuppliersPageController } from '../pages/suppliers/useSuppliersPageC
 
 vi.mock('../services/api', () => ({
   createSupplierOrder: vi.fn(),
+  fetchSupplierProducts: vi.fn(),
   fetchSupplierOrders: vi.fn(),
   fetchSuppliers: vi.fn(),
   fetchSuppliersAgenda: vi.fn()
@@ -38,6 +40,10 @@ describe('useSuppliersPageController', () => {
       week: []
     });
     fetchSupplierOrders.mockResolvedValue([]);
+    fetchSupplierProducts.mockResolvedValue({
+      supplier: { id: 1, nombre: 'Acme' },
+      items: [{ id: 10, nombre: 'Leche Conaprole', precio_venta: 100, stock_actual: 5, barcode: '123' }]
+    });
     createSupplierOrder.mockResolvedValue({ id: 11 });
   });
 
@@ -51,6 +57,7 @@ describe('useSuppliersPageController', () => {
     expect(fetchSuppliers).toHaveBeenCalledTimes(1);
     expect(fetchSuppliersAgenda).toHaveBeenCalledTimes(1);
     expect(fetchSupplierOrders).toHaveBeenCalledWith({ limit: 8 });
+    expect(fetchSupplierProducts).toHaveBeenCalledWith('1');
     expect(result.current.todayHeadline).toMatch(/Hoy llega Acme/i);
   });
 

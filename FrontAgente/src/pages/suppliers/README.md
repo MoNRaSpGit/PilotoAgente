@@ -18,6 +18,7 @@ This module powers supplier operations: simulated day view, weekly arrivals agen
 - `src/pages/suppliers/components/SuppliersWeekAgendaPanel.jsx`
 - `src/pages/suppliers/components/SuppliersOrderFormPanel.jsx`
 - `src/pages/suppliers/components/SuppliersRecentOrdersPanel.jsx`
+- `src/pages/suppliers/components/SuppliersProductsPanel.jsx`
 
 ## Where To Change What
 - Update visuals/layout only: edit files in `components/`.

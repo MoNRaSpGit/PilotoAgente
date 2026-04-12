@@ -1,6 +1,7 @@
 ﻿import { SuppliersDayMovementPanel } from './suppliers/components/SuppliersDayMovementPanel';
 import { SuppliersHeader } from './suppliers/components/SuppliersHeader';
 import { SuppliersOrderFormPanel } from './suppliers/components/SuppliersOrderFormPanel';
+import { SuppliersProductsPanel } from './suppliers/components/SuppliersProductsPanel';
 import { SuppliersRecentOrdersPanel } from './suppliers/components/SuppliersRecentOrdersPanel';
 import { SuppliersWeekAgendaPanel } from './suppliers/components/SuppliersWeekAgendaPanel';
 import { useSuppliersPageController } from './suppliers/useSuppliersPageController';
@@ -12,6 +13,11 @@ function SuppliersPage() {
     setSimulatedDate,
     realToday,
     suppliers,
+    selectedSupplierId,
+    setSelectedSupplierId,
+    selectedSupplierProducts,
+    selectedSupplierMeta,
+    loadingSupplierProducts,
     agenda,
     recentOrders,
     savingOrder,
@@ -36,6 +42,14 @@ function SuppliersPage() {
       <div className="suppliers-grid">
         <SuppliersDayMovementPanel providerDaySchedule={providerDaySchedule} />
         <SuppliersWeekAgendaPanel loading={loading} agenda={agenda} />
+        <SuppliersProductsPanel
+          suppliers={suppliers}
+          selectedSupplierId={selectedSupplierId}
+          setSelectedSupplierId={setSelectedSupplierId}
+          selectedSupplierMeta={selectedSupplierMeta}
+          selectedSupplierProducts={selectedSupplierProducts}
+          loadingSupplierProducts={loadingSupplierProducts}
+        />
         <SuppliersOrderFormPanel
           suppliers={suppliers}
           orderForm={orderForm}

@@ -3,6 +3,7 @@ import { vi } from 'vitest';
 import { SuppliersDayMovementPanel } from '../pages/suppliers/components/SuppliersDayMovementPanel';
 import { SuppliersHeader } from '../pages/suppliers/components/SuppliersHeader';
 import { SuppliersOrderFormPanel } from '../pages/suppliers/components/SuppliersOrderFormPanel';
+import { SuppliersProductsPanel } from '../pages/suppliers/components/SuppliersProductsPanel';
 import { SuppliersRecentOrdersPanel } from '../pages/suppliers/components/SuppliersRecentOrdersPanel';
 import { SuppliersWeekAgendaPanel } from '../pages/suppliers/components/SuppliersWeekAgendaPanel';
 
@@ -90,5 +91,27 @@ describe('SuppliersRecentOrdersPanel', () => {
 
     expect(screen.getByText('Acme')).toBeInTheDocument();
     expect(screen.getByText('pending')).toBeInTheDocument();
+  });
+});
+
+describe('SuppliersProductsPanel', () => {
+  it('renderiza productos del proveedor seleccionado', () => {
+    const setSelectedSupplierId = vi.fn();
+    render(
+      <SuppliersProductsPanel
+        suppliers={[{ id: 1, nombre: 'Conaprole' }]}
+        selectedSupplierId="1"
+        setSelectedSupplierId={setSelectedSupplierId}
+        selectedSupplierMeta={{ id: 1, nombre: 'Conaprole' }}
+        selectedSupplierProducts={[
+          { id: 10, nombre: 'Leche', categoria: 'Lacteos', barcode: '123', stock_actual: 4, precio_venta: 99 }
+        ]}
+        loadingSupplierProducts={false}
+      />
+    );
+
+    expect(screen.getByText(/Productos por proveedor/i)).toBeInTheDocument();
+    expect(screen.getByText('Leche')).toBeInTheDocument();
+    expect(screen.getByText('Conaprole')).toBeInTheDocument();
   });
 });

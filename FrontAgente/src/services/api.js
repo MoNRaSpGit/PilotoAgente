@@ -799,6 +799,32 @@ export async function createSupplier(payload) {
   return data.item;
 }
 
+export async function fetchSupplierProducts(supplierId) {
+  const parsedSupplierId = Number(supplierId);
+  if (!Number.isFinite(parsedSupplierId) || parsedSupplierId <= 0) {
+    throw new Error('Proveedor invalido');
+  }
+
+  const response = await fetch(`${API_URL}/api/suppliers/${parsedSupplierId}/products`, {
+    headers: {
+      ...getAuthHeaders()
+    }
+  });
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    const error = new Error(data.message || 'No se pudieron cargar los productos del proveedor');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  return {
+    supplier: data.supplier || null,
+    items: data.items || []
+  };
+}
+
 export async function fetchSuppliersAgenda(params = {}) {
   const searchParams = new URLSearchParams();
   if (params.date) {

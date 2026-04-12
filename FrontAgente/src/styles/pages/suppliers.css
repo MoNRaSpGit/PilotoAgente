@@ -1,0 +1,151 @@
+.suppliers-page {
+  display: grid;
+  gap: 1rem;
+}
+
+.suppliers-today-banner h2 {
+  margin: 0 0 0.35rem;
+}
+
+.suppliers-today-banner p {
+  margin: 0 0 0.4rem;
+  color: var(--text-secondary);
+}
+
+.suppliers-simulated-date {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: var(--text-secondary);
+}
+
+.suppliers-sim-actions {
+  margin-top: 0.65rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.suppliers-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+}
+
+.suppliers-panel {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.suppliers-panel-subtitle {
+  margin: 0;
+  color: var(--text-secondary);
+  text-transform: capitalize;
+}
+
+.suppliers-panel-full {
+  grid-column: 1 / -1;
+}
+
+.suppliers-day-type-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.75rem;
+}
+
+.suppliers-day-type-col {
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.suppliers-day-type-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.suppliers-day-chip {
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  padding: 0.2rem 0.55rem;
+  font-size: 0.86rem;
+  background: #fff;
+}
+
+.suppliers-week-list {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.suppliers-day-card {
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.suppliers-day-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.suppliers-day-head span {
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+}
+
+.suppliers-day-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-top: 1px dashed rgba(0, 0, 0, 0.1);
+  padding-top: 0.4rem;
+}
+
+.suppliers-form {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.suppliers-recent-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.suppliers-recent-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 0.75rem;
+  padding: 0.6rem 0.75rem;
+}
+
+.suppliers-recent-row small {
+  display: block;
+  color: var(--text-secondary);
+}
+
+.suppliers-recent-amount {
+  text-align: right;
+}
+
+.suppliers-products-table-wrap {
+  overflow-x: auto;
+}
+
+@media (max-width: 640px) {
+  .suppliers-day-head,
+  .suppliers-day-item,
+  .suppliers-recent-row {
+    flex-direction: column;
+  }
+
+  .suppliers-recent-amount {
+    text-align: left;
+  }
+}

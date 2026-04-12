@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   createSupplierOrder,
+  fetchSupplierProducts,
   fetchSupplierOrders,
   fetchSuppliers,
   fetchSuppliersAgenda
@@ -22,6 +23,10 @@ export function useSuppliersPageController() {
   const [suppliers, setSuppliers] = useState([]);
   const [agenda, setAgenda] = useState(INITIAL_SUPPLIERS_AGENDA(realToday));
   const [recentOrders, setRecentOrders] = useState([]);
+  const [selectedSupplierId, setSelectedSupplierId] = useState('');
+  const [selectedSupplierProducts, setSelectedSupplierProducts] = useState([]);
+  const [selectedSupplierMeta, setSelectedSupplierMeta] = useState(null);
+  const [loadingSupplierProducts, setLoadingSupplierProducts] = useState(false);
   const [savingOrder, setSavingOrder] = useState(false);
   const [orderForm, setOrderForm] = useState(INITIAL_SUPPLIER_ORDER_FORM);
 
@@ -35,6 +40,12 @@ export function useSuppliersPageController() {
         fetchSupplierOrders({ limit: 8 })
       ]);
       setSuppliers(supplierItems);
+      setSelectedSupplierId((current) => {
+        if (current && supplierItems.some((item) => String(item.id) === String(current))) {
+          return current;
+        }
+        return supplierItems[0]?.id ? String(supplierItems[0].id) : '';
+      });
       setAgenda(agendaData);
       setRecentOrders(orderItems);
     } catch (error) {
@@ -47,6 +58,45 @@ export function useSuppliersPageController() {
   useEffect(() => {
     loadData(simulatedDate);
   }, [loadData, simulatedDate]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadSupplierProducts() {
+      if (!selectedSupplierId) {
+        setSelectedSupplierMeta(null);
+        setSelectedSupplierProducts([]);
+        return;
+      }
+
+      try {
+        setLoadingSupplierProducts(true);
+        const data = await fetchSupplierProducts(selectedSupplierId);
+        if (!active) {
+          return;
+        }
+        setSelectedSupplierMeta(data.supplier || null);
+        setSelectedSupplierProducts(Array.isArray(data.items) ? data.items : []);
+      } catch (error) {
+        if (!active) {
+          return;
+        }
+        setSelectedSupplierMeta(null);
+        setSelectedSupplierProducts([]);
+        toast.error(error.message);
+      } finally {
+        if (active) {
+          setLoadingSupplierProducts(false);
+        }
+      }
+    }
+
+    loadSupplierProducts();
+
+    return () => {
+      active = false;
+    };
+  }, [selectedSupplierId]);
 
   const todayHeadline = useMemo(() => {
     if (!agenda?.today?.items?.length) {
@@ -126,6 +176,11 @@ export function useSuppliersPageController() {
     suppliers,
     agenda,
     recentOrders,
+    selectedSupplierId,
+    setSelectedSupplierId,
+    selectedSupplierProducts,
+    selectedSupplierMeta,
+    loadingSupplierProducts,
     savingOrder,
     orderForm,
     setOrderForm,

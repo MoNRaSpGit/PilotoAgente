@@ -14,6 +14,11 @@ function createControllerState(overrides = {}) {
     setSimulatedDate: vi.fn(),
     realToday: '2026-04-12',
     suppliers: [],
+    selectedSupplierId: '',
+    setSelectedSupplierId: vi.fn(),
+    selectedSupplierProducts: [],
+    selectedSupplierMeta: null,
+    loadingSupplierProducts: false,
     agenda: {
       selected_date: '2026-04-12',
       today: { total_amount: 0, items: [] },
