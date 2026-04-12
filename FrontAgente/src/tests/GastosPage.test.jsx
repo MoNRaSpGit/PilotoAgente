@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { vi } from 'vitest';
-import { MemoryRouter } from 'react-router-dom';
+import { BrowserRouter } from 'react-router-dom';
 import GastosPage from '../pages/GastosPage';
 import { GastosFormPanel } from '../pages/gastos/components/GastosFormPanel';
 import { GastosHero } from '../pages/gastos/components/GastosHero';
@@ -11,6 +11,15 @@ import { useGastosPageController } from '../pages/gastos/useGastosPageController
 vi.mock('../pages/gastos/useGastosPageController', () => ({
   useGastosPageController: vi.fn()
 }));
+
+const routerFutureFlags = {
+  v7_startTransition: true,
+  v7_relativeSplatPath: true
+};
+
+function renderWithRouter(ui) {
+  return render(<BrowserRouter future={routerFutureFlags}>{ui}</BrowserRouter>);
+}
 
 function createControllerState(overrides = {}) {
   return {
@@ -53,11 +62,7 @@ describe('GastosPage', () => {
   it('renderiza la vista principal', () => {
     useGastosPageController.mockReturnValue(createControllerState());
 
-    render(
-      <MemoryRouter>
-        <GastosPage />
-      </MemoryRouter>
-    );
+    renderWithRouter(<GastosPage />);
 
     expect(screen.getByRole('heading', { name: /Configuracion de costos/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /Gastos registrados/i })).toBeInTheDocument();
@@ -67,11 +72,7 @@ describe('GastosPage', () => {
     const handleSubmit = vi.fn((event) => event.preventDefault());
     useGastosPageController.mockReturnValue(createControllerState({ handleSubmit }));
 
-    render(
-      <MemoryRouter>
-        <GastosPage />
-      </MemoryRouter>
-    );
+    renderWithRouter(<GastosPage />);
     fireEvent.submit(screen.getByRole('button', { name: /Agregar/i }).closest('form'));
 
     expect(handleSubmit).toHaveBeenCalledTimes(1);
@@ -80,11 +81,7 @@ describe('GastosPage', () => {
 
 describe('Gastos components', () => {
   it('GastosHero renderiza acciones', () => {
-    render(
-      <MemoryRouter>
-        <GastosHero resetForm={vi.fn()} />
-      </MemoryRouter>
-    );
+    renderWithRouter(<GastosHero resetForm={vi.fn()} />);
     expect(screen.getByRole('button', { name: /Volver a Caja/i })).toBeInTheDocument();
   });
 
