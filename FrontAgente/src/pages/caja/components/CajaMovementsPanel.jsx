@@ -53,13 +53,13 @@ function CajaMovementsPanel({
                   {sale.type === 'payment' ? (
                     <>
                       <strong className="caja-movement-kind">Pago</strong>
-                      <span className="caja-movement-meta">{`${sale.operatorName} · ${formatDateTime(sale.createdAt)}`}</span>
+                      <span className="caja-movement-meta">{`${sale.operatorName} - ${formatDateTime(sale.createdAt)}`}</span>
                       <p className="caja-movement-description is-highlighted">{sale.description || 'Pago registrado'}</p>
                     </>
                   ) : (
                     <>
                       <strong className="caja-movement-kind is-sale">Venta</strong>
-                      <span className="caja-movement-meta">{`${sale.operatorName} · ${formatDateTime(sale.createdAt)}`}</span>
+                      <span className="caja-movement-meta">{`${sale.operatorName} - ${formatDateTime(sale.createdAt)}`}</span>
                       <p className="caja-movement-description is-highlighted is-sale">{sale.description || 'Venta desde escaner'}</p>
                     </>
                   )}
@@ -108,3 +108,4 @@ function CajaMovementsPanel({
 }
 
 export default CajaMovementsPanel;
+

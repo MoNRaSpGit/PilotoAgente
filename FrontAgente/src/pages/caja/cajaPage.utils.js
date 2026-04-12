@@ -1,4 +1,4 @@
-const BUSINESS_TIMEZONE = 'America/Montevideo';
+ï»¿const BUSINESS_TIMEZONE = 'America/Montevideo';
 
 function getBusinessDateParts(value = new Date()) {
   const date = value instanceof Date ? value : new Date(value);
@@ -96,7 +96,7 @@ export function formatShortDate(value = new Date()) {
 }
 
 export function metricValue(current, previous) {
-  return `${money(current)} · ${money(previous)}`;
+  return `${money(current)} - ${money(previous)}`;
 }
 
 export function formatLongDate(value = new Date()) {
@@ -173,7 +173,7 @@ export function formatDateTime(value) {
     second: '2-digit'
   });
 
-  return `${day} · ${time}`;
+  return `${day} Â· ${time}`;
 }
 
 function getScannerIdleMinutes(updatedAt, now = new Date()) {
@@ -281,3 +281,4 @@ export function getScannerStatusBadge(updatedAt, hasItems, now = new Date()) {
 
   return { label: 'Inactivo', bg: 'secondary', text: 'light', tone: 'idle' };
 }
+
