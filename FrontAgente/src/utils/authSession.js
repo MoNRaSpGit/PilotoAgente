@@ -21,9 +21,11 @@ function readStoredSession() {
   const sessionStorage = getBrowserStorage('session');
 
   try {
+    // Session storage is isolated per browser tab/window.
+    // We prioritize it to avoid cross-role collisions (admin/operario) in the same browser.
+    const sessionRaw = sessionStorage?.getItem(AUTH_SESSION_KEY);
     const localRaw = localStorage?.getItem(AUTH_SESSION_KEY);
-    const legacyRaw = sessionStorage?.getItem(AUTH_SESSION_KEY);
-    const raw = localRaw || legacyRaw;
+    const raw = sessionRaw || localRaw;
 
     if (!raw) {
       return null;
@@ -47,8 +49,8 @@ function readStoredSession() {
       expiresAt: Date.now() + AUTH_SESSION_TTL_MS
     };
 
-    localStorage?.setItem(AUTH_SESSION_KEY, JSON.stringify(normalizedSession));
-    sessionStorage?.removeItem(AUTH_SESSION_KEY);
+    sessionStorage?.setItem(AUTH_SESSION_KEY, JSON.stringify(normalizedSession));
+    localStorage?.removeItem(AUTH_SESSION_KEY);
 
     return normalizedSession;
   } catch (_error) {
@@ -76,8 +78,8 @@ export function saveAuthSession(session) {
     expiresAt: Date.now() + AUTH_SESSION_TTL_MS
   };
 
-  localStorage?.setItem(AUTH_SESSION_KEY, JSON.stringify(sessionWithExpiry));
-  sessionStorage?.removeItem(AUTH_SESSION_KEY);
+  sessionStorage?.setItem(AUTH_SESSION_KEY, JSON.stringify(sessionWithExpiry));
+  localStorage?.removeItem(AUTH_SESSION_KEY);
 }
 
 export function clearAuthSession() {

@@ -16,55 +16,6 @@ import { clearSession } from '../store/slices/authSlice';
 import { clearAuthSession, getAuthToken } from '../utils/authSession';
 
 const BUSINESS_TIMEZONE = 'America/Montevideo';
-const DATE_DEBUG = true;
-let lastLoggedOpenedAt = null;
-let lastLoggedClosedAt = null;
-
-function logDateDebug(label, payload) {
-  if (!DATE_DEBUG || typeof window === 'undefined') {
-    return;
-  }
-
-  // eslint-disable-next-line no-console
-  console.log(`[TZ_DEBUG][Caja] ${label}`, payload);
-}
-
-function formatUyDateTime(value) {
-  const date = parseApiDate(value);
-
-  if (!date) {
-    return null;
-  }
-
-  return date.toLocaleString('es-UY', {
-    timeZone: BUSINESS_TIMEZONE,
-    hour12: false
-  });
-}
-
-function logCashboxOpenCloseInUy(openedAt, closedAt) {
-  if (!DATE_DEBUG || typeof window === 'undefined') {
-    return;
-  }
-
-  if (openedAt && openedAt !== lastLoggedOpenedAt) {
-    lastLoggedOpenedAt = openedAt;
-    const uyDateTime = formatUyDateTime(openedAt);
-    if (uyDateTime) {
-      // eslint-disable-next-line no-console
-      console.log(`[CAJA] Abriste la caja a las ${uyDateTime} (hora Uruguay). Dato API crudo: ${openedAt}`);
-    }
-  }
-
-  if (closedAt && closedAt !== lastLoggedClosedAt) {
-    lastLoggedClosedAt = closedAt;
-    const uyDateTime = formatUyDateTime(closedAt);
-    if (uyDateTime) {
-      // eslint-disable-next-line no-console
-      console.log(`[CAJA] Cerraste la caja a las ${uyDateTime} (hora Uruguay). Dato API crudo: ${closedAt}`);
-    }
-  }
-}
 
 function getBusinessDateParts(value = new Date()) {
   const date = value instanceof Date ? value : new Date(value);
@@ -388,6 +339,7 @@ function CajaPage() {
   const movementsModeRef = useRef('recent');
   const loadRankingRef = useRef(null);
   const rankingModeRef = useRef('top5');
+  const latestDashboardRequestRef = useRef(0);
 
   useEffect(() => {
     dashboardRef.current = dashboard;
@@ -401,6 +353,9 @@ function CajaPage() {
   }, [dispatch, navigate]);
 
   const loadDashboard = useCallback(async (quiet = false, options = {}) => {
+    const requestId = latestDashboardRequestRef.current + 1;
+    latestDashboardRequestRef.current = requestId;
+
     try {
       if (!quiet) {
         setLoading(true);
@@ -427,7 +382,9 @@ function CajaPage() {
         }),
         fetchCashboxRanking({ limit: rankingLimit })
       ]);
-      logCashboxOpenCloseInUy(data?.open_cashbox?.opened_at || null, data?.open_cashbox?.closed_at || null);
+      if (requestId !== latestDashboardRequestRef.current) {
+        return;
+      }
 
       setDashboard(data);
       setLiveSales(normalizeRecentMovements(movementData?.items));
@@ -443,6 +400,10 @@ function CajaPage() {
         updated_at: liveState?.updated_at || null
       });
     } catch (error) {
+      if (requestId !== latestDashboardRequestRef.current) {
+        return;
+      }
+
       if (error.status === 401) {
         handleSessionExpired();
         return;
@@ -452,9 +413,11 @@ function CajaPage() {
         toast.error(error.message);
       }
     } finally {
-      setLoading(false);
-      setMovementsLoading(false);
-      setRankingLoading(false);
+      if (requestId === latestDashboardRequestRef.current) {
+        setLoading(false);
+        setMovementsLoading(false);
+        setRankingLoading(false);
+      }
     }
   }, [handleSessionExpired, rankingMode]);
 
@@ -539,6 +502,9 @@ function CajaPage() {
     let active = true;
 
     const run = async () => {
+      const requestId = latestDashboardRequestRef.current + 1;
+      latestDashboardRequestRef.current = requestId;
+
       try {
         setLoading(true);
         const currentMovementsMode = movementsModeRef.current;
@@ -557,33 +523,35 @@ function CajaPage() {
           }),
           fetchCashboxRanking({ limit: rankingLimit })
         ]);
-        logCashboxOpenCloseInUy(data?.open_cashbox?.opened_at || null, data?.open_cashbox?.closed_at || null);
-
-        if (active) {
-          setDashboard(data);
-          setLiveSales(normalizeRecentMovements(movementData?.items));
-          setRankingItems(normalizeRankingItems(rankingData?.items));
-          setScannerLiveState({
-            items: Array.isArray(liveState?.items) ? liveState.items : [],
-            total: Number(liveState?.total || 0),
-            state: liveState?.state || 'idle',
-            operator: liveState?.operator || null,
-            editing: liveState?.editing || null,
-            manual: liveState?.manual || null,
-            updated_at: liveState?.updated_at || null
-          });
+        if (!active || requestId !== latestDashboardRequestRef.current) {
+          return;
         }
+
+        setDashboard(data);
+        setLiveSales(normalizeRecentMovements(movementData?.items));
+        setRankingItems(normalizeRankingItems(rankingData?.items));
+        setScannerLiveState({
+          items: Array.isArray(liveState?.items) ? liveState.items : [],
+          total: Number(liveState?.total || 0),
+          state: liveState?.state || 'idle',
+          operator: liveState?.operator || null,
+          editing: liveState?.editing || null,
+          manual: liveState?.manual || null,
+          updated_at: liveState?.updated_at || null
+        });
       } catch (error) {
+        if (!active || requestId !== latestDashboardRequestRef.current) {
+          return;
+        }
+
         if (error.status === 401) {
           handleSessionExpired();
           return;
         }
 
-        if (active) {
-          toast.error(error.message);
-        }
+        toast.error(error.message);
       } finally {
-        if (active) {
+        if (active && requestId === latestDashboardRequestRef.current) {
           setLoading(false);
         }
       }
@@ -728,7 +696,6 @@ function CajaPage() {
     try {
       setSavingOpen(true);
       const openedCashbox = await openCashbox({ opening_amount: amount });
-      logCashboxOpenCloseInUy(openedCashbox?.opened_at || null, openedCashbox?.closed_at || null);
       setDashboard((current) => ({
         ...(current || {}),
         is_open: true,
@@ -777,8 +744,7 @@ function CajaPage() {
   const handleCloseCashbox = async () => {
     try {
       setSavingClose(true);
-      const closedCashbox = await closeCashbox();
-      logCashboxOpenCloseInUy(closedCashbox?.opened_at || null, closedCashbox?.closed_at || null);
+      await closeCashbox();
       setDashboard((current) => ({
         ...(current || {}),
         is_open: false,

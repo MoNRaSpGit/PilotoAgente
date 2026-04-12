@@ -3,13 +3,11 @@ import { getAuthToken } from '../utils/authSession';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 const PRODUCT_CACHE_KEY = 'frontagente:scanner-cache';
 const EXPENSE_CACHE_KEY = 'frontagente:expenses-cache';
-const CASHBOX_CACHE_KEY = 'frontagente:caja-cache';
 const PRODUCT_CACHE_TTL_MS = 10 * 60 * 1000;
 const EXPENSE_CACHE_TTL_MS = 5 * 60 * 1000;
 const productMemoryCache = new Map();
 const pendingScannerRequests = new Map();
 const expenseMemoryCache = new Map();
-const cashboxMemoryCache = new Map();
 
 function normalizeBarcode(value = '') {
   return String(value).trim().replace(/\s+/g, '');
@@ -115,49 +113,6 @@ function clearExpenseCache() {
   window.sessionStorage.removeItem(EXPENSE_CACHE_KEY);
 }
 
-function loadCashboxCache() {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  try {
-    const raw = window.sessionStorage.getItem(CASHBOX_CACHE_KEY);
-
-    if (!raw) {
-      return;
-    }
-
-    const entries = JSON.parse(raw);
-
-    entries.forEach(([key, value]) => {
-      if (value.expiresAt > Date.now()) {
-        cashboxMemoryCache.set(key, value);
-      }
-    });
-  } catch (_error) {
-    window.sessionStorage.removeItem(CASHBOX_CACHE_KEY);
-  }
-}
-
-function persistCashboxCache() {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  const entries = [...cashboxMemoryCache.entries()].filter(([, value]) => value.expiresAt > Date.now());
-  window.sessionStorage.setItem(CASHBOX_CACHE_KEY, JSON.stringify(entries));
-}
-
-function clearCashboxCache() {
-  cashboxMemoryCache.clear();
-
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  window.sessionStorage.removeItem(CASHBOX_CACHE_KEY);
-}
-
 function getCachedScannerProduct(barcode) {
   const normalized = normalizeBarcode(barcode);
   const entry = productMemoryCache.get(normalized);
@@ -188,7 +143,6 @@ function setCachedScannerProduct(barcode, value) {
 
 loadSessionCache();
 loadExpenseCache();
-loadCashboxCache();
 
 export async function loginRequest(payload) {
   const response = await fetch(`${API_URL}/api/auth/login`, {
@@ -563,7 +517,6 @@ export async function closeCashbox() {
     throw error;
   }
 
-  clearCashboxCache();
   return data.item;
 }
 
@@ -586,7 +539,6 @@ export async function openCashbox(payload) {
     throw error;
   }
 
-  clearCashboxCache();
   return data.item;
 }
 
@@ -609,7 +561,6 @@ export async function registerCashboxPayment(payload) {
     throw error;
   }
 
-  clearCashboxCache();
   return data.item;
 }
 
@@ -647,7 +598,6 @@ export async function registerCashboxSale(payload) {
       network_and_client_overhead_ms: networkAndClientOverheadMs
     }
   };
-  clearCashboxCache();
   return result;
 }
 
