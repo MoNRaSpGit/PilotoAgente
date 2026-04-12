@@ -17,7 +17,8 @@ This module keeps the dashboard scaffold ready for future implementation while r
 
 ## Visibility Strategy
 - Route `/dashboard` is still available and protected by role gate.
-- Navbar link is intentionally removed so the module stays non-visible in daily flow.
+- Navbar link visibility is controlled by `VITE_FEATURE_DASHBOARD`.
+- Route access is also controlled by `VITE_FEATURE_DASHBOARD`.
 - This allows future activation without rebuilding structure.
 
 ## PR Checklist (Dashboard)

@@ -12,6 +12,7 @@ import ObjetivosPage from './pages/ObjetivosPage';
 import ScannerPage from './pages/ScannerPage';
 import StockPage from './pages/StockPage';
 import SuppliersPage from './pages/SuppliersPage';
+import { featureFlags } from './config/featureFlags';
 import { clearSession } from './store/slices/authSlice';
 import { clearAuthSession } from './utils/authSession';
 import './styles/layout.css';
@@ -53,6 +54,7 @@ function App() {
   const isLoggedIn = Boolean(userRole);
   const homePath = isAdmin ? '/caja' : '/scanner';
   const hideNavbar = location.pathname === '/login';
+  const dashboardEnabled = featureFlags.dashboardEnabled;
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
 
   const handleLogoutConfirm = () => {
@@ -74,6 +76,11 @@ function App() {
             <Nav className="ms-auto app-nav-links">
               {isAdmin ? (
                 <>
+                  {dashboardEnabled ? (
+                    <Nav.Link as={NavLink} to="/dashboard">
+                      Dashboard
+                    </Nav.Link>
+                  ) : null}
                   <Nav.Link as={NavLink} to="/clientes">
                     Clientes
                   </Nav.Link>
@@ -138,9 +145,13 @@ function App() {
             <Route
               path="/dashboard"
               element={
-                <RoleGate allow={['admin']}>
-                  <DashboardPage />
-                </RoleGate>
+                dashboardEnabled ? (
+                  <RoleGate allow={['admin']}>
+                    <DashboardPage />
+                  </RoleGate>
+                ) : (
+                  <Navigate to={isAdmin ? '/caja' : '/scanner'} replace />
+                )
               }
             />
             <Route
