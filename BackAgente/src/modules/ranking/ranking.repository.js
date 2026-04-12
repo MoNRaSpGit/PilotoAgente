@@ -57,8 +57,13 @@ export async function listTopSoldProducts({ limit = 5 } = {}) {
 
   const sql = `
       SELECT
-        ranked.product_name,
-        ranked.barcode,
+        COALESCE(NULLIF(TRIM(pn.nombre), ''), NULLIF(TRIM(pb.nombre), ''), ranked.fallback_product_name) AS product_name,
+        COALESCE(
+          NULLIF(TRIM(pn.barcode), ''),
+          NULLIF(TRIM(pn.barcode_normalized), ''),
+          NULLIF(TRIM(pb.barcode), ''),
+          ranked.barcode_value
+        ) AS barcode,
         ranked.total_quantity,
         ranked.total_sales,
         ranked.movements_count,
@@ -66,8 +71,9 @@ export async function listTopSoldProducts({ limit = 5 } = {}) {
         COALESCE(pn.tiene_imagen, pb.tiene_imagen, 0) AS has_image
       FROM (
         SELECT
-          COALESCE(NULLIF(TRIM(i.product_name), ''), 'Producto') AS product_name,
-          COALESCE(NULLIF(TRIM(i.barcode), ''), null) AS barcode,
+          LOWER(TRIM(i.barcode)) AS barcode_key,
+          MAX(COALESCE(NULLIF(TRIM(i.barcode), ''), NULL)) AS barcode_value,
+          MAX(COALESCE(NULLIF(TRIM(i.product_name), ''), 'Producto')) AS fallback_product_name,
           SUM(i.quantity) AS total_quantity,
           SUM(i.total) AS total_sales,
           COUNT(DISTINCT i.movement_id) AS movements_count
@@ -78,17 +84,17 @@ export async function listTopSoldProducts({ limit = 5 } = {}) {
           AND m.created_at < ?
           AND NULLIF(TRIM(i.barcode), '') IS NOT NULL
           AND LOWER(TRIM(i.barcode)) NOT LIKE 'manual%'
-        GROUP BY product_name, barcode
-        ORDER BY total_quantity DESC, total_sales DESC, product_name ASC
+        GROUP BY barcode_key
+        ORDER BY total_quantity DESC, total_sales DESC, barcode_key ASC
         ${hasLimit ? 'LIMIT ?' : ''}
       ) ranked
       LEFT JOIN ops_producto pn
-        ON ranked.barcode IS NOT NULL
-       AND pn.barcode_normalized = ranked.barcode
+        ON pn.barcode_normalized IS NOT NULL
+       AND LOWER(TRIM(pn.barcode_normalized)) = ranked.barcode_key
       LEFT JOIN ops_producto pb
-        ON ranked.barcode IS NOT NULL
-       AND pb.barcode = ranked.barcode
-      ORDER BY ranked.total_quantity DESC, ranked.total_sales DESC, ranked.product_name ASC
+        ON pb.barcode IS NOT NULL
+       AND LOWER(TRIM(pb.barcode)) = ranked.barcode_key
+      ORDER BY ranked.total_quantity DESC, ranked.total_sales DESC, product_name ASC
     `;
   const params = hasLimit ? [startUtc, endUtc, safeLimit] : [startUtc, endUtc];
   const [rows] = await pool.query(sql, params);
