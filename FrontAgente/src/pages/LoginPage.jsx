@@ -16,6 +16,10 @@ const QUICK_LOGINS = {
   operario: {
     email: 'operario@agente.dev',
     password: 'OperarioDemo2026!'
+  },
+  operarioOficina: {
+    email: 'operario.oficina@agente.dev',
+    password: 'Oficina2026!'
   }
 };
 
@@ -147,6 +151,9 @@ function LoginPage() {
             </Button>
             <Button type="button" variant="outline-dark" disabled={loading} onClick={() => handleQuickLogin('operario')}>
               Entrar como operario
+            </Button>
+            <Button type="button" variant="outline-primary" disabled={loading} onClick={() => handleQuickLogin('operarioOficina')}>
+              Entrar como operario oficina
             </Button>
           </div>
 
