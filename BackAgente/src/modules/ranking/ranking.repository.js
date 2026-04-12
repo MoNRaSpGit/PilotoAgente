@@ -23,8 +23,8 @@ export async function listTopSoldProducts({ limit = 5 } = {}) {
         ranked.total_quantity,
         ranked.total_sales,
         ranked.movements_count,
-        p.imagen AS product_image,
-        p.tiene_imagen AS has_image
+        COALESCE(pn.imagen, pb.imagen) AS product_image,
+        COALESCE(pn.tiene_imagen, pb.tiene_imagen, 0) AS has_image
       FROM (
         SELECT
           COALESCE(NULLIF(TRIM(i.product_name), ''), 'Producto') AS product_name,
@@ -43,9 +43,12 @@ export async function listTopSoldProducts({ limit = 5 } = {}) {
         ORDER BY total_quantity DESC, total_sales DESC, product_name ASC
         ${hasLimit ? 'LIMIT ?' : ''}
       ) ranked
-      LEFT JOIN ops_producto p
+      LEFT JOIN ops_producto pn
         ON ranked.barcode IS NOT NULL
-       AND (p.barcode_normalized = ranked.barcode OR p.barcode = ranked.barcode)
+       AND pn.barcode_normalized = ranked.barcode
+      LEFT JOIN ops_producto pb
+        ON ranked.barcode IS NOT NULL
+       AND pb.barcode = ranked.barcode
       ORDER BY ranked.total_quantity DESC, ranked.total_sales DESC, ranked.product_name ASC
     `;
   const [rows] = await pool.query(sql, hasLimit ? [safeLimit] : []);

@@ -229,11 +229,29 @@ export async function ensureCashboxTables() {
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_caja_items_movement (movement_id),
+        INDEX idx_caja_items_barcode (barcode),
         CONSTRAINT fk_caja_items_movement
           FOREIGN KEY (movement_id) REFERENCES ops_caja_movimientos(id)
           ON DELETE CASCADE
       )
     `);
+
+    const [itemsBarcodeIndex] = await pool.query(
+      `
+        SELECT COUNT(*) AS count
+        FROM information_schema.STATISTICS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'ops_caja_movimiento_items'
+          AND INDEX_NAME = 'idx_caja_items_barcode'
+      `
+    );
+
+    if (!itemsBarcodeIndex[0]?.count) {
+      await pool.query(`
+        ALTER TABLE ops_caja_movimiento_items
+        ADD INDEX idx_caja_items_barcode (barcode)
+      `);
+    }
   })();
 
   try {
