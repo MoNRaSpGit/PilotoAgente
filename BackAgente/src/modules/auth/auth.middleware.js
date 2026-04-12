@@ -29,9 +29,12 @@ export function requireRole(...allowedRoles) {
     const userRole = normalizeRole(req.user?.role);
     const normalizedAllowedRoles = allowedRoles.map((role) => normalizeRole(role));
     const debugPath = req.originalUrl || req.path || '';
+    const normalizedPath = String(debugPath).split('?')[0];
+    const isProductEditRoute = req.method === 'PATCH' && /\/products\/[^/]+$/.test(normalizedPath);
     const isScannerRoute =
       debugPath.includes('/products/scan/') ||
       debugPath.includes('/products/manual-from-scan') ||
+      isProductEditRoute ||
       debugPath.includes('/caja/sales') ||
       debugPath.includes('/caja/live-state') ||
       debugPath.includes('/caja/stream') ||
