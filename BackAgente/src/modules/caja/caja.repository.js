@@ -908,30 +908,35 @@ export async function getCashboxSummary({ date, compareTo } = {}) {
 export async function getCashboxObjectivesSummary({ date, compareTo } = {}) {
   await ensureCashboxTables();
 
-  const selectedDate = normalizeDateInput(date) || new Date().toISOString().slice(0, 10);
-  const comparisonDate = normalizeDateInput(compareTo) || addDays(selectedDate, -1);
+  const requestedSelectedDate = normalizeDateInput(date) || new Date().toISOString().slice(0, 10);
+  const requestedComparisonDate = normalizeDateInput(compareTo) || addDays(requestedSelectedDate, -1);
 
-  const cached = getCachedCashboxObjectives(selectedDate, comparisonDate);
+  const cached = getCachedCashboxObjectives(requestedSelectedDate, requestedComparisonDate);
   if (cached) {
     return cached;
   }
 
-  const comparisonDayEnd = addDays(comparisonDate, 1);
+  const openCashbox = await findOpenCashbox();
+  const selectedDate = String(openCashbox?.opened_at || requestedSelectedDate).slice(0, 10);
+  const comparisonCutoff = `${selectedDate} 00:00:00`;
 
-  const [yesterdayRows] = await pool.query(
+  const [previousSalesRows] = await pool.query(
     `
-      SELECT COALESCE(SUM(sales_total), 0) AS sales_total
-      FROM ops_cajas
-      WHERE opened_at >= ?
-        AND opened_at < ?
+      SELECT DATE_FORMAT(created_at, '%Y-%m-%d') AS sales_date, COALESCE(SUM(amount), 0) AS sales_total
+      FROM ops_caja_movimientos
+      WHERE type = 'sale'
+        AND created_at < ?
+      GROUP BY DATE(created_at)
+      ORDER BY sales_date DESC
+      LIMIT 1
     `,
-    [`${comparisonDate} 00:00:00`, `${comparisonDayEnd} 00:00:00`]
+    [comparisonCutoff]
   );
 
-  const openCashbox = await findOpenCashbox();
-  const yesterday = yesterdayRows[0] || {};
+  const previousSales = previousSalesRows[0] || {};
+  const comparisonDate = previousSales?.sales_date || requestedComparisonDate;
   const currentSales = Number(openCashbox?.sales_total || 0);
-  const previousSales = Number(yesterday.sales_total || 0);
+  const comparisonSales = Number(previousSales.sales_total || 0);
 
   const result = {
     selected_date: selectedDate,
@@ -943,12 +948,12 @@ export async function getCashboxObjectivesSummary({ date, compareTo } = {}) {
       payments_total: Number(openCashbox?.payments_total || 0)
     },
     previous_day: {
-      sales_total: previousSales
+      sales_total: comparisonSales
     },
-    comparison_percent: calculateComparisonPercent(currentSales, previousSales)
+    comparison_percent: calculateComparisonPercent(currentSales, comparisonSales)
   };
 
-  setCachedCashboxObjectives(selectedDate, comparisonDate, result);
+  setCachedCashboxObjectives(requestedSelectedDate, requestedComparisonDate, result);
 
   return result;
 }
