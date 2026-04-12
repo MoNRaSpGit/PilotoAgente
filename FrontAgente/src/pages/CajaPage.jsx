@@ -17,8 +17,8 @@ import { clearAuthSession, getAuthToken } from '../utils/authSession';
 
 const BUSINESS_TIMEZONE = 'America/Montevideo';
 const DATE_DEBUG = true;
-const parsedDateDebugSeen = new Set();
-let emptyDateDebugLogged = false;
+let lastLoggedOpenedAt = null;
+let lastLoggedClosedAt = null;
 
 function logDateDebug(label, payload) {
   if (!DATE_DEBUG || typeof window === 'undefined') {
@@ -27,6 +27,43 @@ function logDateDebug(label, payload) {
 
   // eslint-disable-next-line no-console
   console.log(`[TZ_DEBUG][Caja] ${label}`, payload);
+}
+
+function formatUyDateTime(value) {
+  const date = parseApiDate(value);
+
+  if (!date) {
+    return null;
+  }
+
+  return date.toLocaleString('es-UY', {
+    timeZone: BUSINESS_TIMEZONE,
+    hour12: false
+  });
+}
+
+function logCashboxOpenCloseInUy(openedAt, closedAt) {
+  if (!DATE_DEBUG || typeof window === 'undefined') {
+    return;
+  }
+
+  if (openedAt && openedAt !== lastLoggedOpenedAt) {
+    lastLoggedOpenedAt = openedAt;
+    const uyDateTime = formatUyDateTime(openedAt);
+    if (uyDateTime) {
+      // eslint-disable-next-line no-console
+      console.log(`[CAJA] Abriste la caja a las ${uyDateTime} (hora Uruguay). Dato API crudo: ${openedAt}`);
+    }
+  }
+
+  if (closedAt && closedAt !== lastLoggedClosedAt) {
+    lastLoggedClosedAt = closedAt;
+    const uyDateTime = formatUyDateTime(closedAt);
+    if (uyDateTime) {
+      // eslint-disable-next-line no-console
+      console.log(`[CAJA] Cerraste la caja a las ${uyDateTime} (hora Uruguay). Dato API crudo: ${closedAt}`);
+    }
+  }
 }
 
 function getBusinessDateParts(value = new Date()) {
@@ -145,10 +182,6 @@ function formatLongDate(value = new Date()) {
 
 function parseApiDate(value) {
   if (!value) {
-    if (!emptyDateDebugLogged) {
-      emptyDateDebugLogged = true;
-      logDateDebug('parseApiDate:empty', { value });
-    }
     return null;
   }
 
@@ -159,7 +192,6 @@ function parseApiDate(value) {
   const raw = String(value).trim();
 
   if (!raw) {
-    logDateDebug('parseApiDate:blank', { value });
     return null;
   }
 
@@ -168,24 +200,6 @@ function parseApiDate(value) {
   const iso = hasTimezone ? normalized : `${normalized}Z`;
   const parsed = new Date(iso);
   const isValid = !Number.isNaN(parsed.getTime());
-
-  if (!parsedDateDebugSeen.has(raw)) {
-    parsedDateDebugSeen.add(raw);
-    logDateDebug('parseApiDate', {
-      raw,
-      normalized,
-      hasTimezone,
-      iso,
-      isValid,
-      asUtcIso: isValid ? parsed.toISOString() : null,
-      asMontevideo: isValid
-        ? parsed.toLocaleString('es-UY', {
-            timeZone: BUSINESS_TIMEZONE,
-            hour12: false
-          })
-        : null
-    });
-  }
 
   return isValid ? parsed : null;
 }
@@ -413,15 +427,7 @@ function CajaPage() {
         }),
         fetchCashboxRanking({ limit: rankingLimit })
       ]);
-      logDateDebug('loadDashboard:response', {
-        requestedDate: todayDate(),
-        requestedCompareTo: yesterdayDate(),
-        summarySelectedDate: data?.selected_date || null,
-        openCashboxOpenedAt: data?.open_cashbox?.opened_at || null,
-        openCashboxClosedAt: data?.open_cashbox?.closed_at || null,
-        liveUpdatedAt: liveState?.updated_at || null,
-        firstMovementCreatedAt: Array.isArray(movementData?.items) ? movementData.items[0]?.created_at || null : null
-      });
+      logCashboxOpenCloseInUy(data?.open_cashbox?.opened_at || null, data?.open_cashbox?.closed_at || null);
 
       setDashboard(data);
       setLiveSales(normalizeRecentMovements(movementData?.items));
@@ -467,12 +473,6 @@ function CajaPage() {
       const movementData = await fetchCashboxMovements({
         date: todayDate(),
         limit: movementLimit
-      });
-      logDateDebug('loadMovements:response', {
-        requestedDate: todayDate(),
-        mode,
-        totalItems: Array.isArray(movementData?.items) ? movementData.items.length : 0,
-        firstMovementCreatedAt: Array.isArray(movementData?.items) ? movementData.items[0]?.created_at || null : null
       });
       setLiveSales(normalizeRecentMovements(movementData?.items));
       setMovementsMode(mode);
@@ -557,15 +557,7 @@ function CajaPage() {
           }),
           fetchCashboxRanking({ limit: rankingLimit })
         ]);
-        logDateDebug('bootstrap:response', {
-          requestedDate: todayDate(),
-          requestedCompareTo: yesterdayDate(),
-          summarySelectedDate: data?.selected_date || null,
-          openCashboxOpenedAt: data?.open_cashbox?.opened_at || null,
-          openCashboxClosedAt: data?.open_cashbox?.closed_at || null,
-          liveUpdatedAt: liveState?.updated_at || null,
-          firstMovementCreatedAt: Array.isArray(movementData?.items) ? movementData.items[0]?.created_at || null : null
-        });
+        logCashboxOpenCloseInUy(data?.open_cashbox?.opened_at || null, data?.open_cashbox?.closed_at || null);
 
         if (active) {
           setDashboard(data);
@@ -628,10 +620,6 @@ function CajaPage() {
           return;
         }
 
-        logDateDebug('sse:scanner-state', {
-          payloadUpdatedAt: payload?.updated_at || null,
-          operatorRole: payload?.operator?.role || null
-        });
         setScannerLiveState({
           items: Array.isArray(payload.items) ? payload.items : [],
           total: Number(payload.total || 0),
@@ -645,10 +633,6 @@ function CajaPage() {
       }
 
       if (payload.type === 'sale') {
-        logDateDebug('sse:sale', {
-          payloadCreatedAt: payload?.created_at || null,
-          payloadMovementId: payload?.movement_id || null
-        });
         if (loadMovementsRef.current) {
           loadMovementsRef.current(movementsModeRef.current, true);
         }
@@ -744,6 +728,7 @@ function CajaPage() {
     try {
       setSavingOpen(true);
       const openedCashbox = await openCashbox({ opening_amount: amount });
+      logCashboxOpenCloseInUy(openedCashbox?.opened_at || null, openedCashbox?.closed_at || null);
       setDashboard((current) => ({
         ...(current || {}),
         is_open: true,
@@ -792,7 +777,8 @@ function CajaPage() {
   const handleCloseCashbox = async () => {
     try {
       setSavingClose(true);
-      await closeCashbox();
+      const closedCashbox = await closeCashbox();
+      logCashboxOpenCloseInUy(closedCashbox?.opened_at || null, closedCashbox?.closed_at || null);
       setDashboard((current) => ({
         ...(current || {}),
         is_open: false,
