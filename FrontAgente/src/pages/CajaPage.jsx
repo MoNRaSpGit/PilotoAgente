@@ -31,6 +31,13 @@ import {
   trendLabel,
   yesterdayDate
 } from './caja/cajaPage.utils';
+import {
+  createEmptyScannerLiveState,
+  getMovementSummaryLabel,
+  normalizeScannerLiveState,
+  resolveMovementLimit,
+  resolveRankingLimit
+} from './caja/cajaPage.state';
 
 function CajaPage() {
   const dispatch = useDispatch();
@@ -38,15 +45,7 @@ function CajaPage() {
   const user = useSelector((state) => state.auth.user);
   const [dashboard, setDashboard] = useState(null);
   const [liveSales, setLiveSales] = useState([]);
-  const [scannerLiveState, setScannerLiveState] = useState({
-    items: [],
-    total: 0,
-    state: 'idle',
-    operator: null,
-    editing: null,
-    manual: null,
-    updated_at: null
-  });
+  const [scannerLiveState, setScannerLiveState] = useState(() => createEmptyScannerLiveState());
   const [loading, setLoading] = useState(true);
   const [rankingItems, setRankingItems] = useState([]);
   const [rankingMode, setRankingMode] = useState('top5');
@@ -94,14 +93,9 @@ function CajaPage() {
         setLoading(true);
       }
 
-      const movementLimit =
-        options.movementsMode === 'all'
-          ? 'all'
-          : options.movementsMode === 'top10'
-            ? 10
-            : 3;
+      const movementLimit = resolveMovementLimit(options.movementsMode);
       const resolvedRankingMode = options.rankingMode || rankingMode;
-      const rankingLimit = resolvedRankingMode === 'all' ? 'all' : resolvedRankingMode === 'top10' ? 10 : 5;
+      const rankingLimit = resolveRankingLimit(resolvedRankingMode);
       const [data, liveState, movementData, rankingData] = await Promise.all([
         fetchCashboxSummary({
           date: todayDate(),
@@ -123,15 +117,7 @@ function CajaPage() {
       setLiveSales(normalizeRecentMovements(movementData?.items));
       setRankingItems(normalizeRankingItems(rankingData?.items));
       setRankingMode(resolvedRankingMode);
-      setScannerLiveState({
-        items: Array.isArray(liveState?.items) ? liveState.items : [],
-        total: Number(liveState?.total || 0),
-        state: liveState?.state || 'idle',
-        operator: liveState?.operator || null,
-        editing: liveState?.editing || null,
-        manual: liveState?.manual || null,
-        updated_at: liveState?.updated_at || null
-      });
+      setScannerLiveState(normalizeScannerLiveState(liveState));
     } catch (error) {
       if (requestId !== latestDashboardRequestRef.current) {
         return;
@@ -159,7 +145,7 @@ function CajaPage() {
   }, [loadDashboard]);
 
   const loadMovements = useCallback(async (mode = movementsMode, quiet = false) => {
-    const movementLimit = mode === 'all' ? 'all' : mode === 'top10' ? 10 : 3;
+    const movementLimit = resolveMovementLimit(mode);
 
     try {
       if (!quiet) {
@@ -188,7 +174,7 @@ function CajaPage() {
   }, [loadMovements]);
 
   const loadRanking = useCallback(async (mode = rankingMode, quiet = false) => {
-    const rankingLimit = mode === 'all' ? 'all' : mode === 'top10' ? 10 : 5;
+    const rankingLimit = resolveRankingLimit(mode);
 
     try {
       if (!quiet) {
@@ -242,8 +228,8 @@ function CajaPage() {
         setLoading(true);
         const currentMovementsMode = movementsModeRef.current;
         const currentRankingMode = rankingModeRef.current;
-        const movementLimit = currentMovementsMode === 'all' ? 'all' : currentMovementsMode === 'top10' ? 10 : 3;
-        const rankingLimit = currentRankingMode === 'all' ? 'all' : currentRankingMode === 'top10' ? 10 : 5;
+        const movementLimit = resolveMovementLimit(currentMovementsMode);
+        const rankingLimit = resolveRankingLimit(currentRankingMode);
         const [data, liveState, movementData, rankingData] = await Promise.all([
           fetchCashboxSummary({
             date: todayDate(),
@@ -263,15 +249,7 @@ function CajaPage() {
         setDashboard(data);
         setLiveSales(normalizeRecentMovements(movementData?.items));
         setRankingItems(normalizeRankingItems(rankingData?.items));
-        setScannerLiveState({
-          items: Array.isArray(liveState?.items) ? liveState.items : [],
-          total: Number(liveState?.total || 0),
-          state: liveState?.state || 'idle',
-          operator: liveState?.operator || null,
-          editing: liveState?.editing || null,
-          manual: liveState?.manual || null,
-          updated_at: liveState?.updated_at || null
-        });
+        setScannerLiveState(normalizeScannerLiveState(liveState));
       } catch (error) {
         if (!active || requestId !== latestDashboardRequestRef.current) {
           return;
@@ -321,15 +299,10 @@ function CajaPage() {
           return;
         }
 
-        setScannerLiveState({
-          items: Array.isArray(payload.items) ? payload.items : [],
-          total: Number(payload.total || 0),
-          state: payload.state || 'idle',
-          operator: payload.operator || null,
-          editing: payload.editing || null,
-          manual: payload.manual || null,
+        setScannerLiveState(normalizeScannerLiveState({
+          ...payload,
           updated_at: payload.updated_at || new Date().toISOString()
-        });
+        }));
         return;
       }
 
@@ -343,15 +316,7 @@ function CajaPage() {
       } else if (payload.type === 'cashbox:opened' || payload.type === 'cashbox:closed') {
         setLiveSales([]);
         setRankingItems([]);
-        setScannerLiveState({
-          items: [],
-          total: 0,
-          state: 'idle',
-          operator: null,
-          editing: null,
-          manual: null,
-          updated_at: null
-        });
+        setScannerLiveState(createEmptyScannerLiveState());
       }
 
       if (loadDashboardRef.current && payload.type !== 'scanner:state') {
@@ -408,8 +373,7 @@ function CajaPage() {
     setCloseConfirmOpen(false);
   };
 
-  const movementSummaryLabel =
-    movementsMode === 'all' ? 'Mostrando todo hoy' : movementsMode === 'top10' ? 'Mostrando ultimos 10' : 'Mostrando ultimos 3';
+  const movementSummaryLabel = getMovementSummaryLabel(movementsMode);
 
   const toggleMovementDetails = (movementId) => {
     setExpandedMovements((current) => ({
@@ -443,15 +407,7 @@ function CajaPage() {
       }));
       setLiveSales([]);
       setRankingItems([]);
-      setScannerLiveState({
-        items: [],
-        total: 0,
-        state: 'idle',
-        operator: null,
-        editing: null,
-        manual: null,
-        updated_at: null
-      });
+      setScannerLiveState(createEmptyScannerLiveState());
       toast.success('Caja abierta');
       closeOpenModal();
     } catch (error) {
@@ -494,14 +450,7 @@ function CajaPage() {
       setComparisonExpanded(false);
       setLiveSales([]);
       setRankingItems([]);
-      setScannerLiveState({
-        items: [],
-        total: 0,
-        state: 'idle',
-        operator: null,
-        editing: null,
-        updated_at: null
-      });
+      setScannerLiveState(createEmptyScannerLiveState());
       toast.success('Caja cerrada');
     } catch (error) {
       if (error.status === 401) {
