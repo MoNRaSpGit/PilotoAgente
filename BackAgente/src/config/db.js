@@ -11,6 +11,10 @@ export const pool = mysql.createPool({
   connectionLimit: 10
 });
 
+pool.on('connection', (connection) => {
+  connection.query("SET time_zone = '+00:00'");
+});
+
 export async function checkDatabaseConnection() {
   try {
     const connection = await pool.getConnection();

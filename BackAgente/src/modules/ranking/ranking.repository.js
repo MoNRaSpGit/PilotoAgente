@@ -1,20 +1,59 @@
 import { pool } from '../../config/db.js';
 import { ensureCashboxTables } from '../caja/caja.repository.js';
 
+const BUSINESS_TIMEZONE = 'America/Montevideo';
+const BUSINESS_UTC_OFFSET = '-03:00';
+
+function formatBusinessDate(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: BUSINESS_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+  const parts = formatter.formatToParts(date);
+  const year = parts.find((part) => part.type === 'year')?.value;
+  const month = parts.find((part) => part.type === 'month')?.value;
+  const day = parts.find((part) => part.type === 'day')?.value;
+
+  if (!year || !month || !day) {
+    return date.toISOString().slice(0, 10);
+  }
+
+  return `${year}-${month}-${day}`;
+}
+
+function addDays(dateString, days) {
+  const baseDate = new Date(`${dateString}T00:00:00Z`);
+  baseDate.setUTCDate(baseDate.getUTCDate() + days);
+  return baseDate.toISOString().slice(0, 10);
+}
+
+function businessDateTimeToUtcString(dateString, timeString = '00:00:00') {
+  const parsed = new Date(`${dateString}T${timeString}${BUSINESS_UTC_OFFSET}`);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return `${dateString} ${timeString}`;
+  }
+
+  return parsed.toISOString().slice(0, 19).replace('T', ' ');
+}
+
 export async function listTopSoldProducts({ limit = 5 } = {}) {
   await ensureCashboxTables();
 
   const hasLimit = Number.isFinite(Number(limit)) && Number(limit) > 0;
   const safeLimit = hasLimit ? Math.floor(Number(limit)) : null;
-  const [dateRows] = await pool.query(
-    `
-      SELECT
-        DATE_FORMAT(CURDATE(), '%Y-%m-%d') AS selected_date,
-        DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '%Y-%m-%d') AS next_date
-    `
-  );
-  const selectedDate = dateRows[0]?.selected_date || new Date().toISOString().slice(0, 10);
-  const endDateExclusive = dateRows[0]?.next_date || selectedDate;
+  const selectedDate = formatBusinessDate(new Date());
+  const endDateExclusive = addDays(selectedDate, 1);
+  const startUtc = businessDateTimeToUtcString(selectedDate, '00:00:00');
+  const endUtc = businessDateTimeToUtcString(endDateExclusive, '00:00:00');
 
   const sql = `
       SELECT
@@ -35,8 +74,8 @@ export async function listTopSoldProducts({ limit = 5 } = {}) {
         FROM ops_caja_movimiento_items i
         INNER JOIN ops_caja_movimientos m ON m.id = i.movement_id
         WHERE m.type = 'sale'
-          AND m.created_at >= CURDATE()
-          AND m.created_at < DATE_ADD(CURDATE(), INTERVAL 1 DAY)
+          AND m.created_at >= ?
+          AND m.created_at < ?
           AND NULLIF(TRIM(i.barcode), '') IS NOT NULL
           AND LOWER(TRIM(i.barcode)) NOT LIKE 'manual%'
         GROUP BY product_name, barcode
@@ -51,7 +90,8 @@ export async function listTopSoldProducts({ limit = 5 } = {}) {
        AND pb.barcode = ranked.barcode
       ORDER BY ranked.total_quantity DESC, ranked.total_sales DESC, ranked.product_name ASC
     `;
-  const [rows] = await pool.query(sql, hasLimit ? [safeLimit] : []);
+  const params = hasLimit ? [startUtc, endUtc, safeLimit] : [startUtc, endUtc];
+  const [rows] = await pool.query(sql, params);
 
   return {
     selected_date: selectedDate,

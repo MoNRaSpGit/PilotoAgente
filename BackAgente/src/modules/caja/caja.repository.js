@@ -528,12 +528,13 @@ export async function createCashbox({ openingAmount, operator }) {
           opening_amount,
           sales_total,
           payments_total,
+          opened_at,
           opened_by_user_id,
           opened_by_name,
           opened_by_role,
           status
         )
-        VALUES (?, 0, 0, ?, ?, ?, 'open')
+        VALUES (?, 0, 0, UTC_TIMESTAMP(), ?, ?, ?, 'open')
       `,
       [
         openingAmount,
@@ -590,7 +591,7 @@ export async function closeCashbox({ operator }) {
       `
         UPDATE ops_cajas
         SET status = 'closed',
-            closed_at = NOW()
+            closed_at = UTC_TIMESTAMP()
         WHERE id = ?
       `,
       [caja.id]
