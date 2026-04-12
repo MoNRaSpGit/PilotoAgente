@@ -16,6 +16,18 @@ import { clearSession } from '../store/slices/authSlice';
 import { clearAuthSession, getAuthToken } from '../utils/authSession';
 
 const BUSINESS_TIMEZONE = 'America/Montevideo';
+const DATE_DEBUG = true;
+const parsedDateDebugSeen = new Set();
+let emptyDateDebugLogged = false;
+
+function logDateDebug(label, payload) {
+  if (!DATE_DEBUG || typeof window === 'undefined') {
+    return;
+  }
+
+  // eslint-disable-next-line no-console
+  console.log(`[TZ_DEBUG][Caja] ${label}`, payload);
+}
 
 function getBusinessDateParts(value = new Date()) {
   const date = value instanceof Date ? value : new Date(value);
@@ -133,6 +145,10 @@ function formatLongDate(value = new Date()) {
 
 function parseApiDate(value) {
   if (!value) {
+    if (!emptyDateDebugLogged) {
+      emptyDateDebugLogged = true;
+      logDateDebug('parseApiDate:empty', { value });
+    }
     return null;
   }
 
@@ -143,6 +159,7 @@ function parseApiDate(value) {
   const raw = String(value).trim();
 
   if (!raw) {
+    logDateDebug('parseApiDate:blank', { value });
     return null;
   }
 
@@ -150,8 +167,27 @@ function parseApiDate(value) {
   const normalized = raw.includes(' ') ? raw.replace(' ', 'T') : raw;
   const iso = hasTimezone ? normalized : `${normalized}Z`;
   const parsed = new Date(iso);
+  const isValid = !Number.isNaN(parsed.getTime());
 
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+  if (!parsedDateDebugSeen.has(raw)) {
+    parsedDateDebugSeen.add(raw);
+    logDateDebug('parseApiDate', {
+      raw,
+      normalized,
+      hasTimezone,
+      iso,
+      isValid,
+      asUtcIso: isValid ? parsed.toISOString() : null,
+      asMontevideo: isValid
+        ? parsed.toLocaleString('es-UY', {
+            timeZone: BUSINESS_TIMEZONE,
+            hour12: false
+          })
+        : null
+    });
+  }
+
+  return isValid ? parsed : null;
 }
 
 function formatClock(value) {
@@ -377,6 +413,15 @@ function CajaPage() {
         }),
         fetchCashboxRanking({ limit: rankingLimit })
       ]);
+      logDateDebug('loadDashboard:response', {
+        requestedDate: todayDate(),
+        requestedCompareTo: yesterdayDate(),
+        summarySelectedDate: data?.selected_date || null,
+        openCashboxOpenedAt: data?.open_cashbox?.opened_at || null,
+        openCashboxClosedAt: data?.open_cashbox?.closed_at || null,
+        liveUpdatedAt: liveState?.updated_at || null,
+        firstMovementCreatedAt: Array.isArray(movementData?.items) ? movementData.items[0]?.created_at || null : null
+      });
 
       setDashboard(data);
       setLiveSales(normalizeRecentMovements(movementData?.items));
@@ -422,6 +467,12 @@ function CajaPage() {
       const movementData = await fetchCashboxMovements({
         date: todayDate(),
         limit: movementLimit
+      });
+      logDateDebug('loadMovements:response', {
+        requestedDate: todayDate(),
+        mode,
+        totalItems: Array.isArray(movementData?.items) ? movementData.items.length : 0,
+        firstMovementCreatedAt: Array.isArray(movementData?.items) ? movementData.items[0]?.created_at || null : null
       });
       setLiveSales(normalizeRecentMovements(movementData?.items));
       setMovementsMode(mode);
@@ -506,6 +557,15 @@ function CajaPage() {
           }),
           fetchCashboxRanking({ limit: rankingLimit })
         ]);
+        logDateDebug('bootstrap:response', {
+          requestedDate: todayDate(),
+          requestedCompareTo: yesterdayDate(),
+          summarySelectedDate: data?.selected_date || null,
+          openCashboxOpenedAt: data?.open_cashbox?.opened_at || null,
+          openCashboxClosedAt: data?.open_cashbox?.closed_at || null,
+          liveUpdatedAt: liveState?.updated_at || null,
+          firstMovementCreatedAt: Array.isArray(movementData?.items) ? movementData.items[0]?.created_at || null : null
+        });
 
         if (active) {
           setDashboard(data);
@@ -568,6 +628,10 @@ function CajaPage() {
           return;
         }
 
+        logDateDebug('sse:scanner-state', {
+          payloadUpdatedAt: payload?.updated_at || null,
+          operatorRole: payload?.operator?.role || null
+        });
         setScannerLiveState({
           items: Array.isArray(payload.items) ? payload.items : [],
           total: Number(payload.total || 0),
@@ -581,6 +645,10 @@ function CajaPage() {
       }
 
       if (payload.type === 'sale') {
+        logDateDebug('sse:sale', {
+          payloadCreatedAt: payload?.created_at || null,
+          payloadMovementId: payload?.movement_id || null
+        });
         if (loadMovementsRef.current) {
           loadMovementsRef.current(movementsModeRef.current, true);
         }

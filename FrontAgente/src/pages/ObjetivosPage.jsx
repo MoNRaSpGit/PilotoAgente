@@ -9,6 +9,16 @@ import { clearSession } from '../store/slices/authSlice';
 import { clearAuthSession, getAuthToken } from '../utils/authSession';
 
 const BUSINESS_TIMEZONE = 'America/Montevideo';
+const DATE_DEBUG = true;
+
+function logDateDebug(label, payload) {
+  if (!DATE_DEBUG || typeof window === 'undefined') {
+    return;
+  }
+
+  // eslint-disable-next-line no-console
+  console.log(`[TZ_DEBUG][Objetivos] ${label}`, payload);
+}
 
 function progressPercent(current, goal) {
   if (!Number.isFinite(goal) || goal <= 0) {
@@ -119,6 +129,14 @@ function ObjetivosPage() {
         date: todayDate(),
         compareTo: yesterdayDate(),
         forceRefresh: Boolean(options.forceRefresh)
+      });
+      logDateDebug('loadObjectives:response', {
+        requestedDate: todayDate(),
+        requestedCompareTo: yesterdayDate(),
+        selectedDate: result?.selected_date || null,
+        currentSales: result?.progress?.current_sales || 0,
+        objective: result?.goals?.objective || 0,
+        record: result?.goals?.record || 0
       });
       setData(result);
     } catch (error) {

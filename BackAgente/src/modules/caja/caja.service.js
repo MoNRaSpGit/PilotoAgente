@@ -52,7 +52,8 @@ export async function fetchCashboxSummary() {
 export async function fetchCashboxDashboard(query = {}) {
   return getCashboxSummary({
     date: query?.date,
-    compareTo: query?.compare_to || query?.compareTo
+    compareTo: query?.compare_to || query?.compareTo,
+    forceRefresh: Boolean(query?.force_refresh || query?.forceRefresh)
   });
 }
 
@@ -95,7 +96,8 @@ function resolveGoalLevel(currentSales, standardAmount, objectiveAmount, recordA
 export async function fetchCashboxObjectives(query = {}) {
   const summary = await getCashboxObjectivesSummary({
     date: query?.date,
-    compareTo: query?.compare_to || query?.compareTo
+    compareTo: query?.compare_to || query?.compareTo,
+    forceRefresh: Boolean(query?.force_refresh || query?.forceRefresh)
   });
 
   const openingAmount = roundMoney(summary?.selected_day?.opening_amount);

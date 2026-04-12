@@ -40,6 +40,8 @@ const CASHBOX_ITEM_COLUMNS = `
 
 const CASHBOX_SUMMARY_CACHE_TTL_MS = 5000;
 const CASHBOX_OBJECTIVES_CACHE_TTL_MS = 15000;
+const BUSINESS_TIMEZONE = 'America/Montevideo';
+const BUSINESS_UTC_OFFSET = '-03:00';
 let cashboxTablesPromise = null;
 const cashboxSummaryCache = new Map();
 const cashboxObjectivesCache = new Map();
@@ -65,13 +67,84 @@ function normalizeDateInput(value) {
     return null;
   }
 
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
+    return value.trim();
+  }
+
   const parsed = new Date(value);
 
   if (Number.isNaN(parsed.getTime())) {
     return null;
   }
 
-  return parsed.toISOString().slice(0, 10);
+  return formatBusinessDate(parsed);
+}
+
+function formatBusinessDate(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: BUSINESS_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+  const parts = formatter.formatToParts(date);
+  const year = parts.find((part) => part.type === 'year')?.value;
+  const month = parts.find((part) => part.type === 'month')?.value;
+  const day = parts.find((part) => part.type === 'day')?.value;
+
+  if (!year || !month || !day) {
+    return date.toISOString().slice(0, 10);
+  }
+
+  return `${year}-${month}-${day}`;
+}
+
+function getBusinessTodayDate() {
+  return formatBusinessDate(new Date());
+}
+
+function businessDateTimeToUtcString(dateString, timeString = '00:00:00') {
+  const parsed = new Date(`${dateString}T${timeString}${BUSINESS_UTC_OFFSET}`);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return `${dateString} ${timeString}`;
+  }
+
+  return parsed.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+function getUtcRangeForBusinessDates(startDate, endDateExclusive) {
+  return {
+    startUtc: businessDateTimeToUtcString(startDate, '00:00:00'),
+    endUtc: businessDateTimeToUtcString(endDateExclusive, '00:00:00')
+  };
+}
+
+function utcStringToBusinessDate(value) {
+  if (!value) {
+    return null;
+  }
+
+  const raw = String(value).trim();
+  if (!raw) {
+    return null;
+  }
+
+  const normalized = raw.includes(' ') ? raw.replace(' ', 'T') : raw;
+  const hasTimezone = /(?:[zZ]|[+-]\d{2}:?\d{2})$/.test(normalized);
+  const parsed = new Date(hasTimezone ? normalized : `${normalized}Z`);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return formatBusinessDate(parsed);
 }
 
 function addDays(dateString, days) {
@@ -312,6 +385,7 @@ async function loadCashboxById(connection, cajaId) {
 }
 
 async function loadCashboxRowsInRange(connection, startDate, endDateExclusive) {
+  const { startUtc, endUtc } = getUtcRangeForBusinessDates(startDate, endDateExclusive);
   const [rows] = await connection.query(
     `
       SELECT ${CASHBOX_COLUMNS}
@@ -319,14 +393,15 @@ async function loadCashboxRowsInRange(connection, startDate, endDateExclusive) {
       WHERE opened_at >= ? AND opened_at < ?
       ORDER BY opened_at ASC, id ASC
     `,
-    [`${startDate} 00:00:00`, `${endDateExclusive} 00:00:00`]
+    [startUtc, endUtc]
   );
 
   return rows;
 }
 
 function buildPeriodSummaryFromRows(rows, startDate, endDateExclusive) {
-  const matchingRows = rows.filter((row) => row.opened_at >= `${startDate} 00:00:00` && row.opened_at < `${endDateExclusive} 00:00:00`);
+  const { startUtc, endUtc } = getUtcRangeForBusinessDates(startDate, endDateExclusive);
+  const matchingRows = rows.filter((row) => row.opened_at >= startUtc && row.opened_at < endUtc);
 
   if (matchingRows.length === 0) {
     return buildEmptyPeriodSummary(startDate, startDate, endDateExclusive);
@@ -784,6 +859,7 @@ async function loadMovementItemsMap(connection, movementIds = []) {
 async function loadRecentSaleMovements(connection, startDate, endDateExclusive, limit = 6) {
   const hasLimit = Number.isFinite(Number(limit)) && Number(limit) > 0;
   const safeLimit = hasLimit ? Math.floor(Number(limit)) : null;
+  const { startUtc, endUtc } = getUtcRangeForBusinessDates(startDate, endDateExclusive);
   const sql = `
       SELECT ${CASHBOX_MOVEMENT_COLUMNS}
       FROM ops_caja_movimientos
@@ -794,8 +870,8 @@ async function loadRecentSaleMovements(connection, startDate, endDateExclusive, 
       ${hasLimit ? 'LIMIT ?' : ''}
     `;
   const params = hasLimit
-    ? [`${startDate} 00:00:00`, `${endDateExclusive} 00:00:00`, safeLimit]
-    : [`${startDate} 00:00:00`, `${endDateExclusive} 00:00:00`];
+    ? [startUtc, endUtc, safeLimit]
+    : [startUtc, endUtc];
   const [rows] = await connection.query(sql, params);
 
   if (!rows.length) {
@@ -826,7 +902,7 @@ async function loadRecentSaleMovements(connection, startDate, endDateExclusive, 
 
 export async function listCashboxSaleMovements({ date, limit } = {}) {
   await ensureCashboxTables();
-  const selectedDate = normalizeDateInput(date) || new Date().toISOString().slice(0, 10);
+  const selectedDate = normalizeDateInput(date) || getBusinessTodayDate();
   const selectedDayEnd = addDays(selectedDate, 1);
   const movementLimit = Number.isFinite(Number(limit)) && Number(limit) > 0 ? Math.floor(Number(limit)) : null;
   const movements = await loadRecentSaleMovements(pool, selectedDate, selectedDayEnd, movementLimit);
@@ -837,13 +913,13 @@ export async function listCashboxSaleMovements({ date, limit } = {}) {
   };
 }
 
-export async function getCashboxSummary({ date, compareTo } = {}) {
+export async function getCashboxSummary({ date, compareTo, forceRefresh = false } = {}) {
   await ensureCashboxTables();
 
-  const selectedDate = normalizeDateInput(date) || new Date().toISOString().slice(0, 10);
+  const selectedDate = normalizeDateInput(date) || getBusinessTodayDate();
   const comparisonDate = normalizeDateInput(compareTo) || addDays(selectedDate, -1);
 
-  const cached = getCachedCashboxSummary(selectedDate, comparisonDate);
+  const cached = forceRefresh ? null : getCachedCashboxSummary(selectedDate, comparisonDate);
   if (cached) {
     return cached;
   }
@@ -923,24 +999,26 @@ export async function getCashboxSummary({ date, compareTo } = {}) {
   return result;
 }
 
-export async function getCashboxObjectivesSummary({ date, compareTo } = {}) {
+export async function getCashboxObjectivesSummary({ date, compareTo, forceRefresh = false } = {}) {
   await ensureCashboxTables();
 
-  const requestedSelectedDate = normalizeDateInput(date) || new Date().toISOString().slice(0, 10);
+  const requestedSelectedDate = normalizeDateInput(date) || getBusinessTodayDate();
   const requestedComparisonDate = normalizeDateInput(compareTo) || addDays(requestedSelectedDate, -1);
 
-  const cached = getCachedCashboxObjectives(requestedSelectedDate, requestedComparisonDate);
+  const cached = forceRefresh ? null : getCachedCashboxObjectives(requestedSelectedDate, requestedComparisonDate);
   if (cached) {
     return cached;
   }
 
   const openCashbox = await findOpenCashbox();
-  const selectedDate = String(openCashbox?.opened_at || requestedSelectedDate).slice(0, 10);
+  const selectedDate = openCashbox?.opened_at
+    ? utcStringToBusinessDate(openCashbox.opened_at) || requestedSelectedDate
+    : requestedSelectedDate;
   const [previousClosedRows] = openCashbox
     ? await pool.query(
         `
           SELECT
-            DATE_FORMAT(closed_at, '%Y-%m-%d') AS closed_date,
+            DATE_FORMAT(closed_at, '%Y-%m-%d %H:%i:%s') AS closed_at,
             sales_total
           FROM ops_cajas
           WHERE status = 'closed'
@@ -954,7 +1032,7 @@ export async function getCashboxObjectivesSummary({ date, compareTo } = {}) {
     : await pool.query(
         `
           SELECT
-            DATE_FORMAT(closed_at, '%Y-%m-%d') AS closed_date,
+            DATE_FORMAT(closed_at, '%Y-%m-%d %H:%i:%s') AS closed_at,
             sales_total
           FROM ops_cajas
           WHERE status = 'closed'
@@ -965,7 +1043,7 @@ export async function getCashboxObjectivesSummary({ date, compareTo } = {}) {
       );
 
   const previousClosed = previousClosedRows[0] || {};
-  const comparisonDate = previousClosed?.closed_date || requestedComparisonDate;
+  const comparisonDate = utcStringToBusinessDate(previousClosed?.closed_at) || requestedComparisonDate;
   const currentSales = Number(openCashbox?.sales_total || 0);
   const comparisonSales = Number(previousClosed.sales_total || 0);
 

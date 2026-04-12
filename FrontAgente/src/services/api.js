@@ -6,7 +6,6 @@ const EXPENSE_CACHE_KEY = 'frontagente:expenses-cache';
 const CASHBOX_CACHE_KEY = 'frontagente:caja-cache';
 const PRODUCT_CACHE_TTL_MS = 10 * 60 * 1000;
 const EXPENSE_CACHE_TTL_MS = 5 * 60 * 1000;
-const CASHBOX_CACHE_TTL_MS = 30 * 1000;
 const productMemoryCache = new Map();
 const pendingScannerRequests = new Map();
 const expenseMemoryCache = new Map();
@@ -434,14 +433,11 @@ export async function fetchCashboxSummary(params = {}) {
   if (params.compareTo) {
     searchParams.set('compare_to', params.compareTo);
   }
+  if (params.forceRefresh) {
+    searchParams.set('force_refresh', '1');
+  }
 
   const query = searchParams.toString();
-  const cacheKey = query || 'default';
-  const cached = params.forceRefresh ? null : cashboxMemoryCache.get(cacheKey);
-
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.value;
-  }
 
   const response = await fetch(`${API_URL}/api/caja${query ? `?${query}` : ''}`, {
     headers: {
@@ -457,12 +453,6 @@ export async function fetchCashboxSummary(params = {}) {
     throw error;
   }
 
-  cashboxMemoryCache.set(cacheKey, {
-    value: data,
-    expiresAt: Date.now() + CASHBOX_CACHE_TTL_MS
-  });
-  persistCashboxCache();
-
   return data;
 }
 
@@ -475,6 +465,9 @@ export async function fetchCashboxObjectives(params = {}) {
 
   if (params.compareTo) {
     searchParams.set('compare_to', params.compareTo);
+  }
+  if (params.forceRefresh) {
+    searchParams.set('force_refresh', '1');
   }
 
   const query = searchParams.toString();
