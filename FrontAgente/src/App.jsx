@@ -10,6 +10,8 @@ import GastosPage from './pages/GastosPage';
 import LoginPage from './pages/LoginPage';
 import ObjetivosPage from './pages/ObjetivosPage';
 import ScannerPage from './pages/ScannerPage';
+import StockPage from './pages/StockPage';
+import SuppliersPage from './pages/SuppliersPage';
 import { clearSession } from './store/slices/authSlice';
 import { clearAuthSession } from './utils/authSession';
 import './styles/layout.css';
@@ -20,6 +22,8 @@ import './styles/pages/gastos.css';
 import './styles/pages/login.css';
 import './styles/pages/objetivos.css';
 import './styles/pages/scanner.css';
+import './styles/pages/stock.css';
+import './styles/pages/suppliers.css';
 
 function normalizeRole(role) {
   return String(role || '').trim().toLowerCase();
@@ -70,23 +74,34 @@ function App() {
             <Nav className="ms-auto app-nav-links">
               {isAdmin ? (
                 <>
-                  <Nav.Link as={NavLink} to="/dashboard">
-                    Dashboard
-                  </Nav.Link>
                   <Nav.Link as={NavLink} to="/clientes">
                     Clientes
                   </Nav.Link>
                   <Nav.Link as={NavLink} to="/gastos">
                     Gastos
                   </Nav.Link>
+                  <Nav.Link as={NavLink} to="/stock">
+                    Stock
+                  </Nav.Link>
+                  <Nav.Link as={NavLink} to="/proveedores">
+                    Proveedores
+                  </Nav.Link>
                 </>
               ) : (
-                <Nav.Link as={NavLink} to="/objetivos">
-                  <span className="nav-icon-wrap">
-                    <Target size={16} />
-                    Objetivos
-                  </span>
-                </Nav.Link>
+                <>
+                  <Nav.Link as={NavLink} to="/objetivos">
+                    <span className="nav-icon-wrap">
+                      <Target size={16} />
+                      Objetivos
+                    </span>
+                  </Nav.Link>
+                  <Nav.Link as={NavLink} to="/stock">
+                    Stock
+                  </Nav.Link>
+                  <Nav.Link as={NavLink} to="/proveedores">
+                    Proveedores
+                  </Nav.Link>
+                </>
               )}
               <Nav.Link as={NavLink} to="/scanner">
                 <span className="nav-icon-wrap">
@@ -165,6 +180,22 @@ function App() {
               element={
                 <RoleGate allow={['admin', 'operario']}>
                   <ScannerPage />
+                </RoleGate>
+              }
+            />
+            <Route
+              path="/stock"
+              element={
+                <RoleGate allow={['admin', 'operario']}>
+                  <StockPage />
+                </RoleGate>
+              }
+            />
+            <Route
+              path="/proveedores"
+              element={
+                <RoleGate allow={['admin', 'operario']}>
+                  <SuppliersPage />
                 </RoleGate>
               }
             />
