@@ -15,6 +15,34 @@ import { clearAuthSession, getAuthToken } from '../utils/authSession';
 import toast from 'react-hot-toast';
 
 const mockNavigate = vi.fn();
+const originalEventSource = globalThis.EventSource;
+const eventSourceInstances = [];
+
+class MockEventSource {
+  constructor(url) {
+    this.url = url;
+    this.listeners = new Map();
+    this.addEventListener = vi.fn((eventName, callback) => {
+      this.listeners.set(eventName, callback);
+    });
+    this.removeEventListener = vi.fn((eventName) => {
+      this.listeners.delete(eventName);
+    });
+    this.close = vi.fn();
+    eventSourceInstances.push(this);
+  }
+
+  emit(eventName, payload) {
+    const callback = this.listeners.get(eventName);
+    if (!callback) {
+      return;
+    }
+
+    callback({
+      data: JSON.stringify(payload)
+    });
+  }
+}
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
@@ -89,8 +117,17 @@ function createWrapper(preloadedAuth = { token: '', user: null }) {
 }
 
 describe('useCajaPageController', () => {
+  beforeAll(() => {
+    globalThis.EventSource = MockEventSource;
+  });
+
+  afterAll(() => {
+    globalThis.EventSource = originalEventSource;
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
+    eventSourceInstances.length = 0;
     getAuthToken.mockReturnValue('');
     fetchCashboxSummary.mockResolvedValue(createSummary());
     fetchScannerLiveState.mockResolvedValue({});
@@ -179,5 +216,76 @@ describe('useCajaPageController', () => {
     expect(closeCashbox).toHaveBeenCalledTimes(1);
     expect(toast.success).toHaveBeenCalledWith('Caja cerrada');
     expect(result.current.isOpen).toBe(false);
+  });
+
+  it('sincroniza scanner en vivo al recibir scanner:state de operario', async () => {
+    getAuthToken.mockReturnValue('token-live');
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => useCajaPageController(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    const stream = eventSourceInstances[0];
+    expect(stream).toBeDefined();
+
+    act(() => {
+      stream.emit('cashbox:update', {
+        type: 'scanner:state',
+        operator: { role: 'operario', name: 'Operario 1' },
+        items: [{ name: 'Arroz', quantity: 2, total: 120 }],
+        total: 120,
+        state: 'active',
+        updated_at: '2026-04-12T12:00:00Z'
+      });
+    });
+
+    expect(result.current.scannerLiveState.total).toBe(120);
+    expect(result.current.scannerLiveState.items).toHaveLength(1);
+    expect(result.current.scannerLiveState.operator?.name).toBe('Operario 1');
+  });
+
+  it('refresca datos al recibir evento sale', async () => {
+    getAuthToken.mockReturnValue('token-live');
+    const { wrapper } = createWrapper();
+    renderHook(() => useCajaPageController(), { wrapper });
+
+    await waitFor(() => {
+      expect(fetchCashboxSummary).toHaveBeenCalledTimes(1);
+    });
+
+    const initialMovementsCalls = fetchCashboxMovements.mock.calls.length;
+    const initialRankingCalls = fetchCashboxRanking.mock.calls.length;
+    const stream = eventSourceInstances[0];
+
+    act(() => {
+      stream.emit('cashbox:update', {
+        type: 'sale',
+        operator: { role: 'operario' }
+      });
+    });
+
+    await waitFor(() => {
+      expect(fetchCashboxMovements.mock.calls.length).toBeGreaterThan(initialMovementsCalls);
+      expect(fetchCashboxRanking.mock.calls.length).toBeGreaterThan(initialRankingCalls);
+      expect(fetchCashboxSummary.mock.calls.length).toBeGreaterThan(1);
+    });
+  });
+
+  it('cierra y desuscribe EventSource al desmontar', async () => {
+    getAuthToken.mockReturnValue('token-live');
+    const { wrapper } = createWrapper();
+    const { unmount } = renderHook(() => useCajaPageController(), { wrapper });
+
+    await waitFor(() => {
+      expect(eventSourceInstances.length).toBeGreaterThan(0);
+    });
+
+    const stream = eventSourceInstances[0];
+    unmount();
+
+    expect(stream.removeEventListener).toHaveBeenCalledWith('cashbox:update', expect.any(Function));
+    expect(stream.close).toHaveBeenCalledTimes(1);
   });
 });
