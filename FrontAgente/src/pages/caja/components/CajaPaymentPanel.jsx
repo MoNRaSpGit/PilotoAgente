@@ -1,4 +1,5 @@
-import { Button } from 'react-bootstrap';
+﻿import { Button } from 'react-bootstrap';
+import { CAJA_ACTION_LABELS } from '../cajaText.constants';
 
 function CajaPaymentPanel({ handlePaymentSubmit, paymentForm, setPaymentForm, savingPayment, isOpen, openCloseConfirmModal, savingClose }) {
   return (
@@ -39,13 +40,13 @@ function CajaPaymentPanel({ handlePaymentSubmit, paymentForm, setPaymentForm, sa
           }}
         />
         <Button type="submit" variant="dark" className="caja-payment-submit" disabled={savingPayment || !isOpen}>
-          {savingPayment ? 'Guardando...' : 'Agregar pago'}
+          {savingPayment ? CAJA_ACTION_LABELS.saveInProgress : CAJA_ACTION_LABELS.addPayment}
         </Button>
       </form>
 
       <div className="caja-close-box">
         <Button variant="dark" onClick={openCloseConfirmModal} disabled={savingClose}>
-          {savingClose ? 'Cerrando...' : 'Cerrar caja'}
+          {savingClose ? CAJA_ACTION_LABELS.closeInProgress : CAJA_ACTION_LABELS.closeCashbox}
         </Button>
       </div>
     </article>

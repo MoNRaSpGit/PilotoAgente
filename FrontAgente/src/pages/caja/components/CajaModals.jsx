@@ -1,4 +1,5 @@
-import { Button, Form, Modal } from 'react-bootstrap';
+﻿import { Button, Form, Modal } from 'react-bootstrap';
+import { CAJA_ACTION_LABELS } from '../cajaText.constants';
 
 function CajaModals({
   openModal,
@@ -46,10 +47,10 @@ function CajaModals({
         </Modal.Body>
         <Modal.Footer>
           <Button variant="outline-secondary" onClick={closeOpenModal}>
-            Cancelar
+            {CAJA_ACTION_LABELS.cancel}
           </Button>
           <Button variant="dark" onClick={handleOpenCashbox} disabled={savingOpen}>
-            {savingOpen ? 'Abriendo...' : 'Abrir'}
+            {savingOpen ? CAJA_ACTION_LABELS.openInProgress : CAJA_ACTION_LABELS.open}
           </Button>
         </Modal.Footer>
       </Modal>
@@ -65,7 +66,7 @@ function CajaModals({
         </Modal.Body>
         <Modal.Footer>
           <Button variant="outline-secondary" onClick={closeCloseConfirmModal} disabled={savingClose}>
-            Cancelar
+            {CAJA_ACTION_LABELS.cancel}
           </Button>
           <Button
             variant="dark"
@@ -75,7 +76,7 @@ function CajaModals({
             }}
             disabled={savingClose}
           >
-            {savingClose ? 'Cerrando...' : 'Cerrar caja'}
+            {savingClose ? CAJA_ACTION_LABELS.closeInProgress : CAJA_ACTION_LABELS.closeCashbox}
           </Button>
         </Modal.Footer>
       </Modal>

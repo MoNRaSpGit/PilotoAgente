@@ -1,3 +1,4 @@
+ï»¿import { CAJA_ACTION_LABELS } from '../cajaText.constants';
 import { formatDateTime, formatMovementAmount, money } from '../cajaPage.utils';
 
 function CajaMovementsPanel({
@@ -20,17 +21,17 @@ function CajaMovementsPanel({
           <div className="caja-movements-actions">
             {movementsMode === 'recent' ? (
               <button type="button" className="caja-inline-link" onClick={() => loadMovements('top10')} disabled={movementsLoading}>
-                Ver mas
+                {CAJA_ACTION_LABELS.showMore}
               </button>
             ) : null}
             {movementsMode === 'top10' ? (
               <button type="button" className="caja-inline-link" onClick={() => loadMovements('all')} disabled={movementsLoading}>
-                Ver todo
+                {CAJA_ACTION_LABELS.showAll}
               </button>
             ) : null}
             {movementsMode === 'all' ? (
               <button type="button" className="caja-inline-link" onClick={() => loadMovements('recent')} disabled={movementsLoading}>
-                Volver a 3
+                {CAJA_ACTION_LABELS.backToThree}
               </button>
             ) : null}
           </div>
@@ -52,13 +53,13 @@ function CajaMovementsPanel({
                   {sale.type === 'payment' ? (
                     <>
                       <strong className="caja-movement-kind">Pago</strong>
-                      <span className="caja-movement-meta">{`${sale.operatorName} · ${formatDateTime(sale.createdAt)}`}</span>
+                      <span className="caja-movement-meta">{`${sale.operatorName} Â· ${formatDateTime(sale.createdAt)}`}</span>
                       <p className="caja-movement-description is-highlighted">{sale.description || 'Pago registrado'}</p>
                     </>
                   ) : (
                     <>
                       <strong className="caja-movement-kind is-sale">Venta</strong>
-                      <span className="caja-movement-meta">{`${sale.operatorName} · ${formatDateTime(sale.createdAt)}`}</span>
+                      <span className="caja-movement-meta">{`${sale.operatorName} Â· ${formatDateTime(sale.createdAt)}`}</span>
                       <p className="caja-movement-description is-highlighted is-sale">{sale.description || 'Venta desde escaner'}</p>
                     </>
                   )}

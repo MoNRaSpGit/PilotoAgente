@@ -27,6 +27,7 @@ import {
   resolveMovementLimit,
   resolveRankingLimit
 } from './cajaPage.state';
+import { CAJA_TOAST_MESSAGES } from './cajaText.constants';
 
 export function useCajaPageController() {
   const dispatch = useDispatch();
@@ -65,7 +66,7 @@ export function useCajaPageController() {
     dispatch(clearSession());
     clearAuthSession();
     navigate('/login', { replace: true });
-    toast.error('Sesion vencida, volve a ingresar');
+    toast.error(CAJA_TOAST_MESSAGES.sessionExpired);
   }, [dispatch, navigate]);
 
   const loadDashboard = useCallback(async (quiet = false, options = {}) => {
@@ -370,7 +371,7 @@ export function useCajaPageController() {
     const amount = Number.parseFloat(openingAmount);
 
     if (!Number.isFinite(amount) || amount <= 0) {
-      toast.error('Ingresa un monto inicial valido');
+      toast.error(CAJA_TOAST_MESSAGES.invalidOpeningAmount);
       return;
     }
 
@@ -392,7 +393,7 @@ export function useCajaPageController() {
       setLiveSales([]);
       setRankingItems([]);
       setScannerLiveState(createEmptyScannerLiveState());
-      toast.success('Caja abierta');
+      toast.success(CAJA_TOAST_MESSAGES.opened);
       closeOpenModal();
     } catch (error) {
       if (error.status === 401) {
@@ -435,7 +436,7 @@ export function useCajaPageController() {
       setLiveSales([]);
       setRankingItems([]);
       setScannerLiveState(createEmptyScannerLiveState());
-      toast.success('Caja cerrada');
+      toast.success(CAJA_TOAST_MESSAGES.closed);
     } catch (error) {
       if (error.status === 401) {
         handleSessionExpired();
@@ -455,7 +456,7 @@ export function useCajaPageController() {
     const description = paymentForm.description.trim();
 
     if (!Number.isFinite(amount) || amount <= 0) {
-      toast.error('Ingresa un monto valido');
+      toast.error(CAJA_TOAST_MESSAGES.invalidPaymentAmount);
       return;
     }
 
@@ -484,7 +485,7 @@ export function useCajaPageController() {
         amount: '',
         description: ''
       });
-      toast.success('Pago registrado');
+      toast.success(CAJA_TOAST_MESSAGES.paymentRegistered);
     } catch (error) {
       if (error.status === 401) {
         handleSessionExpired();
@@ -533,6 +534,7 @@ export function useCajaPageController() {
     setPaymentForm,
     toggleMovementDetails,
     trend: {
+      comparisonPercent: dashboard?.comparison_percent ?? null,
       compareDay,
       weeklySummary,
       monthlySummary

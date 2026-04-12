@@ -1,3 +1,4 @@
+﻿import { CAJA_ACTION_LABELS } from '../cajaText.constants';
 import { formatShortDate } from '../cajaPage.utils';
 
 function CajaRankingPanel({ rankingMode, rankingLoading, loadRanking, rankingItems }) {
@@ -12,17 +13,17 @@ function CajaRankingPanel({ rankingMode, rankingLoading, loadRanking, rankingIte
           <div className="caja-movements-actions">
             {rankingMode === 'top5' ? (
               <button type="button" className="caja-inline-link" onClick={() => loadRanking('top10')} disabled={rankingLoading}>
-                Ver mas
+                {CAJA_ACTION_LABELS.showMore}
               </button>
             ) : null}
             {rankingMode === 'top10' ? (
               <button type="button" className="caja-inline-link" onClick={() => loadRanking('all')} disabled={rankingLoading}>
-                Ver todo
+                {CAJA_ACTION_LABELS.showAll}
               </button>
             ) : null}
             {rankingMode === 'all' ? (
               <button type="button" className="caja-inline-link" onClick={() => loadRanking('top5')} disabled={rankingLoading}>
-                Volver a 5
+                {CAJA_ACTION_LABELS.backToFive}
               </button>
             ) : null}
           </div>

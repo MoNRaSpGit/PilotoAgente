@@ -10,7 +10,7 @@ const routerFutureFlags = {
 };
 
 describe('App', () => {
-  it('renderiza el dashboard vacio', () => {
+  it('renderiza la pantalla de login por defecto', () => {
     render(
       <Provider store={store}>
         <BrowserRouter future={routerFutureFlags}>
@@ -19,6 +19,6 @@ describe('App', () => {
       </Provider>
     );
 
-    expect(screen.getByText(/Dashboard en blanco/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Ingresar/i })).toBeInTheDocument();
   });
 });
