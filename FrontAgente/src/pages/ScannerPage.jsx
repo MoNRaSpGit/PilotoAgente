@@ -11,46 +11,12 @@ import {
   updateClientCharge,
   updateProduct
 } from '../services/api';
-
-function resolveProductImage(imageValue) {
-  if (!imageValue) {
-    return '';
-  }
-
-  if (
-    imageValue.startsWith('http://') ||
-    imageValue.startsWith('https://') ||
-    imageValue.startsWith('data:image/')
-  ) {
-    return imageValue;
-  }
-
-  return `data:image/jpeg;base64,${imageValue}`;
-}
-
-function elapsedMs(startedAt) {
-  return Number((performance.now() - startedAt).toFixed(2));
-}
-
-function logChargeTiming(step, startedAt, details = {}) {
-  const durationMs = elapsedMs(startedAt);
-  console.info('[scanner:cobro:timing]', { step, durationMs, ...details });
-}
-
-function cloneSaleItems(items = []) {
-  return (Array.isArray(items) ? items : []).map((item) => ({
-    key: item.key,
-    productId: item.productId,
-    barcode: item.barcode,
-    name: item.name,
-    price: item.price,
-    quantity: item.quantity,
-    total: item.total,
-    imageUrl: item.imageUrl,
-    hasImage: item.hasImage,
-    source: item.source
-  }));
-}
+import {
+  cloneSaleItems,
+  logChargeTiming,
+  normalizeDraftItems,
+  resolveProductImage
+} from './scanner/scannerPage.utils';
 
 function ScannerPage() {
   const user = useSelector((state) => state.auth.user);
@@ -82,27 +48,6 @@ function ScannerPage() {
   const [chargeSnapshotTotal, setChargeSnapshotTotal] = useState(0);
   const [items, setItems] = useState([]);
   const [scannerStateReady, setScannerStateReady] = useState(false);
-
-  const normalizeDraftItems = (draftItems = []) =>
-    (Array.isArray(draftItems) ? draftItems : []).map((item, index) => {
-      const price = Number(item?.price || 0);
-      const quantity = Number(item?.quantity || 1);
-      const total = Number(item?.total || price * quantity);
-      const fallbackKey = item?.barcode || `${item?.name || 'item'}-${index}`;
-
-      return {
-        key: item?.key || fallbackKey,
-        productId: item?.productId || null,
-        barcode: item?.barcode || fallbackKey,
-        name: item?.name || 'Producto',
-        price: Number(price.toFixed(2)),
-        quantity,
-        total: Number(total.toFixed(2)),
-        imageUrl: '',
-        hasImage: false,
-        source: item?.source || 'scanner'
-      };
-    });
 
   const isTouchLikeDevice = useCallback(() => {
     if (typeof window === 'undefined' || typeof navigator === 'undefined') {
@@ -428,7 +373,8 @@ function ScannerPage() {
   };
 
   const handleEditConfirm = async () => {
-    const price = Number.parseFloat(editPrice);
+    const normalizedPriceInput = String(editPrice).replace(',', '.');
+    const price = Number.parseFloat(normalizedPriceInput);
     const name = editName.trim();
 
     if (!name) {
@@ -441,11 +387,30 @@ function ScannerPage() {
       return;
     }
 
-    const shouldPersistProduct = Number.isFinite(Number(editItem?.productId)) && Number(editItem?.productId) > 0;
+    let persistedProductId = Number(editItem?.productId);
+
+    if (!Number.isFinite(persistedProductId) || persistedProductId <= 0) {
+      const candidateBarcode = String(editItem?.barcode || '').trim();
+      const isTemporaryManualItem = !candidateBarcode || candidateBarcode.startsWith('manual-');
+
+      if (!isTemporaryManualItem) {
+        try {
+          const { item: scannedItem } = await scanProductByBarcode(candidateBarcode);
+          const resolvedProductId = Number(scannedItem?.id);
+          if (Number.isFinite(resolvedProductId) && resolvedProductId > 0) {
+            persistedProductId = resolvedProductId;
+          }
+        } catch (_error) {
+          // If lookup fails, keep local edit only for this ticket.
+        }
+      }
+    }
+
+    const shouldPersistProduct = Number.isFinite(persistedProductId) && persistedProductId > 0;
 
     if (shouldPersistProduct) {
       try {
-        await updateProduct(Number(editItem.productId), {
+        await updateProduct(persistedProductId, {
           nombre: name,
           precioVenta: price
         });
@@ -463,6 +428,7 @@ function ScannerPage() {
 
         return {
           ...item,
+          productId: shouldPersistProduct ? persistedProductId : item.productId,
           name,
           price,
           total: Number((price * item.quantity).toFixed(2))
@@ -1052,7 +1018,10 @@ function ScannerPage() {
               type="text"
               value={editPrice}
               onChange={(event) => {
-                const nextValue = event.target.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1');
+                const nextValue = event.target.value
+                  .replace(/[^\d.,]/g, '')
+                  .replace(/,/g, '.')
+                  .replace(/(\..*)\./g, '$1');
                 setEditPrice(nextValue);
               }}
               placeholder="Valor"
