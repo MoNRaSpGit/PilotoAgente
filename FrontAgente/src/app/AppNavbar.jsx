@@ -30,9 +30,6 @@ export function AppNavbar({
               <Nav.Link as={NavLink} to="/gastos">
                 Gastos
               </Nav.Link>
-              <Nav.Link as={NavLink} to="/stock">
-                Stock
-              </Nav.Link>
               <Nav.Link as={NavLink} to="/proveedores">
                 Proveedores
               </Nav.Link>
@@ -44,12 +41,6 @@ export function AppNavbar({
                   <Target size={16} />
                   Objetivos
                 </span>
-              </Nav.Link>
-              <Nav.Link as={NavLink} to="/stock">
-                Stock
-              </Nav.Link>
-              <Nav.Link as={NavLink} to="/proveedores">
-                Proveedores
               </Nav.Link>
             </>
           )}
