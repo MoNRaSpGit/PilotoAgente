@@ -2,6 +2,10 @@ import { ensureUsersTable, seedDemoUsers } from '../modules/auth/auth.repository
 import { ensureCashboxTables } from '../modules/caja/caja.repository.js';
 import { ensureClientHistoryTable, ensureClientsTable } from '../modules/clients/client.repository.js';
 import { ensureExpenseTables } from '../modules/gastos/gastos.repository.js';
+import { ensureStockTables } from '../modules/stock/stock.repository.js';
+import { seedSupplierStockDemo } from '../modules/stock/stock.service.js';
+import { ensureSupplierTables } from '../modules/suppliers/supplier.repository.js';
+import { env } from '../config/env.js';
 
 export async function initDatabase() {
   await ensureUsersTable();
@@ -9,5 +13,18 @@ export async function initDatabase() {
   await ensureClientHistoryTable();
   await ensureCashboxTables();
   await ensureExpenseTables();
+  await ensureSupplierTables();
+  await ensureStockTables();
   await seedDemoUsers();
+
+  if (env.stockDemoSeedEnabled) {
+    const seeded = await seedSupplierStockDemo({
+      limit: env.stockDemoSeedLimit
+    });
+    if (seeded.items.length > 0) {
+      console.log(`[init] Seed stock demo aplicado en ${seeded.items.length} productos`);
+    } else {
+      console.log('[init] Seed stock demo activo, pero no encontro productos compatibles');
+    }
+  }
 }

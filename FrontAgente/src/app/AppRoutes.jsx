@@ -7,7 +7,6 @@ import GastosPage from '../pages/GastosPage';
 import LoginPage from '../pages/LoginPage';
 import ObjetivosPage from '../pages/ObjetivosPage';
 import ScannerPage from '../pages/ScannerPage';
-import StockPage from '../pages/StockPage';
 import SuppliersPage from '../pages/SuppliersPage';
 import { RoleGate } from './RoleGate';
 
@@ -73,17 +72,9 @@ export function AppRoutes({ isLoggedIn, isAdmin, dashboardEnabled }) {
             }
           />
           <Route
-            path="/stock"
-            element={
-              <RoleGate allow={['admin', 'operario']}>
-                <StockPage />
-              </RoleGate>
-            }
-          />
-          <Route
             path="/proveedores"
             element={
-              <RoleGate allow={['admin', 'operario']}>
+              <RoleGate allow={['admin']}>
                 <SuppliersPage />
               </RoleGate>
             }

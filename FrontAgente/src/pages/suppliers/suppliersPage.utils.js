@@ -13,7 +13,6 @@ export const DAY_ALIAS_TO_SPANISH = {
   martes: 'martes',
   tuesday: 'martes',
   miercoles: 'miercoles',
-  'miercoles': 'miercoles',
   wednesday: 'miercoles',
   thursday: 'jueves',
   jueves: 'jueves',
@@ -21,7 +20,6 @@ export const DAY_ALIAS_TO_SPANISH = {
   viernes: 'viernes',
   saturday: 'sabado',
   sabado: 'sabado',
-  'sabado': 'sabado',
   sunday: 'domingo',
   domingo: 'domingo',
   lunes: 'lunes'
@@ -35,13 +33,6 @@ export const INITIAL_SUPPLIERS_AGENDA = (today) => ({
   },
   week: []
 });
-
-export const INITIAL_SUPPLIER_ORDER_FORM = {
-  supplier_id: '',
-  expected_amount: '',
-  delivery_date: '',
-  notes: ''
-};
 
 export function formatMoney(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -64,6 +55,7 @@ export function addDays(dateString, deltaDays) {
 export function formatDateShort(dateString) {
   const date = new Date(`${normalizeISODate(dateString)}T00:00:00Z`);
   return date.toLocaleDateString('es-UY', {
+    timeZone: 'UTC',
     weekday: 'long',
     day: '2-digit',
     month: '2-digit'

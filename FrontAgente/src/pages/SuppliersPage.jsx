@@ -1,9 +1,5 @@
-﻿import { SuppliersDayMovementPanel } from './suppliers/components/SuppliersDayMovementPanel';
 import { SuppliersHeader } from './suppliers/components/SuppliersHeader';
-import { SuppliersOrderFormPanel } from './suppliers/components/SuppliersOrderFormPanel';
-import { SuppliersProductsPanel } from './suppliers/components/SuppliersProductsPanel';
-import { SuppliersRecentOrdersPanel } from './suppliers/components/SuppliersRecentOrdersPanel';
-import { SuppliersWeekAgendaPanel } from './suppliers/components/SuppliersWeekAgendaPanel';
+import { SuppliersWeekMovementPanel } from './suppliers/components/SuppliersWeekMovementPanel';
 import { useSuppliersPageController } from './suppliers/useSuppliersPageController';
 
 function SuppliersPage() {
@@ -12,20 +8,16 @@ function SuppliersPage() {
     simulatedDate,
     setSimulatedDate,
     realToday,
-    suppliers,
-    selectedSupplierId,
-    setSelectedSupplierId,
-    selectedSupplierProducts,
-    selectedSupplierMeta,
-    loadingSupplierProducts,
     agenda,
-    recentOrders,
-    savingOrder,
-    orderForm,
-    setOrderForm,
     todayHeadline,
-    providerDaySchedule,
-    handleCreateOrder
+    selectedDaySupplierDetail,
+    selectedDaySupplierAlerts,
+    loadingDaySupplierProducts,
+    confirmingWeekSupplierId,
+    handleChangeSelectedDaySupplierAlertQuantity,
+    handleConfirmSelectedDaySupplierOrder,
+    handleSelectDaySupplier,
+    weekMovementSchedule
   } = useSuppliersPageController();
 
   return (
@@ -40,24 +32,16 @@ function SuppliersPage() {
       />
 
       <div className="suppliers-grid">
-        <SuppliersDayMovementPanel providerDaySchedule={providerDaySchedule} />
-        <SuppliersWeekAgendaPanel loading={loading} agenda={agenda} />
-        <SuppliersProductsPanel
-          suppliers={suppliers}
-          selectedSupplierId={selectedSupplierId}
-          setSelectedSupplierId={setSelectedSupplierId}
-          selectedSupplierMeta={selectedSupplierMeta}
-          selectedSupplierProducts={selectedSupplierProducts}
-          loadingSupplierProducts={loadingSupplierProducts}
+        <SuppliersWeekMovementPanel
+          weekMovementSchedule={weekMovementSchedule}
+          selectedDaySupplierDetail={selectedDaySupplierDetail}
+          selectedDaySupplierAlerts={selectedDaySupplierAlerts}
+          loadingDaySupplierProducts={loadingDaySupplierProducts}
+          confirmingWeekSupplierId={confirmingWeekSupplierId}
+          handleChangeSelectedDaySupplierAlertQuantity={handleChangeSelectedDaySupplierAlertQuantity}
+          handleConfirmSelectedDaySupplierOrder={handleConfirmSelectedDaySupplierOrder}
+          handleSelectDaySupplier={handleSelectDaySupplier}
         />
-        <SuppliersOrderFormPanel
-          suppliers={suppliers}
-          orderForm={orderForm}
-          setOrderForm={setOrderForm}
-          savingOrder={savingOrder}
-          handleCreateOrder={handleCreateOrder}
-        />
-        <SuppliersRecentOrdersPanel recentOrders={recentOrders} />
       </div>
     </section>
   );

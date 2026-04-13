@@ -16,7 +16,6 @@ import './styles/pages/gastos.css';
 import './styles/pages/login.css';
 import './styles/pages/objetivos.css';
 import './styles/pages/scanner.css';
-import './styles/pages/stock.css';
 import './styles/pages/suppliers.css';
 
 function App() {

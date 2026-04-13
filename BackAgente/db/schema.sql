@@ -118,3 +118,143 @@
 -- updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 -- INDEX idx_gastos_active_scope (active, scope)
 -- INDEX idx_gastos_frequency (frequency)
+
+-- =========================================================
+-- ops_stock_control
+-- Source: src/modules/stock/stock.repository.js
+-- =========================================================
+-- id INT AUTO_INCREMENT PRIMARY KEY
+-- product_id INT NOT NULL UNIQUE
+-- active TINYINT(1) NOT NULL DEFAULT 1
+-- is_test_data TINYINT(1) NOT NULL DEFAULT 0
+-- supplier_name VARCHAR(140) NULL
+-- order_days_csv VARCHAR(80) NULL
+-- delivery_days_csv VARCHAR(80) NULL
+-- critical_threshold INT NOT NULL DEFAULT 1
+-- warning_threshold INT NOT NULL DEFAULT 4
+-- target_leftover INT NOT NULL DEFAULT 2
+-- notes VARCHAR(255) NULL
+-- created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+-- updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+-- INDEX idx_stock_control_active (active)
+
+-- =========================================================
+-- ops_stock_movimientos
+-- Source: src/modules/stock/stock.repository.js
+-- =========================================================
+-- id BIGINT AUTO_INCREMENT PRIMARY KEY
+-- product_id INT NOT NULL
+-- stock_control_id INT NULL
+-- type VARCHAR(20) NOT NULL
+-- quantity_delta INT NOT NULL
+-- quantity_before INT NOT NULL
+-- quantity_after INT NOT NULL
+-- reference_type VARCHAR(40) NULL
+-- reference_id BIGINT NULL
+-- notes VARCHAR(255) NULL
+-- operator_id INT NULL
+-- operator_name VARCHAR(140) NULL
+-- operator_role VARCHAR(20) NULL
+-- created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+-- updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+-- INDEX idx_stock_mov_product_date (product_id, created_at)
+-- INDEX idx_stock_mov_type_date (type, created_at)
+-- INDEX idx_stock_mov_reference (reference_type, reference_id)
+
+-- =========================================================
+-- ops_proveedores
+-- Source: src/modules/suppliers/supplier.repository.js
+-- =========================================================
+-- id INT AUTO_INCREMENT PRIMARY KEY
+-- nombre VARCHAR(140) NOT NULL UNIQUE
+-- telefono VARCHAR(60) NULL
+-- email VARCHAR(190) NULL
+-- dias_pedido_csv VARCHAR(80) NULL
+-- dias_entrega_csv VARCHAR(80) NULL
+-- estado VARCHAR(20) NOT NULL DEFAULT 'activo'
+-- notas VARCHAR(255) NULL
+-- created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+-- updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+-- INDEX idx_proveedor_estado (estado)
+
+-- =========================================================
+-- ops_producto (extension)
+-- Source: src/modules/suppliers/supplier.repository.js
+-- =========================================================
+-- supplier_id INT NULL
+-- INDEX idx_producto_supplier_id (supplier_id)
+
+-- =========================================================
+-- ops_supplier_orders
+-- Source: src/modules/suppliers/supplier.repository.js
+-- =========================================================
+-- id BIGINT AUTO_INCREMENT PRIMARY KEY
+-- supplier_id INT NOT NULL
+-- order_date DATE NOT NULL
+-- delivery_date DATE NOT NULL
+-- expected_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00
+-- status VARCHAR(20) NOT NULL DEFAULT 'pendiente'
+-- notes VARCHAR(255) NULL
+-- operator_id INT NULL
+-- operator_name VARCHAR(140) NULL
+-- operator_role VARCHAR(20) NULL
+-- created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+-- updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+-- INDEX idx_supplier_orders_delivery_status (delivery_date, status)
+-- INDEX idx_supplier_orders_supplier_delivery (supplier_id, delivery_date)
+
+-- =========================================================
+-- ops_supplier_order_items
+-- Source: src/modules/suppliers/supplier.repository.js
+-- =========================================================
+-- id BIGINT AUTO_INCREMENT PRIMARY KEY
+-- order_id BIGINT NOT NULL
+-- product_id INT NULL
+-- product_name VARCHAR(190) NOT NULL
+-- quantity DECIMAL(12,3) NOT NULL DEFAULT 1
+-- unit_cost DECIMAL(12,2) NOT NULL DEFAULT 0.00
+-- line_total DECIMAL(12,2) NOT NULL DEFAULT 0.00
+-- notes VARCHAR(255) NULL
+-- created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+-- updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+-- INDEX idx_supplier_order_items_order (order_id)
+-- INDEX idx_supplier_order_items_product (product_id)
+-- FOREIGN KEY (order_id) REFERENCES ops_supplier_orders(id) ON DELETE CASCADE
+
+-- =========================================================
+-- ops_supplier_order_drafts
+-- Source: src/modules/suppliers/supplier.repository.js
+-- =========================================================
+-- id BIGINT AUTO_INCREMENT PRIMARY KEY
+-- supplier_id INT NOT NULL
+-- status VARCHAR(20) NOT NULL DEFAULT 'open'
+-- source VARCHAR(30) NOT NULL DEFAULT 'stock'
+-- notes VARCHAR(255) NULL
+-- operator_id INT NULL
+-- operator_name VARCHAR(140) NULL
+-- operator_role VARCHAR(20) NULL
+-- created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+-- updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+-- INDEX idx_supplier_drafts_supplier_status (supplier_id, status)
+-- INDEX idx_supplier_drafts_updated (updated_at)
+-- FOREIGN KEY (supplier_id) REFERENCES ops_proveedores(id) ON DELETE CASCADE
+
+-- =========================================================
+-- ops_supplier_order_draft_items
+-- Source: src/modules/suppliers/supplier.repository.js
+-- =========================================================
+-- id BIGINT AUTO_INCREMENT PRIMARY KEY
+-- draft_id BIGINT NOT NULL
+-- product_id INT NULL
+-- product_name VARCHAR(190) NOT NULL
+-- quantity DECIMAL(12,3) NOT NULL DEFAULT 1
+-- unit_cost DECIMAL(12,2) NOT NULL DEFAULT 0.00
+-- line_total DECIMAL(12,2) NOT NULL DEFAULT 0.00
+-- source VARCHAR(30) NOT NULL DEFAULT 'stock_alert'
+-- notes VARCHAR(255) NULL
+-- created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+-- updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+-- INDEX idx_supplier_draft_items_draft (draft_id)
+-- INDEX idx_supplier_draft_items_product (product_id)
+-- UNIQUE KEY uniq_supplier_draft_product (draft_id, product_id)
+-- FOREIGN KEY (draft_id) REFERENCES ops_supplier_order_drafts(id) ON DELETE CASCADE
