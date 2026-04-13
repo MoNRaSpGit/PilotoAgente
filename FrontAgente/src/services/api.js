@@ -648,120 +648,10 @@ export async function fetchScannerLiveState(options = {}) {
   return data.item || null;
 }
 
-export async function fetchStockDashboard(params = {}) {
-  const searchParams = new URLSearchParams();
-
-  if (params.includeHealthy) {
-    searchParams.set('include_healthy', 'true');
-  }
-
-  const query = searchParams.toString();
-  const response = await fetch(`${API_URL}/api/stock/dashboard${query ? `?${query}` : ''}`, {
-    headers: {
-      ...getAuthHeaders()
-    }
-  });
-  const data = await parseJsonResponse(response);
-
-  if (!response.ok) {
-    const error = new Error(data.message || 'No se pudo cargar el tablero de stock');
-    error.status = response.status;
-    error.data = data;
-    throw error;
-  }
-
-  return data;
-}
-
-export async function fetchStockControls() {
-  const response = await fetch(`${API_URL}/api/stock/controls`, {
-    headers: {
-      ...getAuthHeaders()
-    }
-  });
-  const data = await parseJsonResponse(response);
-
-  if (!response.ok) {
-    const error = new Error(data.message || 'No se pudo cargar la configuracion de stock');
-    error.status = response.status;
-    error.data = data;
-    throw error;
-  }
-
-  return data.items || [];
-}
-
-export async function saveStockControl(payload) {
-  const response = await fetch(`${API_URL}/api/stock/controls`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...getAuthHeaders()
-    },
-    body: JSON.stringify(payload)
-  });
-  const data = await parseJsonResponse(response);
-
-  if (!response.ok) {
-    const error = new Error(data.message || 'No se pudo guardar la configuracion de stock');
-    error.status = response.status;
-    error.data = data;
-    throw error;
-  }
-
-  return data.item;
-}
-
-export async function registerStockEntry(payload) {
-  const response = await fetch(`${API_URL}/api/stock/entries`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...getAuthHeaders()
-    },
-    body: JSON.stringify(payload)
-  });
-  const data = await parseJsonResponse(response);
-
-  if (!response.ok) {
-    const error = new Error(data.message || 'No se pudo registrar el ingreso de stock');
-    error.status = response.status;
-    error.data = data;
-    throw error;
-  }
-
-  return data.item;
-}
-
-export async function searchStockProducts(params = {}) {
-  const searchParams = new URLSearchParams();
-  if (params.query) {
-    searchParams.set('query', params.query);
-  }
-  if (Number.isFinite(Number(params.limit)) && Number(params.limit) > 0) {
-    searchParams.set('limit', String(Math.floor(Number(params.limit))));
-  }
-
-  const query = searchParams.toString();
-  const response = await fetch(`${API_URL}/api/stock/products${query ? `?${query}` : ''}`, {
-    headers: {
-      ...getAuthHeaders()
-    }
-  });
-  const data = await parseJsonResponse(response);
-
-  if (!response.ok) {
-    const error = new Error(data.message || 'No se pudo buscar productos');
-    error.status = response.status;
-    error.data = data;
-    throw error;
-  }
-
-  return data.items || [];
-}
 
 export async function fetchSuppliers() {
   const response = await fetch(`${API_URL}/api/suppliers`, {
+    cache: 'no-store',
     headers: {
       ...getAuthHeaders()
     }
@@ -806,6 +696,7 @@ export async function fetchSupplierProducts(supplierId) {
   }
 
   const response = await fetch(`${API_URL}/api/suppliers/${parsedSupplierId}/products`, {
+    cache: 'no-store',
     headers: {
       ...getAuthHeaders()
     }
@@ -833,6 +724,7 @@ export async function fetchSuppliersAgenda(params = {}) {
   const query = searchParams.toString();
 
   const response = await fetch(`${API_URL}/api/suppliers/agenda${query ? `?${query}` : ''}`, {
+    cache: 'no-store',
     headers: {
       ...getAuthHeaders()
     }
@@ -857,6 +749,7 @@ export async function fetchSupplierOrders(params = {}) {
   const query = searchParams.toString();
 
   const response = await fetch(`${API_URL}/api/suppliers/orders${query ? `?${query}` : ''}`, {
+    cache: 'no-store',
     headers: {
       ...getAuthHeaders()
     }
@@ -873,19 +766,19 @@ export async function fetchSupplierOrders(params = {}) {
   return data.items || [];
 }
 
-export async function createSupplierOrder(payload) {
-  const response = await fetch(`${API_URL}/api/suppliers/orders`, {
+export async function upsertSupplierOrderFromProvider(payload) {
+  const response = await fetch(`${API_URL}/api/suppliers/orders/upsert-from-provider`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...getAuthHeaders()
     },
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload || {})
   });
   const data = await parseJsonResponse(response);
 
   if (!response.ok) {
-    const error = new Error(data.message || 'No se pudo registrar el pedido al proveedor');
+    const error = new Error(data.message || 'No se pudo guardar pedido desde proveedor');
     error.status = response.status;
     error.data = data;
     throw error;
