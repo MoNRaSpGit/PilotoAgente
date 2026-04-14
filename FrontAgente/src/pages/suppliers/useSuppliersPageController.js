@@ -5,11 +5,13 @@ import {
   fetchSupplierProducts,
   fetchSuppliers,
   fetchSuppliersAgenda,
+  receiveSupplierOrder,
   upsertSupplierOrderFromProvider
 } from '../../services/api';
 import {
   addDays,
   formatMoney,
+  getLocalISODate,
   getSpanishDayName,
   INITIAL_SUPPLIERS_AGENDA,
   normalizeISODate,
@@ -46,7 +48,12 @@ function selectMostRelevantOrder(orders = []) {
     return null;
   }
 
-  const sorted = [...orders].sort((a, b) => {
+  const pendingOrders = orders.filter((order) => normalizeOrderStatus(order?.status) === 'pendiente');
+  if (!pendingOrders.length) {
+    return null;
+  }
+
+  const sorted = [...pendingOrders].sort((a, b) => {
     const aPending = normalizeOrderStatus(a?.status) === 'pendiente' ? 0 : 1;
     const bPending = normalizeOrderStatus(b?.status) === 'pendiente' ? 0 : 1;
     if (aPending !== bPending) {
@@ -65,7 +72,7 @@ function selectMostRelevantOrder(orders = []) {
 }
 
 export function useSuppliersPageController() {
-  const realToday = new Date().toISOString().slice(0, 10);
+  const realToday = getLocalISODate();
   const [loading, setLoading] = useState(true);
   const [simulatedDate, setSimulatedDate] = useState(realToday);
   const [suppliers, setSuppliers] = useState([]);
@@ -74,12 +81,15 @@ export function useSuppliersPageController() {
   const [quantityOverrides, setQuantityOverrides] = useState({});
   const [confirmedOrderOverrides, setConfirmedOrderOverrides] = useState({});
   const [confirmingWeekSupplierId, setConfirmingWeekSupplierId] = useState(null);
+  const [receivingOrderId, setReceivingOrderId] = useState(null);
+  const [receivedQtyOverrides, setReceivedQtyOverrides] = useState({});
   const [selectedDaySupplierProducts, setSelectedDaySupplierProducts] = useState([]);
   const [loadingDaySupplierProducts, setLoadingDaySupplierProducts] = useState(false);
   const [selectedDaySupplier, setSelectedDaySupplier] = useState(null);
   const suppliersLoadedRef = useRef(false);
   const recentOrdersLoadedRef = useRef(false);
   const productsBySupplierRef = useRef(new Map());
+  const effectiveToday = normalizeISODate(simulatedDate || realToday);
 
   const loadData = useCallback(async (dateToLoad, options = {}) => {
     const targetDate = normalizeISODate(dateToLoad || simulatedDate || realToday);
@@ -106,6 +116,10 @@ export function useSuppliersPageController() {
       if (Array.isArray(orderItems)) {
         setRecentOrders(orderItems);
         recentOrdersLoadedRef.current = true;
+        // Backend becomes source of truth after each orders refresh.
+        // This prevents stale local overrides from reviving old items in UI.
+        setConfirmedOrderOverrides({});
+        setReceivedQtyOverrides({});
       }
     } catch (error) {
       toast.error(error.message);
@@ -181,6 +195,48 @@ export function useSuppliersPageController() {
     return map;
   }, [recentOrders]);
 
+  const pickupOrderDoneBySupplierDay = useMemo(() => {
+    const map = new Map();
+    for (const order of Array.isArray(recentOrders) ? recentOrders : []) {
+      const supplierId = Number(order?.supplier_id || 0);
+      const orderDate = String(order?.order_date || '').trim();
+      const status = normalizeOrderStatus(order?.status);
+      if (!supplierId || !orderDate) {
+        continue;
+      }
+      if (status === 'cancelado') {
+        continue;
+      }
+      map.set(`${supplierId}:${orderDate}`, true);
+    }
+    return map;
+  }, [recentOrders]);
+
+  const deliveryStateBySupplierDay = useMemo(() => {
+    const map = new Map();
+
+    for (const order of Array.isArray(recentOrders) ? recentOrders : []) {
+      const supplierId = Number(order?.supplier_id || 0);
+      const deliveryDate = String(order?.delivery_date || '').trim();
+      const status = normalizeOrderStatus(order?.status);
+      if (!supplierId || !deliveryDate || status === 'cancelado') {
+        continue;
+      }
+
+      const key = `${supplierId}:${deliveryDate}`;
+      const current = map.get(key) || { hasPending: false, hasReceived: false };
+      if (status === 'pendiente') {
+        current.hasPending = true;
+      }
+      if (status === 'recibido') {
+        current.hasReceived = true;
+      }
+      map.set(key, current);
+    }
+
+    return map;
+  }, [recentOrders]);
+
   const todayHeadline = useMemo(() => {
     if (!agenda?.today?.items?.length) {
       return 'Hoy no hay llegadas cargadas';
@@ -214,10 +270,28 @@ export function useSuppliersPageController() {
         const deliveryDays = parseCsvDays(supplier?.dias_entrega?.join(','));
 
         if (pickupDays.includes(dayName)) {
-          pickup.push({ id: supplier.id, nombre: supplierName });
+          const pickupKey = `${Number(supplier.id)}:${date}`;
+          const orderState = date > effectiveToday
+            ? 'none'
+            : (pickupOrderDoneBySupplierDay.get(pickupKey) ? 'done' : 'missed');
+          pickup.push({ id: supplier.id, nombre: supplierName, order_state: orderState });
         }
         if (deliveryDays.includes(dayName)) {
-          delivery.push({ id: supplier.id, nombre: supplierName });
+          const deliveryKey = `${Number(supplier.id)}:${date}`;
+          const deliveryState = deliveryStateBySupplierDay.get(deliveryKey) || {
+            hasPending: false,
+            hasReceived: false
+          };
+          let receptionState = 'none';
+          if (date <= effectiveToday) {
+            if (deliveryState.hasReceived) {
+              receptionState = 'done';
+            } else {
+              receptionState = 'missed';
+            }
+          }
+
+          delivery.push({ id: supplier.id, nombre: supplierName, reception_state: receptionState });
         }
       }
 
@@ -227,12 +301,12 @@ export function useSuppliersPageController() {
       return {
         date,
         day_name: dayName,
-        is_today: date === selectedDate,
+        is_today: date === effectiveToday,
         pickup,
         delivery
       };
     });
-  }, [agenda?.selected_date, simulatedDate, suppliers]);
+  }, [agenda?.selected_date, simulatedDate, suppliers, effectiveToday, pickupOrderDoneBySupplierDay, deliveryStateBySupplierDay]);
 
   const handleSelectDaySupplier = useCallback((supplier, movementType, date) => {
     if (!supplier?.id) {
@@ -290,18 +364,22 @@ export function useSuppliersPageController() {
       }
       return Number(b?.id || 0) - Number(a?.id || 0);
     });
-    const overrideKey = `${Number(supplier.id)}:${selectedDaySupplier.date}`;
-    const overriddenOrder = confirmedOrderOverrides[overrideKey] || null;
     const selectedOrder = selectMostRelevantOrder(sortedMatchingOrders);
 
     return {
       supplier,
       movementType: selectedDaySupplier.movementType,
       date: selectedDaySupplier.date,
-      todayOrder: overriddenOrder || selectedOrder || null,
+      // Only show real pending order selected from backend-driven sources.
+      // If there is no pending order, detail list must remain empty.
+      todayOrder: selectedOrder || null,
+      isDeliveryOverdue:
+        selectedDaySupplier.movementType === 'delivery'
+        && selectedDaySupplier.date < effectiveToday
+        && sortedMatchingOrders.some((order) => normalizeOrderStatus(order?.status) === 'pendiente'),
       matchingOrders: sortedMatchingOrders
     };
-  }, [selectedDaySupplier, suppliers, agenda, recentOrders, confirmedOrderOverrides]);
+  }, [selectedDaySupplier, suppliers, agenda, recentOrders, effectiveToday]);
 
   const selectedDaySupplierAlerts = useMemo(() => {
     const supplierId = Number(selectedDaySupplier?.id || 0);
@@ -390,12 +468,21 @@ export function useSuppliersPageController() {
       toast.error('Selecciona proveedor y fecha en la semana operativa');
       return;
     }
+    if (selectedDaySupplier?.movementType !== 'pickup') {
+      toast.error('El pedido se arma solo en el dia de levante');
+      return;
+    }
     if (!selectedDaySupplierAlerts) {
       toast.error('No hay alertas para ese proveedor');
       return;
     }
 
     try {
+      if (selectedDaySupplier?.movementType === 'pickup' && deliveryDate < effectiveToday) {
+        toast.error(`No se puede confirmar pedido para ${deliveryDate}: ese dia de levante ya paso.`);
+        return;
+      }
+
       setConfirmingWeekSupplierId(supplierId);
       const orderItems = selectedDaySupplierAlerts.alerts
         .map((alert) => ({
@@ -412,7 +499,7 @@ export function useSuppliersPageController() {
 
       const orderDate = selectedDaySupplier?.movementType === 'pickup'
         ? deliveryDate
-        : realToday;
+        : effectiveToday;
 
       const confirmedOrder = await upsertSupplierOrderFromProvider({
         supplier_id: supplierId,
@@ -428,6 +515,16 @@ export function useSuppliersPageController() {
         ...current,
         [`${supplierId}:${deliveryDate}`]: confirmedOrder
       }));
+      setReceivedQtyOverrides((current) => {
+        const next = { ...current };
+        for (const item of Array.isArray(confirmedOrder?.items) ? confirmedOrder.items : []) {
+          const itemId = Number(item?.id || 0);
+          if (itemId) {
+            next[`${Number(confirmedOrder?.id || 0)}:${itemId}`] = Number(item?.quantity || 0);
+          }
+        }
+        return next;
+      });
 
       setQuantityOverrides((current) => {
         const next = { ...current };
@@ -444,7 +541,131 @@ export function useSuppliersPageController() {
     } finally {
       setConfirmingWeekSupplierId(null);
     }
-  }, [selectedDaySupplier, selectedDaySupplierAlerts, selectedDaySupplierDetail, realToday, loadData, simulatedDate]);
+  }, [selectedDaySupplier, selectedDaySupplierAlerts, selectedDaySupplierDetail, effectiveToday, loadData, simulatedDate]);
+
+  const selectedDaySupplierReceivingItems = useMemo(() => {
+    const order = selectedDaySupplierDetail?.todayOrder || null;
+    const orderId = Number(order?.id || 0);
+    if (!orderId) {
+      return [];
+    }
+
+    return (Array.isArray(order?.items) ? order.items : []).map((item) => {
+      const itemId = Number(item?.id || 0);
+      const orderedQuantity = Number(item?.quantity || 0);
+      const key = `${orderId}:${itemId}`;
+      const receivedQuantity = Number(receivedQtyOverrides[key] ?? orderedQuantity);
+      return {
+        ...item,
+        ordered_quantity: orderedQuantity,
+        received_quantity: Math.max(0, Number(receivedQuantity || 0))
+      };
+    });
+  }, [selectedDaySupplierDetail, receivedQtyOverrides]);
+
+  const handleChangeReceivedItemQuantity = useCallback(({ orderId, itemId, quantity }) => {
+    const parsedOrderId = Number(orderId);
+    const parsedItemId = Number(itemId);
+    if (!parsedOrderId || !parsedItemId) {
+      return;
+    }
+
+    const nextQuantity = Math.max(0, Number(quantity || 0));
+    const key = `${parsedOrderId}:${parsedItemId}`;
+    setReceivedQtyOverrides((current) => ({
+      ...current,
+      [key]: nextQuantity
+    }));
+  }, []);
+
+  const handleReceiveSelectedDaySupplierOrder = useCallback(async () => {
+    const orderId = Number(selectedDaySupplierDetail?.todayOrder?.id || 0);
+    const supplierId = Number(selectedDaySupplierDetail?.supplier?.id || 0);
+    const deliveryDate = normalizeISODate(selectedDaySupplierDetail?.date || '');
+
+    if (!orderId) {
+      toast.error('No hay pedido confirmado para recibir');
+      return;
+    }
+    if (!selectedDaySupplierReceivingItems.length) {
+      toast.error('El pedido no tiene items para recibir');
+      return;
+    }
+
+    try {
+      setReceivingOrderId(orderId);
+      const payload = {
+        items: selectedDaySupplierReceivingItems.map((item) => ({
+          item_id: Number(item?.id || 0),
+          quantity_received: Number(item?.received_quantity || 0)
+        }))
+      };
+      const { item, stockUpdates } = await receiveSupplierOrder(orderId, payload);
+      const updatedItems = Number(stockUpdates?.length || 0);
+      toast.success(
+        updatedItems > 0
+          ? `Stock actualizado en ${updatedItems} producto(s)`
+          : 'Pedido marcado como recibido'
+      );
+
+      if (supplierId) {
+        productsBySupplierRef.current.delete(supplierId);
+        setSelectedDaySupplier((current) => (current ? { ...current } : current));
+      }
+
+      if (supplierId && deliveryDate && item) {
+        setConfirmedOrderOverrides((current) => {
+          const next = { ...current };
+          delete next[`${supplierId}:${deliveryDate}`];
+          return next;
+        });
+      }
+      setReceivedQtyOverrides((current) => {
+        const next = { ...current };
+        for (const receivingItem of selectedDaySupplierReceivingItems) {
+          delete next[`${orderId}:${Number(receivingItem?.id || 0)}`];
+        }
+        return next;
+      });
+
+      await loadData(simulatedDate, { forceRecentOrdersRefresh: true });
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setReceivingOrderId(null);
+    }
+  }, [selectedDaySupplierDetail, selectedDaySupplierReceivingItems, loadData, simulatedDate]);
+
+  const handleCancelSelectedDaySupplierFlow = useCallback(() => {
+    const supplierId = Number(selectedDaySupplier?.id || 0);
+    const orderId = Number(selectedDaySupplierDetail?.todayOrder?.id || 0);
+
+    if (supplierId) {
+      setQuantityOverrides((current) => {
+        const next = { ...current };
+        for (const key of Object.keys(next)) {
+          if (key.startsWith(`${supplierId}:`)) {
+            delete next[key];
+          }
+        }
+        return next;
+      });
+    }
+
+    if (orderId) {
+      setReceivedQtyOverrides((current) => {
+        const next = { ...current };
+        for (const key of Object.keys(next)) {
+          if (key.startsWith(`${orderId}:`)) {
+            delete next[key];
+          }
+        }
+        return next;
+      });
+    }
+
+    setSelectedDaySupplier(null);
+  }, [selectedDaySupplier, selectedDaySupplierDetail]);
 
   return {
     loading,
@@ -456,10 +677,15 @@ export function useSuppliersPageController() {
     todayHeadline,
     selectedDaySupplierDetail,
     selectedDaySupplierAlerts,
+    selectedDaySupplierReceivingItems,
     loadingDaySupplierProducts,
     confirmingWeekSupplierId,
+    receivingOrderId,
     handleChangeSelectedDaySupplierAlertQuantity,
+    handleChangeReceivedItemQuantity,
     handleConfirmSelectedDaySupplierOrder,
+    handleReceiveSelectedDaySupplierOrder,
+    handleCancelSelectedDaySupplierFlow,
     handleSelectDaySupplier,
     weekMovementSchedule
   };

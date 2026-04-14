@@ -18,6 +18,7 @@ import {
   listSupplierOrdersByDateRange,
   listProductsBySupplier,
   listSuppliers,
+  receiveSupplierOrderAndApplyStock,
   upsertPendingSupplierOrderWithItems,
   updateSupplierDraftItemQuantity,
   upsertSupplierOrderDraftItem
@@ -514,6 +515,53 @@ export async function fetchSupplierOrderDetail(orderId) {
 
   return {
     item: toOrderViewModel(order, itemsByOrderId)
+  };
+}
+
+export async function receiveSupplierOrder(orderId, payload = {}, user = null) {
+  const parsedOrderId = Number.parseInt(orderId, 10);
+  if (!Number.isFinite(parsedOrderId) || parsedOrderId <= 0) {
+    throw createServiceError('Pedido invalido', 400);
+  }
+
+  const receivedItems = Array.isArray(payload?.items)
+    ? payload.items.map((item, index) => {
+      const itemId = Number.parseInt(item?.item_id, 10);
+      const quantityReceived = Number(item?.quantity_received);
+      if (!Number.isFinite(itemId) || itemId <= 0) {
+        throw createServiceError(`Item ${index + 1}: item_id invalido`, 400);
+      }
+      if (!Number.isFinite(quantityReceived) || quantityReceived < 0) {
+        throw createServiceError(`Item ${index + 1}: quantity_received invalida`, 400);
+      }
+
+      return {
+        item_id: itemId,
+        quantity_received: Number(quantityReceived.toFixed(3))
+      };
+    })
+    : [];
+
+  const received = await receiveSupplierOrderAndApplyStock({
+    orderId: parsedOrderId,
+    receivedItems,
+    receivedBy: user
+  });
+
+  if (!received) {
+    throw createServiceError('Pedido no encontrado', 404);
+  }
+
+  if (received.already_received) {
+    throw createServiceError('El pedido ya fue recibido y aplicado al stock', 409);
+  }
+
+  const itemRows = (received.items || []).map((row) => toOrderItemViewModel(row));
+  const byOrderId = new Map([[parsedOrderId, itemRows]]);
+
+  return {
+    item: toOrderViewModel(received.order, byOrderId),
+    stock_updates: received.stock_updates || []
   };
 }
 

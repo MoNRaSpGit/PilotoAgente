@@ -11,6 +11,7 @@ import {
   fetchSuppliers,
   linkSupplierToProduct,
   removeSupplierDraftItem,
+  receiveSupplierOrder,
   registerSupplierOrder,
   upsertSupplierOrderFromProvider
 } from './supplier.service.js';
@@ -104,6 +105,15 @@ export async function getSupplierOrderDetailController(req, res) {
     return res.json(data);
   } catch (error) {
     return handleServiceError(res, error, 'No se pudo cargar el detalle del pedido');
+  }
+}
+
+export async function receiveSupplierOrderController(req, res) {
+  try {
+    const data = await receiveSupplierOrder(req.params.orderId, req.body, req.user);
+    return res.json(data);
+  } catch (error) {
+    return handleServiceError(res, error, 'No se pudo confirmar recepcion del pedido');
   }
 }
 

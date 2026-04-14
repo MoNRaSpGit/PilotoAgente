@@ -1,18 +1,27 @@
+import { useState } from 'react';
+import { Button, Modal } from 'react-bootstrap';
 import { formatDateShort, formatMoney } from '../suppliersPage.utils';
 
 export function SuppliersWeekMovementPanel({
   weekMovementSchedule,
   selectedDaySupplierDetail,
   selectedDaySupplierAlerts,
+  selectedDaySupplierReceivingItems,
   loadingDaySupplierProducts,
   confirmingWeekSupplierId,
+  receivingOrderId,
   handleChangeSelectedDaySupplierAlertQuantity = () => {},
+  handleChangeReceivedItemQuantity = () => {},
   handleConfirmSelectedDaySupplierOrder = () => {},
+  handleReceiveSelectedDaySupplierOrder = () => {},
+  handleCancelSelectedDaySupplierFlow = () => {},
   handleSelectDaySupplier = () => {}
 }) {
   const selectedSupplierId = Number(selectedDaySupplierDetail?.supplier?.id || 0);
   const selectedDate = String(selectedDaySupplierDetail?.date || '');
   const selectedMovement = String(selectedDaySupplierDetail?.movementType || '');
+  const isDeliveryFlow = selectedMovement === 'delivery';
+  const [receiveConfirmOpen, setReceiveConfirmOpen] = useState(false);
 
   return (
     <article className="card-panel suppliers-panel suppliers-panel-full">
@@ -40,6 +49,12 @@ export function SuppliersWeekMovementPanel({
                           selectedSupplierId === Number(supplier.id) && selectedDate === day.date && selectedMovement === 'delivery'
                             ? 'is-selected'
                             : ''
+                        } ${
+                          supplier?.reception_state === 'done'
+                            ? 'is-done'
+                            : supplier?.reception_state === 'missed'
+                              ? 'is-missed'
+                              : ''
                         }`}
                         onClick={() => handleSelectDaySupplier(supplier, 'delivery', day.date)}
                       >
@@ -64,6 +79,12 @@ export function SuppliersWeekMovementPanel({
                           selectedSupplierId === Number(supplier.id) && selectedDate === day.date && selectedMovement === 'pickup'
                             ? 'is-selected'
                             : ''
+                        } ${
+                          supplier?.order_state === 'done'
+                            ? 'is-done'
+                            : supplier?.order_state === 'missed'
+                              ? 'is-missed'
+                              : ''
                         }`}
                         onClick={() => handleSelectDaySupplier(supplier, 'pickup', day.date)}
                       >
@@ -80,7 +101,16 @@ export function SuppliersWeekMovementPanel({
 
       {selectedDaySupplierDetail ? (
         <div className="suppliers-order-detail">
-          <h4>Detalle de proveedor</h4>
+          <div className="suppliers-order-detail-head">
+            <h4>Detalle de proveedor</h4>
+            <button
+              type="button"
+              className="suppliers-cancel-flow-btn"
+              onClick={handleCancelSelectedDaySupplierFlow}
+            >
+              Cerrar pedidos
+            </button>
+          </div>
           <div className="suppliers-order-detail-grid">
             <span>Proveedor</span>
             <strong>{selectedDaySupplierDetail.supplier?.nombre}</strong>
@@ -95,93 +125,167 @@ export function SuppliersWeekMovementPanel({
                 : 'Sin pedido cargado para ese dia'}
             </strong>
           </div>
+          {selectedDaySupplierDetail?.isDeliveryOverdue ? (
+            <p className="suppliers-overdue-alert">
+              Esta entrega quedo pendiente y ya paso la fecha. Confirmala cuanto antes para actualizar stock.
+            </p>
+          ) : null}
           <div className="suppliers-detail-columns">
             <div className="suppliers-detail-col">
-              <strong>Criticos para armar pedido</strong>
-              {loadingDaySupplierProducts ? (
-                <p className="empty-copy">Cargando productos del proveedor...</p>
-              ) : !selectedDaySupplierAlerts?.alerts?.length ? (
-                <p className="empty-copy">Este proveedor no tiene alertas de stock activas.</p>
+              {isDeliveryFlow ? (
+                <>
+                  <strong>Estado del pedido para entrega</strong>
+                  {selectedDaySupplierDetail?.todayOrder?.items?.length ? (
+                    <p className="empty-copy">El pedido ya fue realizado y quedo listo para recepcion.</p>
+                  ) : (
+                    <p className="suppliers-overdue-alert">Pedido no realizado para esta entrega.</p>
+                  )}
+                </>
               ) : (
-                <div className="suppliers-build-list">
-                  {selectedDaySupplierAlerts.alerts.map((item) => {
-                    const quantity = Number(item?.ui_quantity || 0);
-                    const status = String(item?.status || '');
-                    return (
-                      <div key={`supplier-build-${item.id}`} className="suppliers-build-row">
-                        <div>
-                          <span className="suppliers-build-name">{item?.product?.name}</span>
-                          <span className={`suppliers-alert-badge ${status === 'critical' ? 'is-critical' : 'is-warning'}`}>
-                            {status === 'critical' ? 'Critico' : 'Bajo'}
-                          </span>
-                          <small>
-                            Quedan: {Number(item?.product?.stock_actual || 0)} | Ult. compra: {Number(item?.last_purchased_quantity || 0)}
-                          </small>
-                        </div>
-                        <div className="suppliers-build-actions">
+                <>
+                  <strong>Criticos para armar pedido</strong>
+                  {loadingDaySupplierProducts ? (
+                    <p className="empty-copy">Cargando productos del proveedor...</p>
+                  ) : !selectedDaySupplierAlerts?.alerts?.length ? (
+                    <p className="empty-copy">Este proveedor no tiene alertas de stock activas.</p>
+                  ) : (
+                    <div className="suppliers-build-list">
+                      {selectedDaySupplierAlerts.alerts.map((item) => {
+                        const quantity = Number(item?.ui_quantity || 0);
+                        const status = String(item?.status || '');
+                        return (
+                          <div key={`supplier-build-${item.id}`} className="suppliers-build-row">
+                            <div>
+                              <span className="suppliers-build-name">{item?.product?.name}</span>
+                              <span className={`suppliers-alert-badge ${status === 'critical' ? 'is-critical' : 'is-warning'}`}>
+                                {status === 'critical' ? 'Critico' : 'Bajo'}
+                              </span>
+                              <small>
+                                Quedan: {Number(item?.product?.stock_actual || 0)} | Ult. compra: {Number(item?.last_purchased_quantity || 0)}
+                              </small>
+                            </div>
+                            <div className="suppliers-build-actions">
+                              <button
+                                type="button"
+                                className="suppliers-qty-btn"
+                                onClick={() => {
+                                  if (quantity <= 0) {
+                                    return;
+                                  }
+                                  handleChangeSelectedDaySupplierAlertQuantity({
+                                    alertItem: item,
+                                    quantity: quantity - 1
+                                  });
+                                }}
+                                disabled={quantity <= 0}
+                              >
+                                -
+                              </button>
+                              <span>{quantity}</span>
+                              <button
+                                type="button"
+                                className="suppliers-qty-btn"
+                                onClick={() => {
+                                  handleChangeSelectedDaySupplierAlertQuantity({
+                                    alertItem: item,
+                                    quantity: quantity + 1
+                                  });
+                                }}
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    className="suppliers-confirm-build-btn"
+                    onClick={handleConfirmSelectedDaySupplierOrder}
+                    disabled={
+                      Number(confirmingWeekSupplierId) === Number(selectedDaySupplierDetail.supplier?.id || 0)
+                      || !Number(selectedDaySupplierAlerts?.pending_items || 0)
+                    }
+                  >
+                    {Number(confirmingWeekSupplierId) === Number(selectedDaySupplierDetail.supplier?.id || 0)
+                      ? 'Confirmando...'
+                      : 'Confirmar pedido para este dia'}
+                  </button>
+                </>
+              )}
+            </div>
+
+            <div className="suppliers-detail-col">
+              <strong>Pedido confirmado para este dia</strong>
+              {selectedDaySupplierReceivingItems?.length ? (
+                <>
+                  <div className="suppliers-order-items-list">
+                    {selectedDaySupplierReceivingItems.map((item) => (
+                      <div key={`order-item-${item.id || item.product_name}`} className="suppliers-order-item-row">
+                        <span className="suppliers-build-name">{item.product_name}</span>
+                        <small>
+                          Pedidas: {Number(item.ordered_quantity || 0)} | Unit: {formatMoney(item.unit_cost)} | Total: {formatMoney(item.line_total)}
+                        </small>
+                        <div className="suppliers-build-actions suppliers-receive-actions">
                           <button
                             type="button"
                             className="suppliers-qty-btn"
                             onClick={() => {
-                              if (quantity <= 0) {
+                              if (Number(item?.received_quantity || 0) <= 0) {
                                 return;
                               }
-                              handleChangeSelectedDaySupplierAlertQuantity({
-                                alertItem: item,
-                                quantity: quantity - 1
+                              handleChangeReceivedItemQuantity({
+                                orderId: selectedDaySupplierDetail.todayOrder?.id,
+                                itemId: item?.id,
+                                quantity: Number(item?.received_quantity || 0) - 1
                               });
                             }}
-                            disabled={quantity <= 0}
+                            disabled={Number(item?.received_quantity || 0) <= 0}
                           >
                             -
                           </button>
-                          <span>{quantity}</span>
+                          <span>Recibir: {Number(item?.received_quantity || 0)}</span>
                           <button
                             type="button"
                             className="suppliers-qty-btn"
                             onClick={() => {
-                              handleChangeSelectedDaySupplierAlertQuantity({
-                                alertItem: item,
-                                quantity: quantity + 1
+                              const maxQty = Number(item?.ordered_quantity || 0);
+                              const nextQty = Number(item?.received_quantity || 0) + 1;
+                              if (nextQty > maxQty) {
+                                return;
+                              }
+                              handleChangeReceivedItemQuantity({
+                                orderId: selectedDaySupplierDetail.todayOrder?.id,
+                                itemId: item?.id,
+                                quantity: nextQty
                               });
                             }}
+                            disabled={Number(item?.received_quantity || 0) >= Number(item?.ordered_quantity || 0)}
                           >
                             +
                           </button>
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-              <button
-                type="button"
-                className="suppliers-confirm-build-btn"
-                onClick={handleConfirmSelectedDaySupplierOrder}
-                disabled={
-                  Number(confirmingWeekSupplierId) === Number(selectedDaySupplierDetail.supplier?.id || 0)
-                  || !Number(selectedDaySupplierAlerts?.pending_items || 0)
-                }
-              >
-                {Number(confirmingWeekSupplierId) === Number(selectedDaySupplierDetail.supplier?.id || 0)
-                  ? 'Confirmando...'
-                  : 'Confirmar pedido para este dia'}
-              </button>
-            </div>
-
-            <div className="suppliers-detail-col">
-              <strong>Pedido confirmado para este dia</strong>
-              {selectedDaySupplierDetail.todayOrder?.items?.length ? (
-                <div className="suppliers-order-items-list">
-                  {selectedDaySupplierDetail.todayOrder.items.map((item) => (
-                    <div key={`order-item-${item.id || item.product_name}`} className="suppliers-order-item-row">
-                      <span className="suppliers-build-name">{item.product_name}</span>
-                      <small>
-                        Cant: {Number(item.quantity || 0)} | Unit: {formatMoney(item.unit_cost)} | Total: {formatMoney(item.line_total)}
-                      </small>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    className="suppliers-receive-btn"
+                    onClick={() => setReceiveConfirmOpen(true)}
+                    disabled={
+                      Number(receivingOrderId) === Number(selectedDaySupplierDetail.todayOrder?.id || 0)
+                      || String(selectedDaySupplierDetail.todayOrder?.status || '').toLowerCase() !== 'pendiente'
+                    }
+                  >
+                    {String(selectedDaySupplierDetail.todayOrder?.status || '').toLowerCase() === 'recibido'
+                      ? 'Stock ya actualizado'
+                      : Number(receivingOrderId) === Number(selectedDaySupplierDetail.todayOrder?.id || 0)
+                        ? 'Actualizando stock...'
+                        : 'Confirmar productos recibidos'}
+                  </button>
+                </>
               ) : (
                 <p className="empty-copy">Todavia no hay productos confirmados para este dia.</p>
               )}
@@ -189,6 +293,35 @@ export function SuppliersWeekMovementPanel({
           </div>
         </div>
       ) : null}
+
+      <Modal show={receiveConfirmOpen} onHide={() => setReceiveConfirmOpen(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Confirmar recepcion</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p className="mb-2">
+            Se va a sumar al stock la cantidad que ajustaste en cada producto recibido.
+          </p>
+          <p className="mb-0">
+            Queres confirmar esta accion?
+          </p>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="outline-secondary" onClick={() => setReceiveConfirmOpen(false)}>
+            Cancelar
+          </Button>
+          <Button
+            variant="dark"
+            onClick={async () => {
+              await handleReceiveSelectedDaySupplierOrder();
+              setReceiveConfirmOpen(false);
+            }}
+            disabled={Number(receivingOrderId) > 0}
+          >
+            Confirmar
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </article>
   );
 }

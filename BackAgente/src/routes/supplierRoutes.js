@@ -9,7 +9,8 @@ import {
   getSupplierOrderDetailController,
   getSupplierOrdersController,
   listSupplierProductsController,
-  listSuppliersController
+  listSuppliersController,
+  receiveSupplierOrderController
 } from '../modules/suppliers/supplier.controller.js';
 
 const router = Router();
@@ -25,5 +26,6 @@ router.get('/suppliers/orders', requireRole('admin'), getSupplierOrdersControlle
 router.get('/suppliers/orders/:orderId', requireRole('admin'), getSupplierOrderDetailController);
 router.post('/suppliers/orders', requireRole('admin'), createSupplierOrderController);
 router.post('/suppliers/orders/upsert-from-provider', requireRole('admin'), upsertSupplierOrderFromProviderController);
+router.post('/suppliers/orders/:orderId/receive', requireRole('admin'), receiveSupplierOrderController);
 
 export default router;

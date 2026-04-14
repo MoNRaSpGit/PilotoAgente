@@ -12,10 +12,15 @@ function SuppliersPage() {
     todayHeadline,
     selectedDaySupplierDetail,
     selectedDaySupplierAlerts,
+    selectedDaySupplierReceivingItems,
     loadingDaySupplierProducts,
     confirmingWeekSupplierId,
+    receivingOrderId,
     handleChangeSelectedDaySupplierAlertQuantity,
+    handleChangeReceivedItemQuantity,
     handleConfirmSelectedDaySupplierOrder,
+    handleReceiveSelectedDaySupplierOrder,
+    handleCancelSelectedDaySupplierFlow,
     handleSelectDaySupplier,
     weekMovementSchedule
   } = useSuppliersPageController();
@@ -36,10 +41,15 @@ function SuppliersPage() {
           weekMovementSchedule={weekMovementSchedule}
           selectedDaySupplierDetail={selectedDaySupplierDetail}
           selectedDaySupplierAlerts={selectedDaySupplierAlerts}
+          selectedDaySupplierReceivingItems={selectedDaySupplierReceivingItems}
           loadingDaySupplierProducts={loadingDaySupplierProducts}
           confirmingWeekSupplierId={confirmingWeekSupplierId}
+          receivingOrderId={receivingOrderId}
           handleChangeSelectedDaySupplierAlertQuantity={handleChangeSelectedDaySupplierAlertQuantity}
+          handleChangeReceivedItemQuantity={handleChangeReceivedItemQuantity}
           handleConfirmSelectedDaySupplierOrder={handleConfirmSelectedDaySupplierOrder}
+          handleReceiveSelectedDaySupplierOrder={handleReceiveSelectedDaySupplierOrder}
+          handleCancelSelectedDaySupplierFlow={handleCancelSelectedDaySupplierFlow}
           handleSelectDaySupplier={handleSelectDaySupplier}
         />
       </div>

@@ -38,10 +38,26 @@ export function formatMoney(value) {
   return `$${Number(value || 0).toFixed(2)}`;
 }
 
+export function getLocalISODate(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 export function normalizeISODate(value) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
-    return new Date().toISOString().slice(0, 10);
+    return getLocalISODate();
   }
   return parsed.toISOString().slice(0, 10);
 }

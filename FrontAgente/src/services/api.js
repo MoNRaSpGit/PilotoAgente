@@ -787,6 +787,35 @@ export async function upsertSupplierOrderFromProvider(payload) {
   return data.item;
 }
 
+export async function receiveSupplierOrder(orderId, payload = {}) {
+  const parsedOrderId = Number(orderId);
+  if (!Number.isFinite(parsedOrderId) || parsedOrderId <= 0) {
+    throw new Error('Pedido invalido');
+  }
+
+  const response = await fetch(`${API_URL}/api/suppliers/orders/${parsedOrderId}/receive`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders()
+    },
+    body: JSON.stringify(payload || {}),
+  });
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    const error = new Error(data.message || 'No se pudo confirmar recepcion del pedido');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  return {
+    item: data.item || null,
+    stockUpdates: Array.isArray(data.stock_updates) ? data.stock_updates : []
+  };
+}
+
 export async function scanProductByBarcode(barcode) {
   const normalizedBarcode = normalizeBarcode(barcode);
 

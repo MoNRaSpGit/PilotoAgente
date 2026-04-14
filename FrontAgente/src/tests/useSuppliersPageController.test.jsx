@@ -5,6 +5,7 @@ import {
   fetchSupplierOrders,
   fetchSuppliers,
   fetchSuppliersAgenda,
+  receiveSupplierOrder,
   upsertSupplierOrderFromProvider
 } from '../services/api';
 import { useSuppliersPageController } from '../pages/suppliers/useSuppliersPageController';
@@ -14,6 +15,7 @@ vi.mock('../services/api', () => ({
   fetchSupplierOrders: vi.fn(),
   fetchSuppliers: vi.fn(),
   fetchSuppliersAgenda: vi.fn(),
+  receiveSupplierOrder: vi.fn(),
   upsertSupplierOrderFromProvider: vi.fn()
 }));
 
@@ -27,6 +29,7 @@ vi.mock('react-hot-toast', () => ({
 describe('useSuppliersPageController', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
     fetchSuppliers.mockResolvedValue([
       { id: 1, nombre: 'Acme', dias_pedido: ['lunes'], dias_entrega: ['martes'] },
       { id: 2, nombre: 'Beta', dias_pedido: ['miercoles'], dias_entrega: ['lunes'] }
@@ -54,6 +57,20 @@ describe('useSuppliersPageController', () => {
       delivery_date: '2026-04-14',
       items: [{ id: 1, product_id: 10, product_name: 'Leche Conaprole', quantity: 3, unit_cost: 0, line_total: 0 }]
     });
+    receiveSupplierOrder.mockResolvedValue({
+      item: {
+        id: 22,
+        supplier_id: 1,
+        delivery_date: '2026-04-14',
+        status: 'recibido',
+        items: [{ id: 1, product_id: 10, product_name: 'Leche Conaprole', quantity: 3, unit_cost: 0, line_total: 0 }]
+      },
+      stockUpdates: [{ product_id: 10, quantity_added: 3 }]
+    });
+  });
+
+  afterEach(() => {
+    window.confirm.mockRestore();
   });
 
   it('carga proveedores, agenda y pedidos al iniciar sin autoload de productos', async () => {
@@ -97,7 +114,7 @@ describe('useSuppliersPageController', () => {
     });
 
     act(() => {
-      result.current.handleSelectDaySupplier({ id: 1, nombre: 'Acme' }, 'delivery', '2026-04-14');
+      result.current.handleSelectDaySupplier({ id: 1, nombre: 'Acme' }, 'pickup', '2026-04-14');
     });
 
     await waitFor(() => {
@@ -171,5 +188,41 @@ describe('useSuppliersPageController', () => {
     await waitFor(() => {
       expect(result.current.selectedDaySupplierDetail?.todayOrder?.id).toBe(22);
     });
+  });
+
+  it('confirma recepcion y actualiza stock del pedido seleccionado', async () => {
+    fetchSupplierOrders.mockResolvedValue([
+      {
+        id: 22,
+        supplier_id: 1,
+        status: 'pendiente',
+        delivery_date: '2026-04-13',
+        items: [{ id: 2, product_id: 10, product_name: 'Leche', quantity: 5, unit_cost: 0, line_total: 0 }],
+        updated_at: '2026-04-13 11:00:00'
+      }
+    ]);
+
+    const { result } = renderHook(() => useSuppliersPageController());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    act(() => {
+      result.current.handleSelectDaySupplier({ id: 1, nombre: 'Acme' }, 'delivery', '2026-04-13');
+    });
+
+    await waitFor(() => {
+      expect(result.current.selectedDaySupplierDetail?.todayOrder?.id).toBe(22);
+    });
+
+    await act(async () => {
+      await result.current.handleReceiveSelectedDaySupplierOrder();
+    });
+
+    expect(receiveSupplierOrder).toHaveBeenCalledWith(22, expect.objectContaining({
+      items: expect.any(Array)
+    }));
+    expect(toast.success).toHaveBeenCalled();
   });
 });
