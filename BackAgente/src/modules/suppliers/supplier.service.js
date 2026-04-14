@@ -1,5 +1,6 @@
 import {
   assignSupplierToProduct,
+  confirmSupplierOrderPickup,
   confirmSupplierOrderDraft,
   createSupplierOrder,
   createSupplierOrderDraft,
@@ -16,6 +17,7 @@ import {
   listSupplierOrderItemsByOrderIds,
   listSupplierOrders,
   listSupplierOrdersByDateRange,
+  listSupplierInvoiceIncidents,
   listProductsBySupplier,
   listSuppliers,
   listUnassignedCriticalProducts,
@@ -24,6 +26,7 @@ import {
   updateSupplierDraftItemQuantity,
   upsertSupplierOrderDraftItem
 } from './supplier.repository.js';
+import { env } from '../../config/env.js';
 
 function createServiceError(message, status) {
   const error = new Error(message);
@@ -77,6 +80,19 @@ function weekdayName(dateString) {
   const date = new Date(`${dateString}T00:00:00Z`);
   const labels = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
   return labels[date.getUTCDay()] || '';
+}
+
+function resolveBusinessDate(payload = {}) {
+  return (
+    toISODate(payload?.context_date)
+    || toISODate(payload?.reference_date)
+    || toISODate(payload?.today_date)
+    || new Date().toISOString().slice(0, 10)
+  );
+}
+
+function normalizeSupplierScheduleDays(csvValue) {
+  return normalizeCsvDays(csvValue).split(',').filter(Boolean);
 }
 
 function normalizeOrderItems(items = []) {
@@ -147,13 +163,29 @@ function toDraftItemViewModel(row) {
 
 function toOrderViewModel(row, itemsByOrderId = new Map()) {
   const orderId = Number(row.id);
+  const expectedAmount = toMoney(row.expected_amount);
+  const invoiceAmount = row.invoice_amount === null || typeof row.invoice_amount === 'undefined'
+    ? null
+    : toMoney(row.invoice_amount);
+  const invoiceDiff = row.invoice_diff === null || typeof row.invoice_diff === 'undefined'
+    ? (invoiceAmount === null ? null : toMoney(invoiceAmount - expectedAmount))
+    : toMoney(row.invoice_diff);
+
   return {
     id: orderId,
     supplier_id: Number(row.supplier_id),
     supplier_name: row.supplier_name,
     order_date: row.order_date,
     delivery_date: row.delivery_date,
-    expected_amount: toMoney(row.expected_amount),
+    expected_amount: expectedAmount,
+    invoice_amount: invoiceAmount,
+    invoice_diff: invoiceDiff,
+    invoice_reference: row.invoice_reference || null,
+    has_invoice_mismatch: invoiceDiff !== null ? Math.abs(Number(invoiceDiff || 0)) > 0.009 : false,
+    received_at: row.received_at || null,
+    pickup_confirmed_at: row.pickup_confirmed_at || null,
+    pickup_confirmed_by_name: row.pickup_confirmed_by_name || null,
+    pickup_confirmed_by_role: row.pickup_confirmed_by_role || null,
     status: row.status,
     notes: row.notes || null,
     items: itemsByOrderId.get(orderId) || [],
@@ -393,12 +425,26 @@ export async function upsertSupplierOrderFromProvider(payload = {}, user = null)
     throw createServiceError('Fecha de llegada invalida', 400);
   }
 
-  const orderDate = toISODate(payload?.order_date) || new Date().toISOString().slice(0, 10);
+  const businessDate = resolveBusinessDate(payload);
+  const orderDate = toISODate(payload?.order_date) || businessDate;
+  if (deliveryDate < orderDate) {
+    throw createServiceError('La fecha de llegada no puede ser menor a la fecha de pedido', 400);
+  }
+
+  const pickupDays = normalizeSupplierScheduleDays(supplier?.dias_pedido_csv);
+  if (!env.suppliersTestMode && pickupDays.length > 0) {
+    const orderDayName = weekdayName(orderDate);
+    if (!pickupDays.includes(orderDayName)) {
+      throw createServiceError(`No se puede confirmar pedido: ${supplier.nombre} no levanta los ${orderDayName}`, 409);
+    }
+  }
+
   const rawItems = Array.isArray(payload?.items) ? payload.items : [];
   if (!rawItems.length) {
     throw createServiceError('Debes incluir al menos un producto', 400);
   }
 
+  const usedProductIds = new Set();
   const normalizedItems = [];
   for (let index = 0; index < rawItems.length; index += 1) {
     const item = rawItems[index];
@@ -406,10 +452,20 @@ export async function upsertSupplierOrderFromProvider(payload = {}, user = null)
     if (!Number.isFinite(productId) || productId <= 0) {
       throw createServiceError(`Item ${index + 1}: producto invalido`, 400);
     }
+    if (usedProductIds.has(productId)) {
+      throw createServiceError(`Item ${index + 1}: producto duplicado en el pedido`, 400);
+    }
+    usedProductIds.add(productId);
 
     const product = await findProductById(productId);
     if (!product) {
       throw createServiceError(`Item ${index + 1}: producto no encontrado`, 404);
+    }
+    if (!Number(product?.supplier_id)) {
+      throw createServiceError(`Item ${index + 1}: el producto no tiene proveedor asignado`, 409);
+    }
+    if (Number(product.supplier_id) !== supplierId) {
+      throw createServiceError(`Item ${index + 1}: el producto no pertenece al proveedor seleccionado`, 409);
     }
 
     const quantity = Number(item?.quantity || 0);
@@ -417,8 +473,11 @@ export async function upsertSupplierOrderFromProvider(payload = {}, user = null)
       throw createServiceError(`Item ${index + 1}: cantidad invalida`, 400);
     }
 
-    const unitCost = Number(item?.unit_cost || 0);
-    const safeUnitCost = Number.isFinite(unitCost) && unitCost >= 0 ? unitCost : 0;
+    const unitCost = Number(item?.unit_cost);
+    const fallbackUnitCost = Number(product?.precio_venta || 0);
+    const safeUnitCost = Number.isFinite(unitCost) && unitCost >= 0
+      ? unitCost
+      : (Number.isFinite(fallbackUnitCost) && fallbackUnitCost >= 0 ? fallbackUnitCost : 0);
     const lineTotal = toMoney(quantity * safeUnitCost);
 
     normalizedItems.push({
@@ -543,6 +602,19 @@ export async function receiveSupplierOrder(orderId, payload = {}, user = null) {
     throw createServiceError('Pedido invalido', 400);
   }
 
+  const order = await findSupplierOrderById(parsedOrderId);
+  if (!order) {
+    throw createServiceError('Pedido no encontrado', 404);
+  }
+
+  const businessDate = resolveBusinessDate(payload);
+  if (String(order.delivery_date || '') > businessDate) {
+    throw createServiceError(
+      `No puedes confirmar esta entrega todavia. Disponible desde ${order.delivery_date}`,
+      409
+    );
+  }
+
   const receivedItems = Array.isArray(payload?.items)
     ? payload.items.map((item, index) => {
       const itemId = Number.parseInt(item?.item_id, 10);
@@ -556,15 +628,27 @@ export async function receiveSupplierOrder(orderId, payload = {}, user = null) {
 
       return {
         item_id: itemId,
-        quantity_received: Number(quantityReceived.toFixed(3))
+        quantity_received: Number(quantityReceived.toFixed(3)),
+        note: String(item?.note || item?.discrepancy_note || '').trim() || null
       };
     })
     : [];
 
+  const rawInvoiceAmount = payload?.invoice_amount;
+  const parsedInvoiceAmount = rawInvoiceAmount === '' || rawInvoiceAmount === null || typeof rawInvoiceAmount === 'undefined'
+    ? null
+    : Number(rawInvoiceAmount);
+  if (parsedInvoiceAmount !== null && (!Number.isFinite(parsedInvoiceAmount) || parsedInvoiceAmount < 0)) {
+    throw createServiceError('Monto de boleta invalido', 400);
+  }
+  const invoiceReference = String(payload?.invoice_reference || payload?.invoice_number || '').trim() || null;
+
   const received = await receiveSupplierOrderAndApplyStock({
     orderId: parsedOrderId,
     receivedItems,
-    receivedBy: user
+    receivedBy: user,
+    invoiceAmount: parsedInvoiceAmount,
+    invoiceReference
   });
 
   if (!received) {
@@ -581,6 +665,90 @@ export async function receiveSupplierOrder(orderId, payload = {}, user = null) {
   return {
     item: toOrderViewModel(received.order, byOrderId),
     stock_updates: received.stock_updates || []
+  };
+}
+
+export async function fetchSupplierInvoiceIncidents(query = {}) {
+  const date = toISODate(query?.date) || null;
+  const rows = await listSupplierInvoiceIncidents({
+    date,
+    limit: query?.limit
+  });
+
+  return {
+    date: date || new Date().toISOString().slice(0, 10),
+    items: rows.map((row) => {
+      const expectedAmount = toMoney(row.expected_amount);
+      const invoiceAmount = row.invoice_amount === null || typeof row.invoice_amount === 'undefined'
+        ? null
+        : toMoney(row.invoice_amount);
+      const invoiceDiff = row.invoice_diff === null || typeof row.invoice_diff === 'undefined'
+        ? (invoiceAmount === null ? null : toMoney(invoiceAmount - expectedAmount))
+        : toMoney(row.invoice_diff);
+
+      const details = (Array.isArray(row.details) ? row.details : []).map((detail) => {
+        const orderedQty = Number(detail.ordered_quantity || 0);
+        const receivedQty = Number(detail.received_quantity || 0);
+        const missingQty = Number((orderedQty - receivedQty).toFixed(3));
+        return {
+          id: Number(detail.id),
+          order_id: Number(detail.order_id),
+          order_item_id: Number(detail.order_item_id),
+          product_id: detail.product_id ? Number(detail.product_id) : null,
+          product_name: detail.product_name || '',
+          ordered_quantity: orderedQty,
+          received_quantity: receivedQty,
+          missing_quantity: missingQty > 0 ? missingQty : 0,
+          discrepancy_note: String(detail.discrepancy_note || '').trim() || null,
+          created_at: detail.created_at || null
+        };
+      });
+
+      return {
+        id: Number(row.id),
+        supplier_id: Number(row.supplier_id),
+        supplier_name: row.supplier_name || '',
+        order_date: row.order_date,
+        delivery_date: row.delivery_date,
+        received_at: row.received_at || null,
+        expected_amount: expectedAmount,
+        invoice_amount: invoiceAmount,
+        invoice_diff: invoiceDiff,
+        invoice_reference: row.invoice_reference || null,
+        has_invoice_mismatch: invoiceDiff !== null ? Math.abs(Number(invoiceDiff || 0)) > 0.009 : false,
+        has_quantity_mismatch: details.some((detail) => Number(detail.missing_quantity || 0) > 0),
+        details
+      };
+    })
+  };
+}
+
+export async function confirmSupplierPickup(orderId, user = null) {
+  const parsedOrderId = Number.parseInt(orderId, 10);
+  if (!Number.isFinite(parsedOrderId) || parsedOrderId <= 0) {
+    throw createServiceError('Pedido invalido', 400);
+  }
+
+  const confirmed = await confirmSupplierOrderPickup({
+    orderId: parsedOrderId,
+    confirmedBy: user
+  });
+
+  if (!confirmed) {
+    throw createServiceError('Pedido no encontrado', 404);
+  }
+  if (confirmed.already_closed) {
+    throw createServiceError('El pedido ya no esta pendiente', 409);
+  }
+  if (confirmed.already_confirmed) {
+    throw createServiceError('El pedido ya fue confirmado por operario', 409);
+  }
+
+  const itemRows = await listSupplierOrderItemsByOrderIds([parsedOrderId]);
+  const byOrderId = groupOrderItemsByOrderId(itemRows);
+
+  return {
+    item: toOrderViewModel(confirmed, byOrderId)
   };
 }
 

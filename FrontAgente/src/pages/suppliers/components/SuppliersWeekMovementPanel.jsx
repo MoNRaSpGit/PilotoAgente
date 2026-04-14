@@ -2,16 +2,34 @@ import { useState } from 'react';
 import { Button, Modal } from 'react-bootstrap';
 import { formatDateShort, formatMoney } from '../suppliersPage.utils';
 
+function buildOrderWhatsappMessage(detail) {
+  const supplierName = detail?.supplier?.nombre || 'Proveedor';
+  const date = detail?.date || '-';
+  const items = Array.isArray(detail?.todayOrder?.items) ? detail.todayOrder.items : [];
+  const lines = items.map((item) => (
+    `- ${Number(item?.quantity || 0)} ${item?.product_name || 'Producto'}`
+  ));
+  return [
+    `Pedido para ${supplierName}`,
+    `Fecha: ${date}`,
+    ...lines
+  ].join('\n');
+}
+
 export function SuppliersWeekMovementPanel({
   weekMovementSchedule,
   selectedDaySupplierDetail,
   selectedDaySupplierAlerts,
   selectedDaySupplierReceivingItems,
+  selectedDaySupplierInvoiceSummary,
   loadingDaySupplierProducts,
   confirmingWeekSupplierId,
   receivingOrderId,
+  allowReceiveConfirmation = true,
   handleChangeSelectedDaySupplierAlertQuantity = () => {},
+  handleChangeSelectedDaySupplierAlertUnitCost = () => {},
   handleChangeReceivedItemQuantity = () => {},
+  handleChangeInvoiceAmount = () => {},
   handleConfirmSelectedDaySupplierOrder = () => {},
   handleReceiveSelectedDaySupplierOrder = () => {},
   handleCancelSelectedDaySupplierFlow = () => {},
@@ -21,7 +39,14 @@ export function SuppliersWeekMovementPanel({
   const selectedDate = String(selectedDaySupplierDetail?.date || '');
   const selectedMovement = String(selectedDaySupplierDetail?.movementType || '');
   const isDeliveryFlow = selectedMovement === 'delivery';
+  const selectedOrder = selectedDaySupplierDetail?.todayOrder || null;
+  const selectedOrderStatus = String(selectedOrder?.status || '').toLowerCase();
+  const isPickupConfirmedByOperario = Boolean(String(selectedOrder?.pickup_confirmed_at || '').trim());
+  const isReceivedByOperario = selectedOrderStatus === 'recibido' || Boolean(String(selectedOrder?.received_at || '').trim());
+  const suppliersTestMode = String(import.meta.env.VITE_SUPPLIERS_TEST_MODE || '').trim().toLowerCase() === 'true';
+  const isLockedForAdminEdition = !suppliersTestMode && (isPickupConfirmedByOperario || isReceivedByOperario);
   const [receiveConfirmOpen, setReceiveConfirmOpen] = useState(false);
+  const whatsappNumber = String(import.meta.env.VITE_SUPPLIERS_WPP_NUMBER || '').trim().replace(/\D+/g, '');
 
   return (
     <article className="card-panel suppliers-panel suppliers-panel-full">
@@ -120,14 +145,29 @@ export function SuppliersWeekMovementPanel({
             <strong>{formatDateShort(selectedDaySupplierDetail.date)}</strong>
             <span>Monto esperado</span>
             <strong>
-              {selectedDaySupplierDetail.todayOrder
-                ? formatMoney(selectedDaySupplierDetail.todayOrder.expected_amount)
+              {selectedOrder
+                ? formatMoney(selectedOrder.expected_amount)
                 : 'Sin pedido cargado para ese dia'}
             </strong>
           </div>
+          {selectedOrder ? (
+            <div className="suppliers-day-type-list">
+              <span className={`suppliers-day-chip ${isPickupConfirmedByOperario ? 'suppliers-flow-chip-ok' : 'suppliers-flow-chip-pending'}`}>
+                Envio operario: {isPickupConfirmedByOperario ? 'confirmado' : 'pendiente'}
+              </span>
+              <span className={`suppliers-day-chip ${isReceivedByOperario ? 'suppliers-flow-chip-ok' : 'suppliers-flow-chip-pending'}`}>
+                Recepcion operario: {isReceivedByOperario ? 'confirmada' : 'pendiente'}
+              </span>
+            </div>
+          ) : null}
           {selectedDaySupplierDetail?.isDeliveryOverdue ? (
             <p className="suppliers-overdue-alert">
               Esta entrega quedo pendiente y ya paso la fecha. Confirmala cuanto antes para actualizar stock.
+            </p>
+          ) : null}
+          {selectedDaySupplierDetail?.isFutureDelivery ? (
+            <p className="empty-copy">
+              Esta entrega es futura. Podras confirmar recepcion cuando llegue ese dia.
             </p>
           ) : null}
           <div className="suppliers-detail-columns">
@@ -177,7 +217,7 @@ export function SuppliersWeekMovementPanel({
                                     quantity: quantity - 1
                                   });
                                 }}
-                                disabled={quantity <= 0}
+                                disabled={quantity <= 0 || isLockedForAdminEdition}
                               >
                                 -
                               </button>
@@ -191,34 +231,139 @@ export function SuppliersWeekMovementPanel({
                                     quantity: quantity + 1
                                   });
                                 }}
+                                disabled={isLockedForAdminEdition}
                               >
                                 +
                               </button>
+                            </div>
+                            <div className="suppliers-unit-cost-block">
+                              <label htmlFor={`supplier-cost-${item.id}`}>Costo unitario</label>
+                              <input
+                                id={`supplier-cost-${item.id}`}
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={Number(item?.ui_unit_cost || 0)}
+                                onChange={(event) => {
+                                  handleChangeSelectedDaySupplierAlertUnitCost({
+                                    alertItem: item,
+                                    unitCost: event.target.value
+                                  });
+                                }}
+                                disabled={isLockedForAdminEdition}
+                              />
+                              <small>
+                                V.U: {formatMoney(item?.ui_unit_cost || 0)} | Valor O.: {formatMoney(item?.original_unit_cost || 0)}
+                                {item?.has_order_unit_cost ? ' (pedido)' : ''}
+                                {item?.has_last_known_unit_cost ? ' (ultima compra)' : ''}
+                                {!item?.has_order_unit_cost && !item?.has_last_known_unit_cost ? ' (base)' : ''}
+                              </small>
+                              <small>Subtotal: {formatMoney(item?.ui_line_total || 0)}</small>
                             </div>
                           </div>
                         );
                       })}
                     </div>
                   )}
+                  <p className="suppliers-panel-subtitle">
+                    Total estimado del pedido: {formatMoney(selectedDaySupplierAlerts?.pending_total_amount || 0)}
+                  </p>
                   <button
                     type="button"
                     className="suppliers-confirm-build-btn"
                     onClick={handleConfirmSelectedDaySupplierOrder}
                     disabled={
+                      isLockedForAdminEdition
+                      ||
                       Number(confirmingWeekSupplierId) === Number(selectedDaySupplierDetail.supplier?.id || 0)
                       || !Number(selectedDaySupplierAlerts?.pending_items || 0)
                     }
                   >
-                    {Number(confirmingWeekSupplierId) === Number(selectedDaySupplierDetail.supplier?.id || 0)
+                    {isLockedForAdminEdition
+                      ? 'Pedido gestionado por operario'
+                      : Number(confirmingWeekSupplierId) === Number(selectedDaySupplierDetail.supplier?.id || 0)
                       ? 'Confirmando...'
-                      : 'Confirmar pedido para este dia'}
+                      : (suppliersTestMode ? 'Guardar pedido (modo prueba)' : 'Guardar pedido para operario')}
                   </button>
+                  {isLockedForAdminEdition ? (
+                    <small className="empty-copy">
+                      Este pedido ya fue tomado por operario. Admin queda en modo seguimiento.
+                    </small>
+                  ) : null}
+                  {suppliersTestMode ? (
+                    <small className="empty-copy">
+                      Modo prueba activo: puedes rearmar pedidos fuera de flujo para testing.
+                    </small>
+                  ) : null}
+                  {selectedDaySupplierDetail?.todayOrder?.items?.length ? (
+                    <button
+                      type="button"
+                      className="suppliers-cancel-flow-btn"
+                      onClick={() => {
+                        const text = buildOrderWhatsappMessage(selectedDaySupplierDetail);
+                        const encoded = encodeURIComponent(text);
+                        const href = whatsappNumber
+                          ? `https://wa.me/${whatsappNumber}?text=${encoded}`
+                          : `https://wa.me/?text=${encoded}`;
+                        window.open(href, '_blank', 'noopener,noreferrer');
+                      }}
+                    >
+                      Enviar lista por WhatsApp
+                    </button>
+                  ) : null}
                 </>
               )}
             </div>
 
             <div className="suppliers-detail-col">
-              <strong>Pedido confirmado para este dia</strong>
+              <strong>Seguimiento del pedido (operario)</strong>
+              {selectedDaySupplierInvoiceSummary ? (
+                <div className="suppliers-invoice-summary">
+                  <label htmlFor="supplier-invoice-amount">Monto real de boleta</label>
+                  <input
+                    id="supplier-invoice-amount"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={selectedDaySupplierInvoiceSummary?.invoice_amount ?? ''}
+                    onChange={(event) => {
+                      handleChangeInvoiceAmount({
+                        orderId: selectedDaySupplierInvoiceSummary?.order_id,
+                        amount: event.target.value
+                      });
+                    }}
+                    disabled={
+                      String(selectedOrder?.status || '').toLowerCase() !== 'pendiente'
+                      || !allowReceiveConfirmation
+                    }
+                  />
+                  <small>
+                    Esperado: {formatMoney(selectedDaySupplierInvoiceSummary?.expected_amount || 0)} | Diferencia:{' '}
+                    {selectedDaySupplierInvoiceSummary?.diff_amount === null
+                      ? 'sin cargar'
+                      : formatMoney(selectedDaySupplierInvoiceSummary.diff_amount)}
+                  </small>
+                  {selectedDaySupplierInvoiceSummary?.has_mismatch ? (
+                    <p className="suppliers-overdue-alert">
+                      Atencion: la boleta no coincide con lo estimado del pedido.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+              {selectedOrder ? (
+                <div className="suppliers-order-detail-grid">
+                  <span>Pedido admin</span>
+                  <strong>Creado</strong>
+                  <span>Envio operario</span>
+                  <strong>
+                    {isPickupConfirmedByOperario
+                      ? `Confirmado${selectedOrder?.pickup_confirmed_by_name ? ` por ${selectedOrder.pickup_confirmed_by_name}` : ''}`
+                      : 'Pendiente'}
+                  </strong>
+                  <span>Recepcion operario</span>
+                  <strong>{isReceivedByOperario ? 'Confirmada' : 'Pendiente'}</strong>
+                </div>
+              ) : null}
               {selectedDaySupplierReceivingItems?.length ? (
                 <>
                   <div className="suppliers-order-items-list">
@@ -275,13 +420,19 @@ export function SuppliersWeekMovementPanel({
                     className="suppliers-receive-btn"
                     onClick={() => setReceiveConfirmOpen(true)}
                     disabled={
-                      Number(receivingOrderId) === Number(selectedDaySupplierDetail.todayOrder?.id || 0)
-                      || String(selectedDaySupplierDetail.todayOrder?.status || '').toLowerCase() !== 'pendiente'
+                      !allowReceiveConfirmation
+                      ||
+                      selectedDaySupplierDetail?.isFutureDelivery
+                      || !selectedOrder
+                      || Number(receivingOrderId) === Number(selectedOrder?.id || 0)
+                      || String(selectedOrder?.status || '').toLowerCase() !== 'pendiente'
                     }
                   >
-                    {String(selectedDaySupplierDetail.todayOrder?.status || '').toLowerCase() === 'recibido'
+                    {String(selectedOrder?.status || '').toLowerCase() === 'recibido'
                       ? 'Stock ya actualizado'
-                      : Number(receivingOrderId) === Number(selectedDaySupplierDetail.todayOrder?.id || 0)
+                      : !allowReceiveConfirmation
+                        ? 'Recepcion confirmada por operario'
+                      : Number(receivingOrderId) === Number(selectedOrder?.id || 0)
                         ? 'Actualizando stock...'
                         : 'Confirmar productos recibidos'}
                   </button>

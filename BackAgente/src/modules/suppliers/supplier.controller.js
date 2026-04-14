@@ -1,12 +1,14 @@
 import {
   addSupplierDraftItemFromStock,
   changeSupplierDraftItemQuantity,
+  confirmSupplierPickup,
   confirmSupplierDraft,
   createSupplierRecord,
   fetchOpenSupplierDrafts,
   fetchSupplierOrderDetail,
   fetchRecentSupplierOrders,
   fetchSupplierAgenda,
+  fetchSupplierInvoiceIncidents,
   fetchProductsFromSupplier,
   fetchSuppliers,
   fetchUnassignedCriticalSupplierProducts,
@@ -109,6 +111,15 @@ export async function getSupplierOrdersController(req, res) {
   }
 }
 
+export async function getSupplierInvoiceIncidentsController(req, res) {
+  try {
+    const data = await fetchSupplierInvoiceIncidents(req.query);
+    return res.json(data);
+  } catch (error) {
+    return handleServiceError(res, error, 'No se pudo cargar inconsistencias de boletas');
+  }
+}
+
 export async function getSupplierOrderDetailController(req, res) {
   try {
     const data = await fetchSupplierOrderDetail(req.params.orderId);
@@ -176,5 +187,14 @@ export async function deleteSupplierDraftItemController(req, res) {
     return res.json(data);
   } catch (error) {
     return handleServiceError(res, error, 'No se pudo eliminar item del borrador');
+  }
+}
+
+export async function confirmSupplierPickupController(req, res) {
+  try {
+    const data = await confirmSupplierPickup(req.params.orderId, req.user);
+    return res.json(data);
+  } catch (error) {
+    return handleServiceError(res, error, 'No se pudo confirmar envio del pedido');
   }
 }

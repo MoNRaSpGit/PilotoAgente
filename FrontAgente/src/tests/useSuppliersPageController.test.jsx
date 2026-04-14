@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import toast from 'react-hot-toast';
 import {
   assignProductSupplier,
+  fetchSupplierInvoiceIncidents,
   fetchSupplierProducts,
   fetchSupplierOrders,
   fetchSuppliers,
@@ -17,6 +18,7 @@ vi.mock('../services/api', () => ({
   fetchSupplierOrders: vi.fn(),
   fetchSuppliers: vi.fn(),
   fetchSuppliersAgenda: vi.fn(),
+  fetchSupplierInvoiceIncidents: vi.fn(),
   fetchUnassignedCriticalSupplierProducts: vi.fn(),
   assignProductSupplier: vi.fn(),
   receiveSupplierOrder: vi.fn(),
@@ -49,6 +51,7 @@ describe('useSuppliersPageController', () => {
       week: []
     });
     fetchSupplierOrders.mockResolvedValue([]);
+    fetchSupplierInvoiceIncidents.mockResolvedValue({ date: '2026-04-13', items: [] });
     fetchSupplierProducts.mockResolvedValue({
       supplier: { id: 1, nombre: 'Acme' },
       items: [{ id: 10, nombre: 'Leche Conaprole', precio_venta: 100, stock_actual: 5, barcode: '123' }]

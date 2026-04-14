@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   assignProductSupplier,
+  fetchSupplierInvoiceIncidents,
   fetchSupplierOrders,
   fetchSupplierProducts,
   fetchSuppliers,
@@ -51,11 +52,9 @@ function selectMostRelevantOrder(orders = []) {
   }
 
   const pendingOrders = orders.filter((order) => normalizeOrderStatus(order?.status) === 'pendiente');
-  if (!pendingOrders.length) {
-    return null;
-  }
+  const source = pendingOrders.length ? pendingOrders : orders;
 
-  const sorted = [...pendingOrders].sort((a, b) => {
+  const sorted = [...source].sort((a, b) => {
     const aPending = normalizeOrderStatus(a?.status) === 'pendiente' ? 0 : 1;
     const bPending = normalizeOrderStatus(b?.status) === 'pendiente' ? 0 : 1;
     if (aPending !== bPending) {
@@ -74,6 +73,8 @@ function selectMostRelevantOrder(orders = []) {
 }
 
 export function useSuppliersPageController() {
+  const suppliersDebug =
+    import.meta.env.DEV || String(import.meta.env.VITE_SUPPLIERS_DEBUG || '').trim().toLowerCase() === 'true';
   const realToday = getLocalISODate();
   const [loading, setLoading] = useState(true);
   const [simulatedDate, setSimulatedDate] = useState(realToday);
@@ -81,10 +82,12 @@ export function useSuppliersPageController() {
   const [agenda, setAgenda] = useState(INITIAL_SUPPLIERS_AGENDA(realToday));
   const [recentOrders, setRecentOrders] = useState([]);
   const [quantityOverrides, setQuantityOverrides] = useState({});
+  const [unitCostOverrides, setUnitCostOverrides] = useState({});
   const [confirmedOrderOverrides, setConfirmedOrderOverrides] = useState({});
   const [confirmingWeekSupplierId, setConfirmingWeekSupplierId] = useState(null);
   const [receivingOrderId, setReceivingOrderId] = useState(null);
   const [receivedQtyOverrides, setReceivedQtyOverrides] = useState({});
+  const [invoiceAmountByOrderId, setInvoiceAmountByOrderId] = useState({});
   const [selectedDaySupplierProducts, setSelectedDaySupplierProducts] = useState([]);
   const [loadingDaySupplierProducts, setLoadingDaySupplierProducts] = useState(false);
   const [selectedDaySupplier, setSelectedDaySupplier] = useState(null);
@@ -92,6 +95,7 @@ export function useSuppliersPageController() {
   const [loadingUnassignedCriticalProducts, setLoadingUnassignedCriticalProducts] = useState(false);
   const [assigningSupplierProductId, setAssigningSupplierProductId] = useState(null);
   const [selectedSupplierByProductId, setSelectedSupplierByProductId] = useState({});
+  const [invoiceIncidents, setInvoiceIncidents] = useState([]);
   const suppliersLoadedRef = useRef(false);
   const recentOrdersLoadedRef = useRef(false);
   const productsBySupplierRef = useRef(new Map());
@@ -103,7 +107,6 @@ export function useSuppliersPageController() {
     const forceRecentOrdersRefresh = Boolean(options?.forceRecentOrdersRefresh);
     const shouldFetchSuppliers = forceSuppliersRefresh || !suppliersLoadedRef.current;
     const shouldFetchRecentOrders = forceRecentOrdersRefresh || !recentOrdersLoadedRef.current;
-
     try {
       setLoading(true);
       const [supplierItems, agendaData, orderItems] = await Promise.all([
@@ -137,13 +140,37 @@ export function useSuppliersPageController() {
         // This prevents stale local overrides from reviving old items in UI.
         setConfirmedOrderOverrides({});
         setReceivedQtyOverrides({});
+        setInvoiceAmountByOrderId({});
       }
     } catch (error) {
+      if (suppliersDebug) {
+        console.error('[Suppliers][BI] loadData error', error);
+      }
       toast.error(error.message);
     } finally {
       setLoading(false);
     }
   }, [simulatedDate, realToday]);
+
+  const loadInvoiceIncidents = useCallback(async () => {
+    try {
+      const incidentData = await fetchSupplierInvoiceIncidents({ limit: 60 });
+      const items = Array.isArray(incidentData?.items) ? incidentData.items : [];
+      if (suppliersDebug) {
+        console.info('[Suppliers][BI] invoice-incidents payload', {
+          date: incidentData?.date || null,
+          total: items.length,
+          items
+        });
+      }
+      setInvoiceIncidents(items);
+    } catch (error) {
+      if (suppliersDebug) {
+        console.error('[Suppliers][BI] incidents error', error);
+      }
+      setInvoiceIncidents([]);
+    }
+  }, [suppliersDebug]);
 
   const loadUnassignedCriticalProducts = useCallback(async () => {
     try {
@@ -160,6 +187,10 @@ export function useSuppliersPageController() {
   useEffect(() => {
     loadData(simulatedDate);
   }, [loadData, simulatedDate]);
+
+  useEffect(() => {
+    loadInvoiceIncidents();
+  }, [loadInvoiceIncidents]);
 
   useEffect(() => {
     loadUnassignedCriticalProducts();
@@ -228,19 +259,41 @@ export function useSuppliersPageController() {
     return map;
   }, [recentOrders]);
 
+  const lastUnitCostBySupplierProduct = useMemo(() => {
+    const map = new Map();
+    for (const order of Array.isArray(recentOrders) ? recentOrders : []) {
+      const supplierId = Number(order?.supplier_id || 0);
+      for (const item of Array.isArray(order?.items) ? order.items : []) {
+        const productId = Number(item?.product_id || 0);
+        const unitCost = Number(item?.unit_cost || 0);
+        if (!supplierId || !productId || !Number.isFinite(unitCost) || unitCost <= 0) {
+          continue;
+        }
+        const key = `${supplierId}:${productId}`;
+        if (!map.has(key)) {
+          map.set(key, unitCost);
+        }
+      }
+    }
+    return map;
+  }, [recentOrders]);
+
   const pickupOrderDoneBySupplierDay = useMemo(() => {
     const map = new Map();
     for (const order of Array.isArray(recentOrders) ? recentOrders : []) {
       const supplierId = Number(order?.supplier_id || 0);
       const orderDate = String(order?.order_date || '').trim();
       const status = normalizeOrderStatus(order?.status);
+      const pickupConfirmedAt = String(order?.pickup_confirmed_at || '').trim();
       if (!supplierId || !orderDate) {
         continue;
       }
       if (status === 'cancelado') {
         continue;
       }
-      map.set(`${supplierId}:${orderDate}`, true);
+      if (pickupConfirmedAt) {
+        map.set(`${supplierId}:${orderDate}`, true);
+      }
     }
     return map;
   }, [recentOrders]);
@@ -403,6 +456,9 @@ export function useSuppliersPageController() {
       supplier,
       movementType: selectedDaySupplier.movementType,
       date: selectedDaySupplier.date,
+      isFutureDelivery:
+        selectedDaySupplier.movementType === 'delivery'
+        && selectedDaySupplier.date > effectiveToday,
       // Only show real pending order selected from backend-driven sources.
       // If there is no pending order, detail list must remain empty.
       todayOrder: selectedOrder || null,
@@ -425,6 +481,11 @@ export function useSuppliersPageController() {
         .filter((item) => Number(item?.product_id || 0) > 0)
         .map((item) => [Number(item.product_id), Number(item.quantity || 0)])
     );
+    const currentOrderUnitCostByProductId = new Map(
+      (selectedDaySupplierDetail?.todayOrder?.items || [])
+        .filter((item) => Number(item?.product_id || 0) > 0)
+        .map((item) => [Number(item.product_id), Number(item.unit_cost || 0)])
+    );
 
     const alerts = (Array.isArray(selectedDaySupplierProducts) ? selectedDaySupplierProducts : [])
       .map((product) => {
@@ -437,6 +498,16 @@ export function useSuppliersPageController() {
         const key = `${supplierId}:${productId}`;
         const baseQuantity = Number(currentOrderQtyByProductId.get(productId) || 0);
         const uiQuantity = Number(quantityOverrides[key] ?? baseQuantity);
+        const originalUnitCost = Number(product?.precio_venta || 0);
+        const orderUnitCost = Number(currentOrderUnitCostByProductId.get(productId));
+        const hasOrderUnitCost = Number.isFinite(orderUnitCost) && orderUnitCost > 0;
+        const lastKnownUnitCost = Number(lastUnitCostBySupplierProduct.get(key) || 0);
+        const hasLastKnownUnitCost = Number.isFinite(lastKnownUnitCost) && lastKnownUnitCost > 0;
+        const baseUnitCost = hasOrderUnitCost
+          ? orderUnitCost
+          : (hasLastKnownUnitCost ? lastKnownUnitCost : originalUnitCost);
+        const uiUnitCost = Number(unitCostOverrides[key] ?? baseUnitCost);
+        const safeUiUnitCost = Number.isFinite(uiUnitCost) && uiUnitCost >= 0 ? uiUnitCost : 0;
 
         return {
           id: productId,
@@ -449,6 +520,11 @@ export function useSuppliersPageController() {
           status,
           current_order_quantity: baseQuantity,
           ui_quantity: uiQuantity,
+          ui_unit_cost: safeUiUnitCost,
+          original_unit_cost: Number.isFinite(originalUnitCost) && originalUnitCost >= 0 ? originalUnitCost : 0,
+          has_order_unit_cost: hasOrderUnitCost,
+          has_last_known_unit_cost: !hasOrderUnitCost && hasLastKnownUnitCost,
+          ui_line_total: Number((uiQuantity * safeUiUnitCost).toFixed(2)),
           last_purchased_quantity: lastPurchasedBySupplierProduct.get(key) || 0
         };
       })
@@ -469,14 +545,19 @@ export function useSuppliersPageController() {
       supplier_id: supplierId,
       supplier_name: selectedDaySupplierDetail?.supplier?.nombre || '',
       alerts,
-      pending_items: alerts.filter((item) => Number(item?.ui_quantity || 0) > 0).length
+      pending_items: alerts.filter((item) => Number(item?.ui_quantity || 0) > 0).length,
+      pending_total_amount: Number(
+        alerts.reduce((acc, item) => acc + Number(item?.ui_line_total || 0), 0).toFixed(2)
+      )
     };
   }, [
     selectedDaySupplier,
     selectedDaySupplierDetail,
     selectedDaySupplierProducts,
     quantityOverrides,
-    lastPurchasedBySupplierProduct
+    unitCostOverrides,
+    lastPurchasedBySupplierProduct,
+    lastUnitCostBySupplierProduct
   ]);
 
   const handleChangeSelectedDaySupplierAlertQuantity = useCallback(({ alertItem, quantity }) => {
@@ -491,6 +572,22 @@ export function useSuppliersPageController() {
     setQuantityOverrides((current) => ({
       ...current,
       [key]: nextQuantity
+    }));
+  }, []);
+
+  const handleChangeSelectedDaySupplierAlertUnitCost = useCallback(({ alertItem, unitCost }) => {
+    const supplierId = Number(alertItem?.product?.supplier_id || 0);
+    const productId = Number(alertItem?.product?.id || 0);
+    if (!supplierId || !productId) {
+      return;
+    }
+
+    const parsedUnitCost = Number(unitCost);
+    const safeUnitCost = Number.isFinite(parsedUnitCost) && parsedUnitCost >= 0 ? parsedUnitCost : 0;
+    const key = `${supplierId}:${productId}`;
+    setUnitCostOverrides((current) => ({
+      ...current,
+      [key]: safeUnitCost
     }));
   }, []);
 
@@ -511,16 +608,12 @@ export function useSuppliersPageController() {
     }
 
     try {
-      if (selectedDaySupplier?.movementType === 'pickup' && deliveryDate < effectiveToday) {
-        toast.error(`No se puede confirmar pedido para ${deliveryDate}: ese dia de levante ya paso.`);
-        return;
-      }
-
       setConfirmingWeekSupplierId(supplierId);
       const orderItems = selectedDaySupplierAlerts.alerts
         .map((alert) => ({
           product_id: Number(alert?.product?.id || 0),
           quantity: Number(alert?.ui_quantity || 0),
+          unit_cost: Number(alert?.ui_unit_cost || 0),
           status: alert?.status || 'warning'
         }))
         .filter((item) => item.product_id > 0 && item.quantity > 0);
@@ -538,6 +631,7 @@ export function useSuppliersPageController() {
         supplier_id: supplierId,
         order_date: orderDate,
         delivery_date: deliveryDate,
+        context_date: effectiveToday,
         notes: 'Armado desde semana operativa',
         items: orderItems
       });
@@ -567,8 +661,17 @@ export function useSuppliersPageController() {
         }
         return next;
       });
+      setUnitCostOverrides((current) => {
+        const next = { ...current };
+        for (const alert of selectedDaySupplierAlerts.alerts) {
+          const productId = Number(alert?.product?.id || 0);
+          delete next[`${supplierId}:${productId}`];
+        }
+        return next;
+      });
 
       await loadData(simulatedDate, { forceRecentOrdersRefresh: true });
+      await loadInvoiceIncidents();
     } catch (error) {
       toast.error(error.message);
     } finally {
@@ -596,6 +699,33 @@ export function useSuppliersPageController() {
     });
   }, [selectedDaySupplierDetail, receivedQtyOverrides]);
 
+  const selectedDaySupplierInvoiceSummary = useMemo(() => {
+    const order = selectedDaySupplierDetail?.todayOrder || null;
+    const orderId = Number(order?.id || 0);
+    if (!orderId) {
+      return null;
+    }
+
+    const expectedAmount = Number(order?.expected_amount || 0);
+    const persistedInvoiceAmount = order?.invoice_amount;
+    const overrideInvoiceAmount = invoiceAmountByOrderId[String(orderId)];
+    const invoiceAmount = overrideInvoiceAmount ?? persistedInvoiceAmount;
+    const normalizedInvoiceAmount = invoiceAmount === null || typeof invoiceAmount === 'undefined'
+      ? null
+      : Number(invoiceAmount);
+    const diffAmount = normalizedInvoiceAmount === null || !Number.isFinite(normalizedInvoiceAmount)
+      ? null
+      : Number((normalizedInvoiceAmount - expectedAmount).toFixed(2));
+
+    return {
+      order_id: orderId,
+      expected_amount: expectedAmount,
+      invoice_amount: normalizedInvoiceAmount,
+      diff_amount: diffAmount,
+      has_mismatch: diffAmount !== null ? Math.abs(diffAmount) > 0.009 : false
+    };
+  }, [selectedDaySupplierDetail, invoiceAmountByOrderId]);
+
   const handleChangeReceivedItemQuantity = useCallback(({ orderId, itemId, quantity }) => {
     const parsedOrderId = Number(orderId);
     const parsedItemId = Number(itemId);
@@ -608,6 +738,32 @@ export function useSuppliersPageController() {
     setReceivedQtyOverrides((current) => ({
       ...current,
       [key]: nextQuantity
+    }));
+  }, []);
+
+  const handleChangeInvoiceAmount = useCallback(({ orderId, amount }) => {
+    const parsedOrderId = Number(orderId);
+    if (!parsedOrderId) {
+      return;
+    }
+
+    if (amount === '' || amount === null || typeof amount === 'undefined') {
+      setInvoiceAmountByOrderId((current) => {
+        const next = { ...current };
+        delete next[String(parsedOrderId)];
+        return next;
+      });
+      return;
+    }
+
+    const parsedAmount = Number(amount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount < 0) {
+      return;
+    }
+
+    setInvoiceAmountByOrderId((current) => ({
+      ...current,
+      [String(parsedOrderId)]: Number(parsedAmount.toFixed(2))
     }));
   }, []);
 
@@ -628,6 +784,8 @@ export function useSuppliersPageController() {
     try {
       setReceivingOrderId(orderId);
       const payload = {
+        context_date: effectiveToday,
+        invoice_amount: selectedDaySupplierInvoiceSummary?.invoice_amount ?? null,
         items: selectedDaySupplierReceivingItems.map((item) => ({
           item_id: Number(item?.id || 0),
           quantity_received: Number(item?.received_quantity || 0)
@@ -635,11 +793,20 @@ export function useSuppliersPageController() {
       };
       const { item, stockUpdates } = await receiveSupplierOrder(orderId, payload);
       const updatedItems = Number(stockUpdates?.length || 0);
-      toast.success(
-        updatedItems > 0
-          ? `Stock actualizado en ${updatedItems} producto(s)`
-          : 'Pedido marcado como recibido'
-      );
+      const invoiceDiff = Number(item?.invoice_diff);
+      if (Number.isFinite(invoiceDiff) && Math.abs(invoiceDiff) > 0.009) {
+        toast.success(
+          updatedItems > 0
+            ? `Stock actualizado. Diferencia boleta: ${formatMoney(invoiceDiff)}`
+            : `Pedido recibido. Diferencia boleta: ${formatMoney(invoiceDiff)}`
+        );
+      } else {
+        toast.success(
+          updatedItems > 0
+            ? 'Stock actualizado y boleta conciliada'
+            : 'Pedido marcado como recibido'
+        );
+      }
 
       if (supplierId) {
         productsBySupplierRef.current.delete(supplierId);
@@ -660,6 +827,11 @@ export function useSuppliersPageController() {
         }
         return next;
       });
+      setInvoiceAmountByOrderId((current) => {
+        const next = { ...current };
+        delete next[String(orderId)];
+        return next;
+      });
 
       await loadData(simulatedDate, { forceRecentOrdersRefresh: true });
     } catch (error) {
@@ -667,7 +839,15 @@ export function useSuppliersPageController() {
     } finally {
       setReceivingOrderId(null);
     }
-  }, [selectedDaySupplierDetail, selectedDaySupplierReceivingItems, loadData, simulatedDate]);
+  }, [
+    selectedDaySupplierDetail,
+    selectedDaySupplierReceivingItems,
+    selectedDaySupplierInvoiceSummary,
+    loadData,
+    loadInvoiceIncidents,
+    simulatedDate,
+    effectiveToday
+  ]);
 
   const handleCancelSelectedDaySupplierFlow = useCallback(() => {
     const supplierId = Number(selectedDaySupplier?.id || 0);
@@ -675,6 +855,15 @@ export function useSuppliersPageController() {
 
     if (supplierId) {
       setQuantityOverrides((current) => {
+        const next = { ...current };
+        for (const key of Object.keys(next)) {
+          if (key.startsWith(`${supplierId}:`)) {
+            delete next[key];
+          }
+        }
+        return next;
+      });
+      setUnitCostOverrides((current) => {
         const next = { ...current };
         for (const key of Object.keys(next)) {
           if (key.startsWith(`${supplierId}:`)) {
@@ -693,6 +882,11 @@ export function useSuppliersPageController() {
             delete next[key];
           }
         }
+        return next;
+      });
+      setInvoiceAmountByOrderId((current) => {
+        const next = { ...current };
+        delete next[String(orderId)];
         return next;
       });
     }
@@ -755,6 +949,8 @@ export function useSuppliersPageController() {
     selectedDaySupplierDetail,
     selectedDaySupplierAlerts,
     selectedDaySupplierReceivingItems,
+    selectedDaySupplierInvoiceSummary,
+    invoiceIncidents,
     unassignedCriticalProducts,
     loadingUnassignedCriticalProducts,
     assigningSupplierProductId,
@@ -763,7 +959,9 @@ export function useSuppliersPageController() {
     confirmingWeekSupplierId,
     receivingOrderId,
     handleChangeSelectedDaySupplierAlertQuantity,
+    handleChangeSelectedDaySupplierAlertUnitCost,
     handleChangeReceivedItemQuantity,
+    handleChangeInvoiceAmount,
     handleConfirmSelectedDaySupplierOrder,
     handleReceiveSelectedDaySupplierOrder,
     handleCancelSelectedDaySupplierFlow,

@@ -22,6 +22,7 @@ export const env = {
   objectivesRecordExtraAmount: Number(process.env.OBJECTIVES_RECORD_EXTRA_AMOUNT || 2000),
   stockDemoSeedEnabled: parseBoolean(process.env.STOCK_DEMO_SEED, false),
   stockDemoSeedLimit: Number(process.env.STOCK_DEMO_SEED_LIMIT || 12),
+  suppliersTestMode: parseBoolean(process.env.SUPPLIERS_TEST_MODE, false),
   vapidSubject: process.env.VAPID_SUBJECT || '',
   vapidPublicKey: process.env.VAPID_PUBLIC_KEY || '',
   vapidPrivateKey: process.env.VAPID_PRIVATE_KEY || '',

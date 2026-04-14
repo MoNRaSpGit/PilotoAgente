@@ -817,6 +817,34 @@ export async function fetchSupplierOrders(params = {}) {
   return data.items || [];
 }
 
+export async function fetchSupplierInvoiceIncidents(params = {}) {
+  const searchParams = new URLSearchParams();
+  if (params.date) {
+    searchParams.set('date', params.date);
+  }
+  if (Number.isFinite(Number(params.limit)) && Number(params.limit) > 0) {
+    searchParams.set('limit', String(Math.floor(Number(params.limit))));
+  }
+  const query = searchParams.toString();
+
+  const response = await fetch(`${API_URL}/api/suppliers/invoice-incidents${query ? `?${query}` : ''}`, {
+    cache: 'no-store',
+    headers: {
+      ...getAuthHeaders()
+    }
+  });
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    const error = new Error(data.message || 'No se pudieron cargar inconsistencias de boletas');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  return data;
+}
+
 export async function upsertSupplierOrderFromProvider(payload) {
   const response = await fetch(`${API_URL}/api/suppliers/orders/upsert-from-provider`, {
     method: 'POST',
@@ -865,6 +893,30 @@ export async function receiveSupplierOrder(orderId, payload = {}) {
     item: data.item || null,
     stockUpdates: Array.isArray(data.stock_updates) ? data.stock_updates : []
   };
+}
+
+export async function confirmSupplierPickup(orderId) {
+  const parsedOrderId = Number(orderId);
+  if (!Number.isFinite(parsedOrderId) || parsedOrderId <= 0) {
+    throw new Error('Pedido invalido');
+  }
+
+  const response = await fetch(`${API_URL}/api/suppliers/orders/${parsedOrderId}/confirm-pickup`, {
+    method: 'POST',
+    headers: {
+      ...getAuthHeaders()
+    }
+  });
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    const error = new Error(data.message || 'No se pudo confirmar envio del pedido');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  return data.item || null;
 }
 
 export async function scanProductByBarcode(barcode) {

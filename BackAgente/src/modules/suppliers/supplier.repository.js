@@ -2,6 +2,19 @@ import { pool } from '../../config/db.js';
 
 let supplierTablesPromise = null;
 
+function isRetryableConnectionError(error) {
+  const message = String(error?.message || '').toLowerCase();
+  const code = String(error?.code || '').toUpperCase();
+  if (code === 'PROTOCOL_CONNECTION_LOST' || code === 'ECONNRESET' || code === 'EPIPE') {
+    return true;
+  }
+  return (
+    message.includes('connection is in closed state')
+    || message.includes('cannot enqueue query after invoking quit')
+    || message.includes('connection lost')
+  );
+}
+
 async function columnExists(tableName, columnName) {
   const [rows] = await pool.query(
     `
@@ -32,7 +45,7 @@ async function indexExists(tableName, indexName) {
   return Boolean(rows[0]?.count);
 }
 
-async function withTransaction(work) {
+async function withTransaction(work, attempt = 0) {
   const connection = await pool.getConnection();
 
   try {
@@ -41,10 +54,21 @@ async function withTransaction(work) {
     await connection.commit();
     return result;
   } catch (error) {
-    await connection.rollback();
+    try {
+      await connection.rollback();
+    } catch {
+      // Ignore rollback errors when connection is already closed.
+    }
+    if (attempt < 1 && isRetryableConnectionError(error)) {
+      return withTransaction(work, attempt + 1);
+    }
     throw error;
   } finally {
-    connection.release();
+    try {
+      connection.release();
+    } catch {
+      // Ignore release errors on closed connections.
+    }
   }
 }
 
@@ -94,6 +118,13 @@ export async function ensureSupplierTables() {
         order_date DATE NOT NULL,
         delivery_date DATE NOT NULL,
         expected_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+        invoice_amount DECIMAL(12,2) NULL,
+        invoice_diff DECIMAL(12,2) NULL,
+        invoice_reference VARCHAR(120) NULL,
+        received_at DATETIME NULL,
+        pickup_confirmed_at DATETIME NULL,
+        pickup_confirmed_by_name VARCHAR(140) NULL,
+        pickup_confirmed_by_role VARCHAR(20) NULL,
         status VARCHAR(20) NOT NULL DEFAULT 'pendiente',
         notes VARCHAR(255) NULL,
         operator_id INT NULL,
@@ -108,6 +139,62 @@ export async function ensureSupplierTables() {
           ON DELETE CASCADE
       )
     `);
+
+    const hasInvoiceAmount = await columnExists('ops_supplier_orders', 'invoice_amount');
+    if (!hasInvoiceAmount) {
+      await pool.query(`
+        ALTER TABLE ops_supplier_orders
+        ADD COLUMN invoice_amount DECIMAL(12,2) NULL AFTER expected_amount
+      `);
+    }
+
+    const hasInvoiceDiff = await columnExists('ops_supplier_orders', 'invoice_diff');
+    if (!hasInvoiceDiff) {
+      await pool.query(`
+        ALTER TABLE ops_supplier_orders
+        ADD COLUMN invoice_diff DECIMAL(12,2) NULL AFTER invoice_amount
+      `);
+    }
+
+    const hasInvoiceReference = await columnExists('ops_supplier_orders', 'invoice_reference');
+    if (!hasInvoiceReference) {
+      await pool.query(`
+        ALTER TABLE ops_supplier_orders
+        ADD COLUMN invoice_reference VARCHAR(120) NULL AFTER invoice_diff
+      `);
+    }
+
+    const hasReceivedAt = await columnExists('ops_supplier_orders', 'received_at');
+    if (!hasReceivedAt) {
+      await pool.query(`
+        ALTER TABLE ops_supplier_orders
+        ADD COLUMN received_at DATETIME NULL AFTER invoice_reference
+      `);
+    }
+
+    const hasPickupConfirmedAt = await columnExists('ops_supplier_orders', 'pickup_confirmed_at');
+    if (!hasPickupConfirmedAt) {
+      await pool.query(`
+        ALTER TABLE ops_supplier_orders
+        ADD COLUMN pickup_confirmed_at DATETIME NULL AFTER received_at
+      `);
+    }
+
+    const hasPickupConfirmedByName = await columnExists('ops_supplier_orders', 'pickup_confirmed_by_name');
+    if (!hasPickupConfirmedByName) {
+      await pool.query(`
+        ALTER TABLE ops_supplier_orders
+        ADD COLUMN pickup_confirmed_by_name VARCHAR(140) NULL AFTER pickup_confirmed_at
+      `);
+    }
+
+    const hasPickupConfirmedByRole = await columnExists('ops_supplier_orders', 'pickup_confirmed_by_role');
+    if (!hasPickupConfirmedByRole) {
+      await pool.query(`
+        ALTER TABLE ops_supplier_orders
+        ADD COLUMN pickup_confirmed_by_role VARCHAR(20) NULL AFTER pickup_confirmed_by_name
+      `);
+    }
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS ops_supplier_order_items (
@@ -125,6 +212,32 @@ export async function ensureSupplierTables() {
         INDEX idx_supplier_order_items_product (product_id),
         CONSTRAINT fk_supplier_order_items_order
           FOREIGN KEY (order_id) REFERENCES ops_supplier_orders(id)
+          ON DELETE CASCADE
+      )
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ops_supplier_order_receipts (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        order_id BIGINT NOT NULL,
+        order_item_id BIGINT NOT NULL,
+        product_id INT NULL,
+        product_name VARCHAR(190) NOT NULL,
+        ordered_quantity DECIMAL(12,3) NOT NULL DEFAULT 0,
+        received_quantity DECIMAL(12,3) NOT NULL DEFAULT 0,
+        discrepancy_note VARCHAR(255) NULL,
+        operator_id INT NULL,
+        operator_name VARCHAR(140) NULL,
+        operator_role VARCHAR(20) NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_supplier_receipts_order (order_id),
+        INDEX idx_supplier_receipts_item (order_item_id),
+        INDEX idx_supplier_receipts_created (created_at),
+        CONSTRAINT fk_supplier_receipts_order
+          FOREIGN KEY (order_id) REFERENCES ops_supplier_orders(id)
+          ON DELETE CASCADE,
+        CONSTRAINT fk_supplier_receipts_item
+          FOREIGN KEY (order_item_id) REFERENCES ops_supplier_order_items(id)
           ON DELETE CASCADE
       )
     `);
@@ -315,7 +428,7 @@ export async function findProductById(productId) {
   await ensureSupplierTables();
   const [rows] = await pool.query(
     `
-      SELECT id, nombre, supplier_id
+      SELECT id, nombre, supplier_id, precio_venta
       FROM ops_producto
       WHERE id = ?
       LIMIT 1
@@ -444,6 +557,13 @@ export async function createSupplierOrder(payload) {
           DATE_FORMAT(so.order_date, '%Y-%m-%d') AS order_date,
           DATE_FORMAT(so.delivery_date, '%Y-%m-%d') AS delivery_date,
           so.expected_amount,
+          so.invoice_amount,
+          so.invoice_diff,
+          so.invoice_reference,
+          DATE_FORMAT(so.received_at, '%Y-%m-%d %H:%i:%s') AS received_at,
+          DATE_FORMAT(so.pickup_confirmed_at, '%Y-%m-%d %H:%i:%s') AS pickup_confirmed_at,
+          so.pickup_confirmed_by_name,
+          so.pickup_confirmed_by_role,
           so.status,
           so.notes,
           so.operator_id,
@@ -477,6 +597,17 @@ export async function upsertPendingSupplierOrderWithItems({
     const expectedAmount = Number(
       (Array.isArray(items) ? items : []).reduce((acc, item) => acc + Number(item.line_total || 0), 0).toFixed(2)
     );
+    // Serializa upserts por proveedor para evitar duplicados en doble click/reintentos concurrentes.
+    await connection.query(
+      `
+        SELECT id
+        FROM ops_proveedores
+        WHERE id = ?
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [supplierId]
+    );
 
     const [existingRows] = await connection.query(
       `
@@ -503,6 +634,9 @@ export async function upsertPendingSupplierOrderWithItems({
           SET order_date = ?,
               expected_amount = ?,
               notes = ?,
+              pickup_confirmed_at = NULL,
+              pickup_confirmed_by_name = NULL,
+              pickup_confirmed_by_role = NULL,
               operator_id = ?,
               operator_name = ?,
               operator_role = ?,
@@ -592,6 +726,13 @@ export async function upsertPendingSupplierOrderWithItems({
           DATE_FORMAT(so.order_date, '%Y-%m-%d') AS order_date,
           DATE_FORMAT(so.delivery_date, '%Y-%m-%d') AS delivery_date,
           so.expected_amount,
+          so.invoice_amount,
+          so.invoice_diff,
+          so.invoice_reference,
+          DATE_FORMAT(so.received_at, '%Y-%m-%d %H:%i:%s') AS received_at,
+          DATE_FORMAT(so.pickup_confirmed_at, '%Y-%m-%d %H:%i:%s') AS pickup_confirmed_at,
+          so.pickup_confirmed_by_name,
+          so.pickup_confirmed_by_role,
           so.status,
           so.notes,
           so.operator_id,
@@ -651,7 +792,14 @@ export async function listSupplierOrdersByDateRange({
         DATE_FORMAT(so.order_date, '%Y-%m-%d') AS order_date,
         DATE_FORMAT(so.delivery_date, '%Y-%m-%d') AS delivery_date,
         so.expected_amount,
-        so.status,
+          so.invoice_amount,
+          so.invoice_diff,
+          so.invoice_reference,
+          DATE_FORMAT(so.received_at, '%Y-%m-%d %H:%i:%s') AS received_at,
+          DATE_FORMAT(so.pickup_confirmed_at, '%Y-%m-%d %H:%i:%s') AS pickup_confirmed_at,
+          so.pickup_confirmed_by_name,
+          so.pickup_confirmed_by_role,
+          so.status,
         so.notes,
         so.operator_id,
         so.operator_name,
@@ -683,7 +831,14 @@ export async function listSupplierOrders({ limit = 50 } = {}) {
         DATE_FORMAT(so.order_date, '%Y-%m-%d') AS order_date,
         DATE_FORMAT(so.delivery_date, '%Y-%m-%d') AS delivery_date,
         so.expected_amount,
-        so.status,
+          so.invoice_amount,
+          so.invoice_diff,
+          so.invoice_reference,
+          DATE_FORMAT(so.received_at, '%Y-%m-%d %H:%i:%s') AS received_at,
+          DATE_FORMAT(so.pickup_confirmed_at, '%Y-%m-%d %H:%i:%s') AS pickup_confirmed_at,
+          so.pickup_confirmed_by_name,
+          so.pickup_confirmed_by_role,
+          so.status,
         so.notes,
         so.operator_id,
         so.operator_name,
@@ -712,7 +867,14 @@ export async function findSupplierOrderById(orderId) {
         DATE_FORMAT(so.order_date, '%Y-%m-%d') AS order_date,
         DATE_FORMAT(so.delivery_date, '%Y-%m-%d') AS delivery_date,
         so.expected_amount,
-        so.status,
+          so.invoice_amount,
+          so.invoice_diff,
+          so.invoice_reference,
+          DATE_FORMAT(so.received_at, '%Y-%m-%d %H:%i:%s') AS received_at,
+          DATE_FORMAT(so.pickup_confirmed_at, '%Y-%m-%d %H:%i:%s') AS pickup_confirmed_at,
+          so.pickup_confirmed_by_name,
+          so.pickup_confirmed_by_role,
+          so.status,
         so.notes,
         so.operator_id,
         so.operator_name,
@@ -733,7 +895,9 @@ export async function findSupplierOrderById(orderId) {
 export async function receiveSupplierOrderAndApplyStock({
   orderId,
   receivedItems = [],
-  receivedBy = null
+  receivedBy = null,
+  invoiceAmount = null,
+  invoiceReference = null
 }) {
   await ensureSupplierTables();
 
@@ -747,6 +911,13 @@ export async function receiveSupplierOrderAndApplyStock({
           DATE_FORMAT(so.order_date, '%Y-%m-%d') AS order_date,
           DATE_FORMAT(so.delivery_date, '%Y-%m-%d') AS delivery_date,
           so.expected_amount,
+          so.invoice_amount,
+          so.invoice_diff,
+          so.invoice_reference,
+          DATE_FORMAT(so.received_at, '%Y-%m-%d %H:%i:%s') AS received_at,
+          DATE_FORMAT(so.pickup_confirmed_at, '%Y-%m-%d %H:%i:%s') AS pickup_confirmed_at,
+          so.pickup_confirmed_by_name,
+          so.pickup_confirmed_by_role,
           so.status,
           so.notes,
           so.operator_id,
@@ -799,6 +970,7 @@ export async function receiveSupplierOrderAndApplyStock({
       itemRows.map((item) => [Number(item.id), Number(item.quantity || 0)])
     );
     const receivedByItemId = new Map();
+    const noteByItemId = new Map();
 
     if (Array.isArray(receivedItems) && receivedItems.length > 0) {
       for (const entry of receivedItems) {
@@ -824,16 +996,20 @@ export async function receiveSupplierOrderAndApplyStock({
         }
 
         receivedByItemId.set(itemId, Number(quantityReceived.toFixed(3)));
+        const note = String(entry?.note || entry?.discrepancy_note || '').trim();
+        noteByItemId.set(itemId, note || null);
       }
 
       for (const [itemId] of orderedByItemId.entries()) {
         if (!receivedByItemId.has(itemId)) {
           receivedByItemId.set(itemId, 0);
+          noteByItemId.set(itemId, null);
         }
       }
     } else {
       for (const [itemId, orderedQuantity] of orderedByItemId.entries()) {
         receivedByItemId.set(itemId, Number(Number(orderedQuantity || 0).toFixed(3)));
+        noteByItemId.set(itemId, null);
       }
     }
 
@@ -873,13 +1049,68 @@ export async function receiveSupplierOrderAndApplyStock({
 
     await connection.query(
       `
+        DELETE FROM ops_supplier_order_receipts
+        WHERE order_id = ?
+      `,
+      [orderId]
+    );
+
+    for (const row of itemRows) {
+      const itemId = Number(row?.id || 0);
+      const orderedQuantity = Number(row?.quantity || 0);
+      const receivedQuantity = Number(receivedByItemId.get(itemId) || 0);
+      await connection.query(
+        `
+          INSERT INTO ops_supplier_order_receipts (
+            order_id,
+            order_item_id,
+            product_id,
+            product_name,
+            ordered_quantity,
+            received_quantity,
+            discrepancy_note,
+            operator_id,
+            operator_name,
+            operator_role
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          orderId,
+          itemId,
+          row?.product_id || null,
+          row?.product_name || '',
+          Number(orderedQuantity.toFixed(3)),
+          Number(receivedQuantity.toFixed(3)),
+          noteByItemId.get(itemId) || null,
+          receivedBy?.id || null,
+          receivedBy?.name || null,
+          receivedBy?.role || null
+        ]
+      );
+    }
+
+    const expectedAmount = Number(order.expected_amount || 0);
+    const hasInvoiceAmount = Number.isFinite(Number(invoiceAmount)) && Number(invoiceAmount) >= 0;
+    const normalizedInvoiceAmount = hasInvoiceAmount ? Number(Number(invoiceAmount).toFixed(2)) : null;
+    const invoiceDiff = hasInvoiceAmount ? Number((normalizedInvoiceAmount - expectedAmount).toFixed(2)) : null;
+
+    await connection.query(
+      `
         UPDATE ops_supplier_orders
         SET status = 'recibido',
+            invoice_amount = ?,
+            invoice_diff = ?,
+            invoice_reference = ?,
+            received_at = CURRENT_TIMESTAMP,
             notes = ?,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `,
       [
+        normalizedInvoiceAmount,
+        invoiceDiff,
+        invoiceReference || null,
         order.notes || (receivedBy?.name ? `Recepcion confirmado por ${receivedBy.name}` : null),
         orderId
       ]
@@ -894,6 +1125,13 @@ export async function receiveSupplierOrderAndApplyStock({
           DATE_FORMAT(so.order_date, '%Y-%m-%d') AS order_date,
           DATE_FORMAT(so.delivery_date, '%Y-%m-%d') AS delivery_date,
           so.expected_amount,
+          so.invoice_amount,
+          so.invoice_diff,
+          so.invoice_reference,
+          DATE_FORMAT(so.received_at, '%Y-%m-%d %H:%i:%s') AS received_at,
+          DATE_FORMAT(so.pickup_confirmed_at, '%Y-%m-%d %H:%i:%s') AS pickup_confirmed_at,
+          so.pickup_confirmed_by_name,
+          so.pickup_confirmed_by_role,
           so.status,
           so.notes,
           so.operator_id,
@@ -914,6 +1152,184 @@ export async function receiveSupplierOrderAndApplyStock({
       items: itemRows,
       stock_updates: stockUpdates
     };
+  });
+}
+
+export async function listSupplierInvoiceIncidents({ date = null, limit = 50 } = {}) {
+  await ensureSupplierTables();
+  const safeLimit = Math.max(1, Math.min(200, Math.floor(Number(limit) || 50)));
+  const normalizedDate = String(date || '').trim();
+  const hasDateFilter = Boolean(normalizedDate);
+
+  const baseQuery = `
+      SELECT
+        so.id,
+        so.supplier_id,
+        s.nombre AS supplier_name,
+        DATE_FORMAT(so.order_date, '%Y-%m-%d') AS order_date,
+        DATE_FORMAT(so.delivery_date, '%Y-%m-%d') AS delivery_date,
+        DATE_FORMAT(so.received_at, '%Y-%m-%d %H:%i:%s') AS received_at,
+        so.expected_amount,
+        so.invoice_amount,
+        so.invoice_diff,
+        so.invoice_reference,
+        so.status
+      FROM ops_supplier_orders so
+      INNER JOIN ops_proveedores s ON s.id = so.supplier_id
+      WHERE so.status = 'recibido'
+        AND (
+          ABS(COALESCE(so.invoice_diff, 0)) > 0.009
+          OR EXISTS (
+            SELECT 1
+            FROM ops_supplier_order_receipts r
+            WHERE r.order_id = so.id
+              AND (
+                r.received_quantity < r.ordered_quantity
+                OR (r.discrepancy_note IS NOT NULL AND TRIM(r.discrepancy_note) <> '')
+              )
+          )
+        )
+  `;
+
+  const dateClause = hasDateFilter
+    ? ` AND DATE(COALESCE(so.received_at, so.delivery_date)) = ? `
+    : '';
+  const tailClause = `
+      ORDER BY COALESCE(so.received_at, so.updated_at) DESC, so.id DESC
+      LIMIT ?
+  `;
+
+  const query = `${baseQuery}${dateClause}${tailClause}`;
+  const params = hasDateFilter
+    ? [normalizedDate, safeLimit]
+    : [safeLimit];
+
+  const [orderRows] = await pool.query(query, params);
+
+  if (!orderRows.length) {
+    return [];
+  }
+
+  const orderIds = orderRows.map((row) => Number(row.id)).filter((id) => Number.isFinite(id) && id > 0);
+  const placeholders = orderIds.map(() => '?').join(', ');
+  const [receiptRows] = await pool.query(
+    `
+      SELECT
+        r.id,
+        r.order_id,
+        r.order_item_id,
+        r.product_id,
+        r.product_name,
+        r.ordered_quantity,
+        r.received_quantity,
+        r.discrepancy_note,
+        DATE_FORMAT(r.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
+      FROM ops_supplier_order_receipts r
+      WHERE r.order_id IN (${placeholders})
+        AND (
+          r.received_quantity < r.ordered_quantity
+          OR (r.discrepancy_note IS NOT NULL AND TRIM(r.discrepancy_note) <> '')
+        )
+      ORDER BY r.order_id ASC, r.id ASC
+    `,
+    orderIds
+  );
+
+  const detailsByOrderId = new Map();
+  for (const row of receiptRows) {
+    const orderId = Number(row.order_id);
+    const current = detailsByOrderId.get(orderId) || [];
+    current.push(row);
+    detailsByOrderId.set(orderId, current);
+  }
+
+  return orderRows.map((row) => ({
+    ...row,
+    details: detailsByOrderId.get(Number(row.id)) || []
+  }));
+}
+
+export async function confirmSupplierOrderPickup({
+  orderId,
+  confirmedBy = null
+}) {
+  await ensureSupplierTables();
+
+  return withTransaction(async (connection) => {
+    const [orderRows] = await connection.query(
+      `
+        SELECT
+          so.id,
+          so.status,
+          DATE_FORMAT(so.pickup_confirmed_at, '%Y-%m-%d %H:%i:%s') AS pickup_confirmed_at
+        FROM ops_supplier_orders so
+        WHERE so.id = ?
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [orderId]
+    );
+    const order = orderRows[0] || null;
+    if (!order) {
+      return null;
+    }
+
+    if (String(order.status || '').trim().toLowerCase() !== 'pendiente') {
+      return { ...order, already_closed: true };
+    }
+
+    if (order.pickup_confirmed_at) {
+      return { ...order, already_confirmed: true };
+    }
+
+    await connection.query(
+      `
+        UPDATE ops_supplier_orders
+        SET pickup_confirmed_at = CURRENT_TIMESTAMP,
+            pickup_confirmed_by_name = ?,
+            pickup_confirmed_by_role = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `,
+      [
+        confirmedBy?.name || null,
+        confirmedBy?.role || null,
+        orderId
+      ]
+    );
+
+    const [updatedRows] = await connection.query(
+      `
+        SELECT
+          so.id,
+          so.supplier_id,
+          s.nombre AS supplier_name,
+          DATE_FORMAT(so.order_date, '%Y-%m-%d') AS order_date,
+          DATE_FORMAT(so.delivery_date, '%Y-%m-%d') AS delivery_date,
+          so.expected_amount,
+          so.invoice_amount,
+          so.invoice_diff,
+          so.invoice_reference,
+          DATE_FORMAT(so.received_at, '%Y-%m-%d %H:%i:%s') AS received_at,
+          DATE_FORMAT(so.pickup_confirmed_at, '%Y-%m-%d %H:%i:%s') AS pickup_confirmed_at,
+          so.pickup_confirmed_by_name,
+          so.pickup_confirmed_by_role,
+          so.status,
+          so.notes,
+          so.operator_id,
+          so.operator_name,
+          so.operator_role,
+          DATE_FORMAT(so.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
+          DATE_FORMAT(so.updated_at, '%Y-%m-%d %H:%i:%s') AS updated_at
+        FROM ops_supplier_orders so
+        INNER JOIN ops_proveedores s ON s.id = so.supplier_id
+        WHERE so.id = ?
+        LIMIT 1
+      `,
+      [orderId]
+    );
+
+    return updatedRows[0] || null;
   });
 }
 
@@ -1269,6 +1685,17 @@ export async function confirmSupplierOrderDraft({
     const expectedAmount = Number(
       itemRows.reduce((acc, item) => acc + Number(item.line_total || 0), 0).toFixed(2)
     );
+    // Serializa confirmaciones por proveedor para minimizar carreras en creacion de pedidos pendientes.
+    await connection.query(
+      `
+        SELECT id
+        FROM ops_proveedores
+        WHERE id = ?
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [draft.supplier_id]
+    );
 
     const [existingOrderRows] = await connection.query(
       `
@@ -1296,6 +1723,9 @@ export async function confirmSupplierOrderDraft({
           SET order_date = ?,
               expected_amount = ?,
               notes = ?,
+              pickup_confirmed_at = NULL,
+              pickup_confirmed_by_name = NULL,
+              pickup_confirmed_by_role = NULL,
               operator_id = ?,
               operator_name = ?,
               operator_role = ?
@@ -1403,6 +1833,13 @@ export async function confirmSupplierOrderDraft({
           DATE_FORMAT(so.order_date, '%Y-%m-%d') AS order_date,
           DATE_FORMAT(so.delivery_date, '%Y-%m-%d') AS delivery_date,
           so.expected_amount,
+          so.invoice_amount,
+          so.invoice_diff,
+          so.invoice_reference,
+          DATE_FORMAT(so.received_at, '%Y-%m-%d %H:%i:%s') AS received_at,
+          DATE_FORMAT(so.pickup_confirmed_at, '%Y-%m-%d %H:%i:%s') AS pickup_confirmed_at,
+          so.pickup_confirmed_by_name,
+          so.pickup_confirmed_by_role,
           so.status,
           so.notes,
           so.operator_id,
@@ -1566,3 +2003,5 @@ export async function deleteSupplierDraftItem({ draftId, itemId }) {
     return true;
   });
 }
+
+

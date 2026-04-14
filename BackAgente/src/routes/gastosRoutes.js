@@ -14,9 +14,8 @@ router.use(authMiddleware);
 
 router.get('/gastos', requireRole('admin', 'operario'), listExpensesController);
 router.get('/gastos/summary', requireRole('admin', 'operario'), summaryExpensesController);
-router.use(requireRole('admin'));
-router.post('/gastos', createExpenseController);
-router.patch('/gastos/:id', updateExpenseController);
-router.delete('/gastos/:id', deleteExpenseController);
+router.post('/gastos', requireRole('admin'), createExpenseController);
+router.patch('/gastos/:id', requireRole('admin'), updateExpenseController);
+router.delete('/gastos/:id', requireRole('admin'), deleteExpenseController);
 
 export default router;

@@ -6,6 +6,7 @@ import DashboardPage from '../pages/DashboardPage';
 import GastosPage from '../pages/GastosPage';
 import LoginPage from '../pages/LoginPage';
 import ObjetivosPage from '../pages/ObjetivosPage';
+import RegPedidosPage from '../pages/RegPedidosPage';
 import ScannerPage from '../pages/ScannerPage';
 import SuppliersPage from '../pages/SuppliersPage';
 import { RoleGate } from './RoleGate';
@@ -68,6 +69,14 @@ export function AppRoutes({ isLoggedIn, isAdmin, dashboardEnabled }) {
             element={
               <RoleGate allow={['admin', 'operario']}>
                 <ScannerPage />
+              </RoleGate>
+            }
+          />
+          <Route
+            path="/reg-pedidos"
+            element={
+              <RoleGate allow={['operario']}>
+                <RegPedidosPage />
               </RoleGate>
             }
           />

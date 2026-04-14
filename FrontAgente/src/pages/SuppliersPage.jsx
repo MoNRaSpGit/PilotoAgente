@@ -1,4 +1,5 @@
 import { SuppliersHeader } from './suppliers/components/SuppliersHeader';
+import { SuppliersInvoiceIncidentsPanel } from './suppliers/components/SuppliersInvoiceIncidentsPanel';
 import { SuppliersUnassignedCriticalPanel } from './suppliers/components/SuppliersUnassignedCriticalPanel';
 import { SuppliersWeekMovementPanel } from './suppliers/components/SuppliersWeekMovementPanel';
 import { useSuppliersPageController } from './suppliers/useSuppliersPageController';
@@ -15,6 +16,8 @@ function SuppliersPage() {
     selectedDaySupplierDetail,
     selectedDaySupplierAlerts,
     selectedDaySupplierReceivingItems,
+    selectedDaySupplierInvoiceSummary,
+    invoiceIncidents,
     unassignedCriticalProducts,
     loadingUnassignedCriticalProducts,
     assigningSupplierProductId,
@@ -23,7 +26,9 @@ function SuppliersPage() {
     confirmingWeekSupplierId,
     receivingOrderId,
     handleChangeSelectedDaySupplierAlertQuantity,
+    handleChangeSelectedDaySupplierAlertUnitCost,
     handleChangeReceivedItemQuantity,
+    handleChangeInvoiceAmount,
     handleConfirmSelectedDaySupplierOrder,
     handleReceiveSelectedDaySupplierOrder,
     handleCancelSelectedDaySupplierFlow,
@@ -50,11 +55,15 @@ function SuppliersPage() {
           selectedDaySupplierDetail={selectedDaySupplierDetail}
           selectedDaySupplierAlerts={selectedDaySupplierAlerts}
           selectedDaySupplierReceivingItems={selectedDaySupplierReceivingItems}
+          selectedDaySupplierInvoiceSummary={selectedDaySupplierInvoiceSummary}
           loadingDaySupplierProducts={loadingDaySupplierProducts}
           confirmingWeekSupplierId={confirmingWeekSupplierId}
           receivingOrderId={receivingOrderId}
+          allowReceiveConfirmation={false}
           handleChangeSelectedDaySupplierAlertQuantity={handleChangeSelectedDaySupplierAlertQuantity}
+          handleChangeSelectedDaySupplierAlertUnitCost={handleChangeSelectedDaySupplierAlertUnitCost}
           handleChangeReceivedItemQuantity={handleChangeReceivedItemQuantity}
+          handleChangeInvoiceAmount={handleChangeInvoiceAmount}
           handleConfirmSelectedDaySupplierOrder={handleConfirmSelectedDaySupplierOrder}
           handleReceiveSelectedDaySupplierOrder={handleReceiveSelectedDaySupplierOrder}
           handleCancelSelectedDaySupplierFlow={handleCancelSelectedDaySupplierFlow}
@@ -70,6 +79,8 @@ function SuppliersPage() {
           onSelectSupplier={handleSelectSupplierForUnassignedProduct}
           onAssignSupplier={handleAssignSupplierToUnassignedProduct}
         />
+
+        <SuppliersInvoiceIncidentsPanel items={invoiceIncidents} />
       </div>
     </section>
   );
