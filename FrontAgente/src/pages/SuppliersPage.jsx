@@ -1,4 +1,5 @@
 import { SuppliersHeader } from './suppliers/components/SuppliersHeader';
+import { SuppliersUnassignedCriticalPanel } from './suppliers/components/SuppliersUnassignedCriticalPanel';
 import { SuppliersWeekMovementPanel } from './suppliers/components/SuppliersWeekMovementPanel';
 import { useSuppliersPageController } from './suppliers/useSuppliersPageController';
 
@@ -8,11 +9,16 @@ function SuppliersPage() {
     simulatedDate,
     setSimulatedDate,
     realToday,
+    suppliers,
     agenda,
     todayHeadline,
     selectedDaySupplierDetail,
     selectedDaySupplierAlerts,
     selectedDaySupplierReceivingItems,
+    unassignedCriticalProducts,
+    loadingUnassignedCriticalProducts,
+    assigningSupplierProductId,
+    selectedSupplierByProductId,
     loadingDaySupplierProducts,
     confirmingWeekSupplierId,
     receivingOrderId,
@@ -21,6 +27,8 @@ function SuppliersPage() {
     handleConfirmSelectedDaySupplierOrder,
     handleReceiveSelectedDaySupplierOrder,
     handleCancelSelectedDaySupplierFlow,
+    handleSelectSupplierForUnassignedProduct,
+    handleAssignSupplierToUnassignedProduct,
     handleSelectDaySupplier,
     weekMovementSchedule
   } = useSuppliersPageController();
@@ -51,6 +59,16 @@ function SuppliersPage() {
           handleReceiveSelectedDaySupplierOrder={handleReceiveSelectedDaySupplierOrder}
           handleCancelSelectedDaySupplierFlow={handleCancelSelectedDaySupplierFlow}
           handleSelectDaySupplier={handleSelectDaySupplier}
+        />
+
+        <SuppliersUnassignedCriticalPanel
+          items={unassignedCriticalProducts}
+          suppliers={suppliers}
+          loading={loadingUnassignedCriticalProducts}
+          assigningProductId={assigningSupplierProductId}
+          selectedSupplierByProductId={selectedSupplierByProductId}
+          onSelectSupplier={handleSelectSupplierForUnassignedProduct}
+          onAssignSupplier={handleAssignSupplierToUnassignedProduct}
         />
       </div>
     </section>

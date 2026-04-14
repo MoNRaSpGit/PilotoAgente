@@ -349,6 +349,32 @@ export async function listProductsBySupplier(supplierId) {
   return rows;
 }
 
+export async function listUnassignedCriticalProducts({ limit = 100 } = {}) {
+  await ensureSupplierTables();
+  const safeLimit = Math.max(1, Math.min(300, Math.floor(Number(limit) || 100)));
+  const [rows] = await pool.query(
+    `
+      SELECT
+        p.id,
+        p.nombre,
+        p.categoria,
+        p.stock_actual,
+        p.precio_venta,
+        p.barcode,
+        p.barcode_normalized
+      FROM ops_producto p
+      WHERE p.supplier_id IS NULL
+        AND COALESCE(p.stock_actual, 0) <= 5
+        AND COALESCE(p.estado, 'activo') = 'activo'
+      ORDER BY COALESCE(p.stock_actual, 0) ASC, p.nombre ASC
+      LIMIT ?
+    `,
+    [safeLimit]
+  );
+
+  return rows;
+}
+
 export async function createSupplierOrder(payload) {
   await ensureSupplierTables();
   return withTransaction(async (connection) => {

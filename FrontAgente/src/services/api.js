@@ -716,6 +716,57 @@ export async function fetchSupplierProducts(supplierId) {
   };
 }
 
+export async function fetchUnassignedCriticalSupplierProducts(params = {}) {
+  const searchParams = new URLSearchParams();
+  if (Number.isFinite(Number(params.limit)) && Number(params.limit) > 0) {
+    searchParams.set('limit', String(Math.floor(Number(params.limit))));
+  }
+  const query = searchParams.toString();
+
+  const response = await fetch(`${API_URL}/api/suppliers/unassigned-critical-products${query ? `?${query}` : ''}`, {
+    cache: 'no-store',
+    headers: {
+      ...getAuthHeaders()
+    }
+  });
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    const error = new Error(data.message || 'No se pudieron cargar productos criticos sin proveedor');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  return data.items || [];
+}
+
+export async function assignProductSupplier(productId, payload) {
+  const parsedProductId = Number(productId);
+  if (!Number.isFinite(parsedProductId) || parsedProductId <= 0) {
+    throw new Error('Producto invalido');
+  }
+
+  const response = await fetch(`${API_URL}/api/products/${parsedProductId}/supplier`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders()
+    },
+    body: JSON.stringify(payload || {})
+  });
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    const error = new Error(data.message || 'No se pudo asignar proveedor al producto');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  return data.item || null;
+}
+
 export async function fetchSuppliersAgenda(params = {}) {
   const searchParams = new URLSearchParams();
   if (params.date) {

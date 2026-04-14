@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
+  assignProductSupplier,
   fetchSupplierOrders,
   fetchSupplierProducts,
   fetchSuppliers,
   fetchSuppliersAgenda,
+  fetchUnassignedCriticalSupplierProducts,
   receiveSupplierOrder,
   upsertSupplierOrderFromProvider
 } from '../../services/api';
@@ -86,6 +88,10 @@ export function useSuppliersPageController() {
   const [selectedDaySupplierProducts, setSelectedDaySupplierProducts] = useState([]);
   const [loadingDaySupplierProducts, setLoadingDaySupplierProducts] = useState(false);
   const [selectedDaySupplier, setSelectedDaySupplier] = useState(null);
+  const [unassignedCriticalProducts, setUnassignedCriticalProducts] = useState([]);
+  const [loadingUnassignedCriticalProducts, setLoadingUnassignedCriticalProducts] = useState(false);
+  const [assigningSupplierProductId, setAssigningSupplierProductId] = useState(null);
+  const [selectedSupplierByProductId, setSelectedSupplierByProductId] = useState({});
   const suppliersLoadedRef = useRef(false);
   const recentOrdersLoadedRef = useRef(false);
   const productsBySupplierRef = useRef(new Map());
@@ -109,6 +115,17 @@ export function useSuppliersPageController() {
       if (Array.isArray(supplierItems)) {
         setSuppliers(supplierItems);
         suppliersLoadedRef.current = true;
+        setSelectedSupplierByProductId((current) => {
+          const next = {};
+          for (const key of Object.keys(current)) {
+            const parsedSupplierId = Number(current[key]);
+            const exists = supplierItems.some((supplier) => Number(supplier?.id || 0) === parsedSupplierId);
+            if (exists) {
+              next[key] = current[key];
+            }
+          }
+          return next;
+        });
       }
 
       setAgenda(agendaData);
@@ -128,9 +145,25 @@ export function useSuppliersPageController() {
     }
   }, [simulatedDate, realToday]);
 
+  const loadUnassignedCriticalProducts = useCallback(async () => {
+    try {
+      setLoadingUnassignedCriticalProducts(true);
+      const items = await fetchUnassignedCriticalSupplierProducts({ limit: 120 });
+      setUnassignedCriticalProducts(Array.isArray(items) ? items : []);
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setLoadingUnassignedCriticalProducts(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadData(simulatedDate);
   }, [loadData, simulatedDate]);
+
+  useEffect(() => {
+    loadUnassignedCriticalProducts();
+  }, [loadUnassignedCriticalProducts]);
 
   useEffect(() => {
     let active = true;
@@ -667,6 +700,50 @@ export function useSuppliersPageController() {
     setSelectedDaySupplier(null);
   }, [selectedDaySupplier, selectedDaySupplierDetail]);
 
+  const handleSelectSupplierForUnassignedProduct = useCallback(({ productId, supplierId }) => {
+    const parsedProductId = Number(productId);
+    if (!parsedProductId) {
+      return;
+    }
+
+    setSelectedSupplierByProductId((current) => ({
+      ...current,
+      [String(parsedProductId)]: Number(supplierId || 0)
+    }));
+  }, []);
+
+  const handleAssignSupplierToUnassignedProduct = useCallback(async (productId) => {
+    const parsedProductId = Number(productId);
+    const supplierId = Number(selectedSupplierByProductId[String(parsedProductId)] || 0);
+    if (!parsedProductId) {
+      return;
+    }
+    if (!supplierId) {
+      toast.error('Selecciona un proveedor para asignar');
+      return;
+    }
+
+    try {
+      setAssigningSupplierProductId(parsedProductId);
+      await assignProductSupplier(parsedProductId, { supplier_id: supplierId });
+      toast.success('Proveedor asignado al producto');
+
+      setUnassignedCriticalProducts((current) =>
+        (Array.isArray(current) ? current : []).filter((item) => Number(item?.id || 0) !== parsedProductId)
+      );
+      setSelectedSupplierByProductId((current) => {
+        const next = { ...current };
+        delete next[String(parsedProductId)];
+        return next;
+      });
+      await loadData(simulatedDate, { forceSuppliersRefresh: true });
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setAssigningSupplierProductId(null);
+    }
+  }, [selectedSupplierByProductId, loadData, simulatedDate]);
+
   return {
     loading,
     simulatedDate,
@@ -678,6 +755,10 @@ export function useSuppliersPageController() {
     selectedDaySupplierDetail,
     selectedDaySupplierAlerts,
     selectedDaySupplierReceivingItems,
+    unassignedCriticalProducts,
+    loadingUnassignedCriticalProducts,
+    assigningSupplierProductId,
+    selectedSupplierByProductId,
     loadingDaySupplierProducts,
     confirmingWeekSupplierId,
     receivingOrderId,
@@ -686,6 +767,8 @@ export function useSuppliersPageController() {
     handleConfirmSelectedDaySupplierOrder,
     handleReceiveSelectedDaySupplierOrder,
     handleCancelSelectedDaySupplierFlow,
+    handleSelectSupplierForUnassignedProduct,
+    handleAssignSupplierToUnassignedProduct,
     handleSelectDaySupplier,
     weekMovementSchedule
   };

@@ -18,6 +18,7 @@ import {
   listSupplierOrdersByDateRange,
   listProductsBySupplier,
   listSuppliers,
+  listUnassignedCriticalProducts,
   receiveSupplierOrderAndApplyStock,
   upsertPendingSupplierOrderWithItems,
   updateSupplierDraftItemQuantity,
@@ -308,6 +309,24 @@ export async function fetchProductsFromSupplier(supplierId) {
       barcode: product.barcode_normalized || product.barcode || null,
       supplier_id: Number(product.supplier_id || 0)
     }))
+  };
+}
+
+export async function fetchUnassignedCriticalSupplierProducts(query = {}) {
+  const rows = await listUnassignedCriticalProducts({ limit: query?.limit });
+  return {
+    items: rows.map((row) => {
+      const stockActual = Number(row.stock_actual || 0);
+      return {
+        id: Number(row.id),
+        nombre: row.nombre || '',
+        categoria: row.categoria || null,
+        stock_actual: stockActual,
+        precio_venta: Number(row.precio_venta || 0),
+        barcode: row.barcode_normalized || row.barcode || null,
+        status: stockActual <= 2 ? 'critical' : 'warning'
+      };
+    })
   };
 }
 

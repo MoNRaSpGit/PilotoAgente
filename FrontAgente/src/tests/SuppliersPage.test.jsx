@@ -13,6 +13,7 @@ function createControllerState(overrides = {}) {
     simulatedDate: '2026-04-12',
     setSimulatedDate: vi.fn(),
     realToday: '2026-04-12',
+    suppliers: [],
     agenda: {
       selected_date: '2026-04-12',
       today: { total_amount: 0, items: [] },
@@ -22,6 +23,10 @@ function createControllerState(overrides = {}) {
     selectedDaySupplierDetail: null,
     selectedDaySupplierAlerts: null,
     selectedDaySupplierReceivingItems: [],
+    unassignedCriticalProducts: [],
+    loadingUnassignedCriticalProducts: false,
+    assigningSupplierProductId: null,
+    selectedSupplierByProductId: {},
     loadingDaySupplierProducts: false,
     confirmingWeekSupplierId: null,
     receivingOrderId: null,
@@ -30,6 +35,8 @@ function createControllerState(overrides = {}) {
     handleConfirmSelectedDaySupplierOrder: vi.fn(),
     handleReceiveSelectedDaySupplierOrder: vi.fn(),
     handleCancelSelectedDaySupplierFlow: vi.fn(),
+    handleSelectSupplierForUnassignedProduct: vi.fn(),
+    handleAssignSupplierToUnassignedProduct: vi.fn(),
     handleSelectDaySupplier: vi.fn(),
     weekMovementSchedule: [],
     ...overrides

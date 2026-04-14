@@ -1,10 +1,12 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import toast from 'react-hot-toast';
 import {
+  assignProductSupplier,
   fetchSupplierProducts,
   fetchSupplierOrders,
   fetchSuppliers,
   fetchSuppliersAgenda,
+  fetchUnassignedCriticalSupplierProducts,
   receiveSupplierOrder,
   upsertSupplierOrderFromProvider
 } from '../services/api';
@@ -15,6 +17,8 @@ vi.mock('../services/api', () => ({
   fetchSupplierOrders: vi.fn(),
   fetchSuppliers: vi.fn(),
   fetchSuppliersAgenda: vi.fn(),
+  fetchUnassignedCriticalSupplierProducts: vi.fn(),
+  assignProductSupplier: vi.fn(),
   receiveSupplierOrder: vi.fn(),
   upsertSupplierOrderFromProvider: vi.fn()
 }));
@@ -49,6 +53,8 @@ describe('useSuppliersPageController', () => {
       supplier: { id: 1, nombre: 'Acme' },
       items: [{ id: 10, nombre: 'Leche Conaprole', precio_venta: 100, stock_actual: 5, barcode: '123' }]
     });
+    fetchUnassignedCriticalSupplierProducts.mockResolvedValue([]);
+    assignProductSupplier.mockResolvedValue({ id: 10, supplier_id: 1, supplier_name: 'Acme' });
     upsertSupplierOrderFromProvider.mockResolvedValue({
       id: 22,
       supplier_id: 1,

@@ -28,6 +28,89 @@
   grid-column: 1 / -1;
 }
 
+.suppliers-unassigned-panel {
+  grid-column: 1 / -1;
+}
+
+.suppliers-unassigned-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.suppliers-toggle-unassigned-btn {
+  border: 1px solid var(--sup-border-strong);
+  border-radius: 0.55rem;
+  background: #fff;
+  color: #1f2937;
+  padding: 0.3rem 0.55rem;
+  font-weight: 600;
+}
+
+.suppliers-unassigned-list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.suppliers-unassigned-footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.suppliers-link-btn {
+  border: 0;
+  background: transparent;
+  color: #0f766e;
+  font-weight: 600;
+  padding: 0;
+}
+
+.suppliers-unassigned-row {
+  border: 1px solid var(--sup-border);
+  border-radius: 0.7rem;
+  padding: 0.55rem 0.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  background: #fff;
+}
+
+.suppliers-unassigned-row small {
+  display: block;
+  color: var(--sup-text-soft);
+}
+
+.suppliers-unassigned-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.suppliers-unassigned-actions select {
+  min-width: 190px;
+  border: 1px solid var(--sup-border-strong);
+  border-radius: 0.5rem;
+  padding: 0.28rem 0.45rem;
+  background: #fff;
+}
+
+.suppliers-assign-btn {
+  border: 1px solid rgba(15, 23, 42, 0.25);
+  border-radius: 0.55rem;
+  background: #0f172a;
+  color: #fff;
+  padding: 0.34rem 0.58rem;
+  font-weight: 600;
+}
+
+.suppliers-assign-btn:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
 .suppliers-hero-banner {
   background:
     radial-gradient(circle at 100% -40%, rgba(15, 118, 110, 0.2), transparent 55%),
@@ -447,5 +530,19 @@
   .suppliers-build-row {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .suppliers-unassigned-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .suppliers-unassigned-actions {
+    width: 100%;
+  }
+
+  .suppliers-unassigned-actions select {
+    flex: 1;
+    min-width: 0;
   }
 }

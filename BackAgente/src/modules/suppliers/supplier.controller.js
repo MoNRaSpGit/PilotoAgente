@@ -9,6 +9,7 @@ import {
   fetchSupplierAgenda,
   fetchProductsFromSupplier,
   fetchSuppliers,
+  fetchUnassignedCriticalSupplierProducts,
   linkSupplierToProduct,
   removeSupplierDraftItem,
   receiveSupplierOrder,
@@ -60,6 +61,15 @@ export async function listSupplierProductsController(req, res) {
     return res.json(data);
   } catch (error) {
     return handleServiceError(res, error, 'No se pudo obtener productos del proveedor');
+  }
+}
+
+export async function listUnassignedCriticalSupplierProductsController(req, res) {
+  try {
+    const data = await fetchUnassignedCriticalSupplierProducts(req.query);
+    return res.json(data);
+  } catch (error) {
+    return handleServiceError(res, error, 'No se pudo obtener productos criticos sin proveedor');
   }
 }
 

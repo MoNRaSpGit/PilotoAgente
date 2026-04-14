@@ -8,6 +8,7 @@ import {
   getSupplierAgendaController,
   getSupplierOrderDetailController,
   getSupplierOrdersController,
+  listUnassignedCriticalSupplierProductsController,
   listSupplierProductsController,
   listSuppliersController,
   receiveSupplierOrderController
@@ -18,6 +19,7 @@ const router = Router();
 router.use(authMiddleware);
 
 router.get('/suppliers', requireRole('admin'), listSuppliersController);
+router.get('/suppliers/unassigned-critical-products', requireRole('admin'), listUnassignedCriticalSupplierProductsController);
 router.post('/suppliers', requireRole('admin'), createSupplierController);
 router.get('/suppliers/:supplierId/products', requireRole('admin'), listSupplierProductsController);
 router.patch('/products/:productId/supplier', requireRole('admin'), assignProductSupplierController);
