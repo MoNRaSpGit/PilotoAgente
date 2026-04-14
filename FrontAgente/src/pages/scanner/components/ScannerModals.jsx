@@ -43,7 +43,7 @@ function ScannerModals({
         centered
         restoreFocus={false}
       >
-        <Modal.Header closeButton>
+        <Modal.Header>
           <Modal.Title>Agregar Producto Manual</Modal.Title>
         </Modal.Header>
         <Modal.Body>
@@ -82,7 +82,7 @@ function ScannerModals({
         centered
         restoreFocus={false}
       >
-        <Modal.Header closeButton>
+        <Modal.Header>
           <Modal.Title>Agregar Producto Manual</Modal.Title>
         </Modal.Header>
         <Modal.Body>

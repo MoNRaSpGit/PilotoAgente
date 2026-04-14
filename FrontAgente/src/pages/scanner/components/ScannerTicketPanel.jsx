@@ -34,29 +34,33 @@ function ScannerTicketPanel({
               <div
                 className={`scanner-item ${index === items.length - 1 ? 'scanner-item-latest' : ''}`}
                 key={item.key}
-                role="button"
-                tabIndex={0}
-                onPointerDown={() => handleItemPointerDown(item)}
-                onPointerUp={clearItemPress}
-                onPointerLeave={clearItemPress}
-                onPointerCancel={clearItemPress}
-                onClick={() => handleItemClick(item.key)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    handleItemClick(item.key);
-                  }
-                }}
               >
-                <div className="scanner-item-main">
-                  {item.hasImage ? (
-                    <img className="scanner-product-image" src={item.imageUrl} alt={item.name} loading="lazy" />
-                  ) : (
-                    <div className="scanner-product-fallback">IMG</div>
-                  )}
-                  <div className="scanner-item-text">
-                    <span className="scanner-item-name">{item.name}</span>
-                    <span className="scanner-item-price">${item.price.toFixed(2)}</span>
+                <div
+                  className="scanner-item-hit-area"
+                  role="button"
+                  tabIndex={0}
+                  onPointerDown={() => handleItemPointerDown(item)}
+                  onPointerUp={clearItemPress}
+                  onPointerLeave={clearItemPress}
+                  onPointerCancel={clearItemPress}
+                  onClick={() => handleItemClick(item.key)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      handleItemClick(item.key);
+                    }
+                  }}
+                >
+                  <div className="scanner-item-main">
+                    {item.hasImage ? (
+                      <img className="scanner-product-image" src={item.imageUrl} alt={item.name} loading="lazy" />
+                    ) : (
+                      <div className="scanner-product-fallback">IMG</div>
+                    )}
+                    <div className="scanner-item-text">
+                      <span className="scanner-item-name">{item.name}</span>
+                      <span className="scanner-item-price">${item.price.toFixed(2)}</span>
+                    </div>
                   </div>
                 </div>
 

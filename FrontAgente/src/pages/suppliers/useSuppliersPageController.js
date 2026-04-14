@@ -493,7 +493,7 @@ export function useSuppliersPageController() {
         if (stockActual > 5) {
           return null;
         }
-        const status = stockActual <= 2 ? 'critical' : 'warning';
+        const status = stockActual <= 3 ? 'critical' : 'warning';
         const productId = Number(product?.id || 0);
         const key = `${supplierId}:${productId}`;
         const baseQuantity = Number(currentOrderQtyByProductId.get(productId) || 0);

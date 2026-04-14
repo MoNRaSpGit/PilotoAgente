@@ -356,7 +356,7 @@ export async function fetchUnassignedCriticalSupplierProducts(query = {}) {
         stock_actual: stockActual,
         precio_venta: Number(row.precio_venta || 0),
         barcode: row.barcode_normalized || row.barcode || null,
-        status: stockActual <= 2 ? 'critical' : 'warning'
+        status: stockActual <= 3 ? 'critical' : 'warning'
       };
     })
   };
