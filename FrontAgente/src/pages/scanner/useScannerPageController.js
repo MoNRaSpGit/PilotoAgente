@@ -16,6 +16,8 @@ import {
   normalizeDraftItems,
   resolveProductImage
 } from './scannerPage.utils';
+import { createScannerSaleTicketText } from './printing/scannerTicketPrint.model';
+import { sendScannerTicketToRawBt } from './printing/scannerTicketPrint.service';
 
 export function useScannerPageController() {
   const user = useSelector((state) => state.auth.user);
@@ -519,6 +521,23 @@ export function useScannerPageController() {
     setEditOpen(false);
   };
 
+  const printSaleTicket = ({ saleItems, saleAmount, clientName = '' }) => {
+    const ticketText = createScannerSaleTicketText({
+      items: saleItems,
+      totalAmount: saleAmount,
+      clientName,
+      operatorName: user?.name || '',
+      storeName: import.meta.env.VITE_SCANNER_TICKET_STORE_NAME || import.meta.env.VITE_APP_NAME || 'PILOTO AGENTE',
+      feedLines: Number(import.meta.env.VITE_SCANNER_TICKET_FEED_LINES || 6)
+    });
+
+    const printResult = sendScannerTicketToRawBt(ticketText);
+
+    if (!printResult.ok && printResult.reason !== 'disabled') {
+      toast.error('No se pudo abrir RawBT para imprimir el ticket');
+    }
+  };
+
   const recordBoxSale = async (saleItems, saleAmount, context = 'general') => {
     const registerSaleStartedAt = performance.now();
     const clearLiveStateVersion = liveSyncVersionRef.current + 1;
@@ -569,6 +588,10 @@ export function useScannerPageController() {
     const saleItemsSnapshot = cloneSaleItems(items);
     const amountSnapshot = Number(totalAmount || 0);
     const itemCountSnapshot = saleItemsSnapshot.length;
+    printSaleTicket({
+      saleItems: saleItemsSnapshot,
+      saleAmount: amountSnapshot
+    });
 
     const clearUiStartedAt = performance.now();
     setItems([]);
@@ -628,13 +651,20 @@ export function useScannerPageController() {
     }
 
     try {
+      const saleItemsSnapshot = cloneSaleItems(items);
+      const amountSnapshot = Number(chargeSnapshotTotal || 0);
+      printSaleTicket({
+        saleItems: saleItemsSnapshot,
+        saleAmount: amountSnapshot,
+        clientName: selectedClientData.nombre
+      });
       const today = new Date().toISOString().slice(0, 10);
-      await recordBoxSale(items, chargeSnapshotTotal, 'with-client');
+      await recordBoxSale(saleItemsSnapshot, amountSnapshot, 'with-client');
       const updateClientStartedAt = performance.now();
       const updated = await updateClientCharge(selectedClientData.id, {
-        charge_amount: chargeSnapshotTotal,
+        charge_amount: amountSnapshot,
         ultima_fecha_pago: today,
-        items: items.map((item) => ({
+        items: saleItemsSnapshot.map((item) => ({
           name: item.name,
           quantity: item.quantity,
           price: item.price,
@@ -652,7 +682,7 @@ export function useScannerPageController() {
       setBarcode('');
       setManualPrice('');
       clearSelectedClient();
-      toast.success(`Se agrego ${chargeSnapshotTotal.toFixed(2)} a ${updated.nombre}`);
+      toast.success(`Se agrego ${amountSnapshot.toFixed(2)} a ${updated.nombre}`);
       closeChargeClientConfirm();
       setChargeOpen(false);
       setManualOpen(false);
@@ -665,8 +695,8 @@ export function useScannerPageController() {
       logChargeTiming('totalFlow', totalFlowStartedAt, {
         context: 'with-client',
         clientId: selectedClientData.id,
-        amount: Number(chargeSnapshotTotal || 0),
-        items: items.length
+        amount: Number(amountSnapshot || 0),
+        items: saleItemsSnapshot.length
       });
     } catch (error) {
       logChargeTiming('error', totalFlowStartedAt, {

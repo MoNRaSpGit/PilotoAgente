@@ -14,6 +14,8 @@ import {
   updateClientCharge,
   updateProduct
 } from '../services/api';
+import { createScannerSaleTicketText } from '../pages/scanner/printing/scannerTicketPrint.model';
+import { sendScannerTicketToRawBt } from '../pages/scanner/printing/scannerTicketPrint.service';
 
 vi.mock('../services/api', () => ({
   createManualProductFromBarcode: vi.fn(),
@@ -24,6 +26,14 @@ vi.mock('../services/api', () => ({
   syncScannerLiveState: vi.fn(),
   updateClientCharge: vi.fn(),
   updateProduct: vi.fn()
+}));
+
+vi.mock('../pages/scanner/printing/scannerTicketPrint.model', () => ({
+  createScannerSaleTicketText: vi.fn()
+}));
+
+vi.mock('../pages/scanner/printing/scannerTicketPrint.service', () => ({
+  sendScannerTicketToRawBt: vi.fn()
 }));
 
 vi.mock('react-hot-toast', () => ({
@@ -67,6 +77,8 @@ describe('useScannerPageController', () => {
     updateProduct.mockResolvedValue({});
     updateClientCharge.mockResolvedValue({ id: 1, nombre: 'Cliente Demo' });
     syncScannerLiveState.mockResolvedValue({});
+    createScannerSaleTicketText.mockReturnValue('ticket demo');
+    sendScannerTicketToRawBt.mockReturnValue({ ok: true });
   });
 
   it('carga estado inicial y clientes para admin', async () => {
@@ -151,6 +163,8 @@ describe('useScannerPageController', () => {
       expect(registerCashboxSale).toHaveBeenCalledTimes(1);
     });
 
+    expect(createScannerSaleTicketText).toHaveBeenCalledTimes(1);
+    expect(sendScannerTicketToRawBt).toHaveBeenCalledWith('ticket demo');
     expect(result.current.items).toHaveLength(0);
     expect(result.current.chargeOpen).toBe(false);
   });
