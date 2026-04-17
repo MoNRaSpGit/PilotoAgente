@@ -528,7 +528,9 @@ export function useScannerPageController() {
       clientName,
       operatorName: user?.name || '',
       storeName: import.meta.env.VITE_SCANNER_TICKET_STORE_NAME || import.meta.env.VITE_APP_NAME || 'PILOTO AGENTE',
-      feedLines: Number(import.meta.env.VITE_SCANNER_TICKET_FEED_LINES || 6)
+      feedLines: Number(import.meta.env.VITE_SCANNER_TICKET_FEED_LINES || 12),
+      paperWidth: Number(import.meta.env.VITE_SCANNER_TICKET_PAPER_WIDTH || 48),
+      leftPadding: Number(import.meta.env.VITE_SCANNER_TICKET_LEFT_PADDING || 2)
     });
 
     const printResult = sendScannerTicketToRawBt(ticketText);
