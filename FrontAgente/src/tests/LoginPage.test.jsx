@@ -17,6 +17,7 @@ function createControllerState(overrides = {}) {
     handleSubmit: vi.fn((event) => event.preventDefault()),
     handleQuickLogin: vi.fn(),
     handleLogoTap: vi.fn(),
+    handleCloseApp: vi.fn(),
     ...overrides
   };
 }
@@ -46,6 +47,7 @@ describe('Login components', () => {
         handleSubmit={vi.fn()}
         handleQuickLogin={vi.fn()}
         handleLogoTap={vi.fn()}
+        handleCloseApp={vi.fn()}
       />
     );
 
@@ -64,6 +66,7 @@ describe('Login components', () => {
         handleSubmit={handleSubmit}
         handleQuickLogin={vi.fn()}
         handleLogoTap={vi.fn()}
+        handleCloseApp={vi.fn()}
       />
     );
 

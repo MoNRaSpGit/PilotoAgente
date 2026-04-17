@@ -1,7 +1,16 @@
-﻿import { BotMessageSquare } from 'lucide-react';
+import { BotMessageSquare, Power } from 'lucide-react';
 import { Button, Form } from 'react-bootstrap';
 
-export function LoginPanel({ form, loading, panelUnlocked, handleChange, handleSubmit, handleQuickLogin, handleLogoTap }) {
+export function LoginPanel({
+  form,
+  loading,
+  panelUnlocked,
+  handleChange,
+  handleSubmit,
+  handleQuickLogin,
+  handleLogoTap,
+  handleCloseApp
+}) {
   return (
     <div className="card-panel login-secret-panel">
       <div className="panel-heading">
@@ -31,6 +40,10 @@ export function LoginPanel({ form, loading, panelUnlocked, handleChange, handleS
               onClick={() => handleQuickLogin('operarioOficina')}
             >
               Entrar como operario oficina
+            </Button>
+            <Button type="button" variant="outline-danger" disabled={loading} onClick={handleCloseApp}>
+              <Power size={16} className="me-1" />
+              Cerrar app
             </Button>
           </div>
 

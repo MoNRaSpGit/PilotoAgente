@@ -110,6 +110,39 @@ export function useLoginPageController() {
     setLogoTapCount((current) => Math.min(current + 1, 7));
   };
 
+  const handleCloseApp = () => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      if (window.Capacitor?.Plugins?.App?.exitApp) {
+        window.Capacitor.Plugins.App.exitApp();
+        return;
+      }
+
+      if (window.navigator?.app?.exitApp) {
+        window.navigator.app.exitApp();
+        return;
+      }
+
+      window.close();
+
+      window.setTimeout(() => {
+        if (!window.closed) {
+          if (window.history.length > 1) {
+            window.history.back();
+            return;
+          }
+
+          window.location.replace('about:blank');
+        }
+      }, 120);
+    } catch (_error) {
+      window.location.replace('about:blank');
+    }
+  };
+
   return {
     form,
     loading,
@@ -117,6 +150,7 @@ export function useLoginPageController() {
     handleChange,
     handleSubmit,
     handleQuickLogin,
-    handleLogoTap
+    handleLogoTap,
+    handleCloseApp
   };
 }

@@ -9,7 +9,8 @@ function LoginPage() {
     handleChange,
     handleSubmit,
     handleQuickLogin,
-    handleLogoTap
+    handleLogoTap,
+    handleCloseApp
   } = useLoginPageController();
 
   return (
@@ -22,6 +23,7 @@ function LoginPage() {
         handleSubmit={handleSubmit}
         handleQuickLogin={handleQuickLogin}
         handleLogoTap={handleLogoTap}
+        handleCloseApp={handleCloseApp}
       />
     </section>
   );
