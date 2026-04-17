@@ -1,6 +1,6 @@
 const DEFAULT_TICKET_WIDTH = 32;
 const DEFAULT_LEFT_PADDING = 0;
-const DEFAULT_FEED_LINES = 8;
+const DEFAULT_FEED_LINES = 14;
 const PRODUCT_COLUMN_WIDTH = 21;
 const TOTAL_COLUMN_WIDTH = 11;
 const ESC = '\x1B';
@@ -89,7 +89,6 @@ export function createScannerSaleTicketText({
   items = [],
   totalAmount = 0,
   clientName = '',
-  operatorName = '',
   storeName = 'PILOTO AGENTE',
   printedAt = new Date(),
   feedLines = DEFAULT_FEED_LINES,
@@ -98,7 +97,6 @@ export function createScannerSaleTicketText({
 } = {}) {
   const safeItems = Array.isArray(items) ? items : [];
   const safeClientName = toSafeText(clientName);
-  const safeOperatorName = toSafeText(operatorName);
   const safeWidth = Math.max(20, Number(paperWidth) || DEFAULT_TICKET_WIDTH);
   const safeLeftPadding = Math.max(0, Number(leftPadding) || DEFAULT_LEFT_PADDING);
   const printedDate = printedAt instanceof Date ? printedAt : new Date(printedAt);
@@ -125,10 +123,6 @@ export function createScannerSaleTicketText({
 
   if (safeClientName) {
     text += `${withLeftPadding(fitLine(`CLIENTE: ${safeClientName}`, safeWidth), safeLeftPadding)}\n`;
-  }
-
-  if (safeOperatorName) {
-    text += `${withLeftPadding(fitLine(`OPERADOR: ${safeOperatorName}`, safeWidth), safeLeftPadding)}\n`;
   }
 
   text += `${withLeftPadding(withBold(centerText('Gracias por su compra', safeWidth)), safeLeftPadding)}\n`;
