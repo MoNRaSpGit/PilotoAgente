@@ -126,15 +126,11 @@ export function useLoginPageController() {
         return;
       }
 
+      window.open('', '_self');
       window.close();
 
       window.setTimeout(() => {
         if (!window.closed) {
-          if (window.history.length > 1) {
-            window.history.back();
-            return;
-          }
-
           window.location.replace('about:blank');
         }
       }, 120);
