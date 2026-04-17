@@ -1,6 +1,11 @@
-const DEFAULT_TICKET_WIDTH = 48;
-const DEFAULT_LEFT_PADDING = 2;
-const DEFAULT_FEED_LINES = 12;
+const DEFAULT_TICKET_WIDTH = 32;
+const DEFAULT_LEFT_PADDING = 0;
+const DEFAULT_FEED_LINES = 8;
+const PRODUCT_COLUMN_WIDTH = 21;
+const TOTAL_COLUMN_WIDTH = 11;
+const ESC = '\x1B';
+const BOLD_ON = `${ESC}E\x01`;
+const BOLD_OFF = `${ESC}E\x00`;
 
 function toSafeText(value, fallback = '') {
   const normalized = String(value ?? fallback)
@@ -27,7 +32,14 @@ function lineSeparator(width) {
 
 function formatMoney(value) {
   const numberValue = Number(value || 0);
-  return `$${numberValue.toFixed(2)}`;
+  const rounded = Math.round(numberValue);
+  const formatter = new Intl.NumberFormat('es-UY', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+    useGrouping: false
+  });
+
+  return `$${formatter.format(rounded)}`;
 }
 
 function withLeftPadding(value, leftPadding) {
@@ -39,34 +51,38 @@ function fitLine(value, width) {
   return String(value || '').slice(0, safeWidth).padEnd(safeWidth, ' ');
 }
 
-function rightValueLine(label, value, width) {
-  const safeLabel = toSafeText(label).toUpperCase();
-  const safeValue = toSafeText(value);
-  const composed = `${safeLabel}: ${safeValue}`;
-
-  if (composed.length >= width) {
-    return composed.slice(0, width);
-  }
-
-  const spaces = ' '.repeat(Math.max(0, width - composed.length));
-  return `${safeLabel}:${spaces}${safeValue}`;
+function padRight(value, width) {
+  return String(value || '').slice(0, width).padEnd(width, ' ');
 }
 
-function formatItemBlock(item, width) {
-  const quantity = Number(item?.quantity || 0);
-  const price = Number(item?.price || 0);
-  const lineTotal = Number(item?.total || quantity * price);
-  const name = toSafeText(item?.name || 'Producto').toUpperCase();
-  const unitPriceLabel = formatMoney(price);
-  const lineTotalLabel = formatMoney(lineTotal);
-  const quantityLabel = `${quantity} x ${unitPriceLabel}`;
-  const gap = Math.max(1, width - quantityLabel.length - lineTotalLabel.length);
-  const row2 = `${quantityLabel}${' '.repeat(gap)}${lineTotalLabel}`;
+function padLeft(value, width) {
+  const text = String(value || '');
+  if (text.length >= width) {
+    return text.slice(text.length - width);
+  }
 
-  return [
-    fitLine(name, width),
-    fitLine(row2, width)
-  ];
+  return text.padStart(width, ' ');
+}
+
+function withBold(value) {
+  return `${BOLD_ON}${value}${BOLD_OFF}`;
+}
+
+function formatItemRow(item) {
+  const quantity = Number(item?.quantity || 0);
+  const lineName = `${quantity}x ${toSafeText(item?.name || 'Producto')}`;
+  const productCell = padRight(lineName, PRODUCT_COLUMN_WIDTH);
+  const price = Number(item?.price || 0);
+  const resolvedTotal = Number(item?.total || quantity * price);
+  const lineTotalLabel = padLeft(formatMoney(resolvedTotal), TOTAL_COLUMN_WIDTH);
+
+  return `${productCell}${lineTotalLabel}`;
+}
+
+function formatTotalRow(totalAmount) {
+  const totalLabel = padRight('TOTAL', PRODUCT_COLUMN_WIDTH);
+  const lineTotalLabel = formatMoney(totalAmount);
+  return `${totalLabel}${padLeft(lineTotalLabel, TOTAL_COLUMN_WIDTH)}`;
 }
 
 export function createScannerSaleTicketText({
@@ -81,7 +97,6 @@ export function createScannerSaleTicketText({
   leftPadding = DEFAULT_LEFT_PADDING
 } = {}) {
   const safeItems = Array.isArray(items) ? items : [];
-  const safeStoreName = toSafeText(storeName, 'PILOTO AGENTE') || 'PILOTO AGENTE';
   const safeClientName = toSafeText(clientName);
   const safeOperatorName = toSafeText(operatorName);
   const safeWidth = Math.max(20, Number(paperWidth) || DEFAULT_TICKET_WIDTH);
@@ -92,20 +107,21 @@ export function createScannerSaleTicketText({
     : printedDate.toLocaleString('es-UY');
 
   let text = '';
-  text += `${withLeftPadding(centerText(safeStoreName, safeWidth), safeLeftPadding)}\n`;
-  text += `${withLeftPadding(centerText('TICKET DE VENTA', safeWidth), safeLeftPadding)}\n`;
+  text += `${withLeftPadding(withBold(centerText('SCANER', safeWidth)), safeLeftPadding)}\n`;
+  text += `${withLeftPadding(centerText('Ticket de venta', safeWidth), safeLeftPadding)}\n`;
+  text += `${withLeftPadding(lineSeparator(safeWidth), safeLeftPadding)}\n`;
+  text += `${withLeftPadding(fitLine(`Fecha: ${printedLabel}`, safeWidth), safeLeftPadding)}\n`;
+  text += `${withLeftPadding(lineSeparator(safeWidth), safeLeftPadding)}\n`;
+  text += `${withLeftPadding(withBold(`${padRight('Producto', PRODUCT_COLUMN_WIDTH)}${padLeft('Total', TOTAL_COLUMN_WIDTH)}`), safeLeftPadding)}\n`;
   text += `${withLeftPadding(lineSeparator(safeWidth), safeLeftPadding)}\n`;
 
   safeItems.forEach((item) => {
-    const itemLines = formatItemBlock(item, safeWidth);
-    itemLines.forEach((line) => {
-      text += `${withLeftPadding(line, safeLeftPadding)}\n`;
-    });
-    text += `${withLeftPadding(fitLine('', safeWidth), safeLeftPadding)}\n`;
+    text += `${withLeftPadding(formatItemRow(item), safeLeftPadding)}\n`;
   });
 
   text += `${withLeftPadding(lineSeparator(safeWidth), safeLeftPadding)}\n`;
-  text += `${withLeftPadding(rightValueLine('TOTAL', formatMoney(totalAmount), safeWidth), safeLeftPadding)}\n`;
+  text += `${withLeftPadding(withBold(formatTotalRow(totalAmount)), safeLeftPadding)}\n`;
+  text += `${withLeftPadding(lineSeparator(safeWidth), safeLeftPadding)}\n`;
 
   if (safeClientName) {
     text += `${withLeftPadding(fitLine(`CLIENTE: ${safeClientName}`, safeWidth), safeLeftPadding)}\n`;
@@ -115,9 +131,7 @@ export function createScannerSaleTicketText({
     text += `${withLeftPadding(fitLine(`OPERADOR: ${safeOperatorName}`, safeWidth), safeLeftPadding)}\n`;
   }
 
-  text += `${withLeftPadding(fitLine(`FECHA: ${printedLabel}`, safeWidth), safeLeftPadding)}\n`;
-  text += `${withLeftPadding(lineSeparator(safeWidth), safeLeftPadding)}\n`;
-  text += `${withLeftPadding(centerText('GRACIAS POR SU COMPRA', safeWidth), safeLeftPadding)}\n`;
+  text += `${withLeftPadding(withBold(centerText('Gracias por su compra', safeWidth)), safeLeftPadding)}\n`;
   text += '\n'.repeat(Math.max(2, Number(feedLines) || DEFAULT_FEED_LINES));
 
   return text;
