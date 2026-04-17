@@ -2,7 +2,7 @@ const PRINT_ENABLED = String(import.meta.env.VITE_SCANNER_TICKET_PRINT_ENABLED ?
 const PRINT_MODE = String(import.meta.env.VITE_SCANNER_TICKET_PRINT_MODE ?? 'scheme').toLowerCase();
 
 function buildPrintUrl(ticketText) {
-  const encoded = encodeURIComponent(String(ticketText || '').trim());
+  const encoded = encodeURIComponent(String(ticketText || ''));
 
   if (PRINT_MODE === 'intent') {
     return `intent://rawbt?data=${encoded}#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end`;
@@ -29,9 +29,9 @@ export function sendScannerTicketToRawBt(ticketText) {
     return { ok: false, reason: 'unsupported-runtime' };
   }
 
-  const normalized = String(ticketText || '').trim();
+  const normalized = String(ticketText || '');
 
-  if (!normalized) {
+  if (!normalized.trim()) {
     return { ok: false, reason: 'empty-ticket' };
   }
 

@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
 import toast from 'react-hot-toast';
 import { fetchScannerLiveState, syncScannerLiveState } from '../../services/api';
@@ -527,7 +527,7 @@ export function useScannerPageController() {
       totalAmount: saleAmount,
       clientName,
       storeName: import.meta.env.VITE_SCANNER_TICKET_STORE_NAME || import.meta.env.VITE_APP_NAME || 'PILOTO AGENTE',
-      feedLines: Number(import.meta.env.VITE_SCANNER_TICKET_FEED_LINES || 30),
+      feedLines: Number(import.meta.env.VITE_SCANNER_TICKET_FEED_LINES || 60),
       paperWidth: Number(import.meta.env.VITE_SCANNER_TICKET_PAPER_WIDTH || 32),
       leftPadding: Number(import.meta.env.VITE_SCANNER_TICKET_LEFT_PADDING || 0)
     });
