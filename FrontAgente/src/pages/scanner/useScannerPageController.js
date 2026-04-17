@@ -532,11 +532,7 @@ export function useScannerPageController() {
       leftPadding: Number(import.meta.env.VITE_SCANNER_TICKET_LEFT_PADDING || 0)
     });
 
-    const printResult = sendScannerTicketToRawBt(ticketText);
-
-    if (!printResult.ok && printResult.reason !== 'disabled') {
-      toast.error('No se pudo abrir RawBT para imprimir el ticket');
-    }
+    return sendScannerTicketToRawBt(ticketText);
   };
 
   const recordBoxSale = async (saleItems, saleAmount, context = 'general') => {
@@ -589,10 +585,13 @@ export function useScannerPageController() {
     const saleItemsSnapshot = cloneSaleItems(items);
     const amountSnapshot = Number(totalAmount || 0);
     const itemCountSnapshot = saleItemsSnapshot.length;
-    printSaleTicket({
+    const printResult = printSaleTicket({
       saleItems: saleItemsSnapshot,
       saleAmount: amountSnapshot
     });
+    if (!printResult.ok && printResult.reason !== 'disabled') {
+      toast.error('No se pudo abrir RawBT para imprimir el ticket');
+    }
 
     const clearUiStartedAt = performance.now();
     setItems([]);
@@ -654,11 +653,14 @@ export function useScannerPageController() {
     try {
       const saleItemsSnapshot = cloneSaleItems(items);
       const amountSnapshot = Number(chargeSnapshotTotal || 0);
-      printSaleTicket({
+      const printResult = printSaleTicket({
         saleItems: saleItemsSnapshot,
         saleAmount: amountSnapshot,
         clientName: selectedClientData.nombre
       });
+      if (!printResult.ok && printResult.reason !== 'disabled') {
+        toast.error('No se pudo abrir RawBT para imprimir el ticket');
+      }
       const today = new Date().toISOString().slice(0, 10);
       await recordBoxSale(saleItemsSnapshot, amountSnapshot, 'with-client');
       const updateClientStartedAt = performance.now();

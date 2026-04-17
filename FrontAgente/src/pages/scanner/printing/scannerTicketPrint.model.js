@@ -6,6 +6,11 @@ const TOTAL_COLUMN_WIDTH = 11;
 const ESC = '\x1B';
 const BOLD_ON = `${ESC}E\x01`;
 const BOLD_OFF = `${ESC}E\x00`;
+const MONEY_FORMATTER = new Intl.NumberFormat('es-UY', {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+  useGrouping: false
+});
 
 function toSafeText(value, fallback = '') {
   const normalized = String(value ?? fallback)
@@ -33,13 +38,7 @@ function lineSeparator(width) {
 function formatMoney(value) {
   const numberValue = Number(value || 0);
   const rounded = Math.round(numberValue);
-  const formatter = new Intl.NumberFormat('es-UY', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-    useGrouping: false
-  });
-
-  return `$${formatter.format(rounded)}`;
+  return `$${MONEY_FORMATTER.format(rounded)}`;
 }
 
 function withLeftPadding(value, leftPadding) {
@@ -89,7 +88,7 @@ export function createScannerSaleTicketText({
   items = [],
   totalAmount = 0,
   clientName = '',
-  storeName = 'PILOTO AGENTE',
+  storeName = 'SCANER',
   printedAt = new Date(),
   feedLines = DEFAULT_FEED_LINES,
   paperWidth = DEFAULT_TICKET_WIDTH,
@@ -97,6 +96,7 @@ export function createScannerSaleTicketText({
 } = {}) {
   const safeItems = Array.isArray(items) ? items : [];
   const safeClientName = toSafeText(clientName);
+  const safeStoreName = toSafeText(storeName, 'SCANER') || 'SCANER';
   const safeWidth = Math.max(20, Number(paperWidth) || DEFAULT_TICKET_WIDTH);
   const safeLeftPadding = Math.max(0, Number(leftPadding) || DEFAULT_LEFT_PADDING);
   const printedDate = printedAt instanceof Date ? printedAt : new Date(printedAt);
@@ -105,7 +105,7 @@ export function createScannerSaleTicketText({
     : printedDate.toLocaleString('es-UY');
 
   let text = '';
-  text += `${withLeftPadding(withBold(centerText('SCANER', safeWidth)), safeLeftPadding)}\n`;
+  text += `${withLeftPadding(withBold(centerText(safeStoreName, safeWidth)), safeLeftPadding)}\n`;
   text += `${withLeftPadding(centerText('Ticket de venta', safeWidth), safeLeftPadding)}\n`;
   text += `${withLeftPadding(lineSeparator(safeWidth), safeLeftPadding)}\n`;
   text += `${withLeftPadding(fitLine(`Fecha: ${printedLabel}`, safeWidth), safeLeftPadding)}\n`;

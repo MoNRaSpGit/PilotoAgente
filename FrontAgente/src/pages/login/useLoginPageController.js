@@ -131,11 +131,11 @@ export function useLoginPageController() {
 
       window.setTimeout(() => {
         if (!window.closed) {
-          window.location.replace('about:blank');
+          toast.error('No se pudo cerrar automaticamente. Usa el boton atras del dispositivo.');
         }
       }, 120);
     } catch (_error) {
-      window.location.replace('about:blank');
+      toast.error('No se pudo cerrar automaticamente. Usa el boton atras del dispositivo.');
     }
   };
 
