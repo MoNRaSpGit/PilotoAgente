@@ -41,10 +41,6 @@ export function LoginPanel({
             >
               Entrar como operario oficina
             </Button>
-            <Button type="button" variant="outline-danger" disabled={loading} onClick={handleCloseApp}>
-              <Power size={16} className="me-1" />
-              Cerrar app
-            </Button>
           </div>
 
           <Form onSubmit={handleSubmit}>
@@ -77,6 +73,10 @@ export function LoginPanel({
 
           <Button type="submit" disabled>
             Iniciar sesion
+          </Button>
+          <Button type="button" variant="outline-danger" className="ms-2" onClick={handleCloseApp}>
+            <Power size={16} className="me-1" />
+            Cerrar app
           </Button>
         </Form>
       )}

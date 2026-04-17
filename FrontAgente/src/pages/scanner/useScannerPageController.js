@@ -527,7 +527,7 @@ export function useScannerPageController() {
       totalAmount: saleAmount,
       clientName,
       storeName: import.meta.env.VITE_SCANNER_TICKET_STORE_NAME || import.meta.env.VITE_APP_NAME || 'PILOTO AGENTE',
-      feedLines: Number(import.meta.env.VITE_SCANNER_TICKET_FEED_LINES || 24),
+      feedLines: Number(import.meta.env.VITE_SCANNER_TICKET_FEED_LINES || 8),
       paperWidth: Number(import.meta.env.VITE_SCANNER_TICKET_PAPER_WIDTH || 32),
       leftPadding: Number(import.meta.env.VITE_SCANNER_TICKET_LEFT_PADDING || 0)
     });
