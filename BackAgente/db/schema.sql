@@ -162,6 +162,18 @@
 -- INDEX idx_stock_mov_reference (reference_type, reference_id)
 
 -- =========================================================
+-- ops_categoria
+-- Source: src/modules/categories/category.repository.js
+-- =========================================================
+-- id INT AUTO_INCREMENT PRIMARY KEY
+-- nombre VARCHAR(140) NOT NULL
+-- nombre_normalized VARCHAR(140) NOT NULL UNIQUE
+-- estado VARCHAR(20) NOT NULL DEFAULT 'activo'
+-- created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+-- updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+-- INDEX idx_categoria_estado (estado)
+
+-- =========================================================
 -- ops_proveedores
 -- Source: src/modules/suppliers/supplier.repository.js
 -- =========================================================
@@ -182,7 +194,14 @@
 -- Source: src/modules/suppliers/supplier.repository.js
 -- =========================================================
 -- supplier_id INT NULL
+-- categoria_id INT NULL
+-- imagen_url VARCHAR(500) NULL
+-- imagen_public_id VARCHAR(255) NULL
+-- imagen_source VARCHAR(20) NOT NULL DEFAULT 'local'
 -- INDEX idx_producto_supplier_id (supplier_id)
+-- INDEX idx_producto_categoria_id (categoria_id)
+-- INDEX idx_producto_imagen_source (imagen_source)
+-- FOREIGN KEY (categoria_id) REFERENCES ops_categoria(id) ON DELETE SET NULL
 
 -- =========================================================
 -- ops_supplier_orders
@@ -258,3 +277,102 @@
 -- INDEX idx_supplier_draft_items_product (product_id)
 -- UNIQUE KEY uniq_supplier_draft_product (draft_id, product_id)
 -- FOREIGN KEY (draft_id) REFERENCES ops_supplier_order_drafts(id) ON DELETE CASCADE
+
+-- =========================================================
+-- ops_web_usuarios
+-- Source: src/modules/webAuth/webAuth.repository.js
+-- =========================================================
+-- id BIGINT AUTO_INCREMENT PRIMARY KEY
+-- nombre VARCHAR(140) NOT NULL
+-- nombre_normalized VARCHAR(140) NOT NULL UNIQUE
+-- email VARCHAR(190) NOT NULL UNIQUE
+-- password_salt VARCHAR(128) NOT NULL
+-- password_hash VARCHAR(255) NOT NULL
+-- estado VARCHAR(20) NOT NULL DEFAULT 'activo'
+-- created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+-- updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+-- INDEX idx_web_usuarios_estado (estado)
+
+-- =========================================================
+-- ops_web_usuario_perfil
+-- Source: src/modules/webUsers/webUsers.repository.js
+-- =========================================================
+-- id BIGINT AUTO_INCREMENT PRIMARY KEY
+-- web_usuario_id BIGINT NOT NULL UNIQUE
+-- telefono VARCHAR(40) NULL
+-- direccion_base VARCHAR(255) NULL
+-- notas_admin VARCHAR(255) NULL
+-- puntos_actuales INT NOT NULL DEFAULT 0
+-- puntos_acumulados INT NOT NULL DEFAULT 0
+-- nivel_fidelidad VARCHAR(20) NOT NULL DEFAULT 'base'
+-- total_compras INT NOT NULL DEFAULT 0
+-- monto_total_compras DECIMAL(12,2) NOT NULL DEFAULT 0.00
+-- ultima_compra_at DATETIME NULL
+-- login_count INT NOT NULL DEFAULT 0
+-- last_login_at DATETIME NULL
+-- created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+-- updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+-- INDEX idx_web_usuario_perfil_puntos (puntos_actuales)
+-- INDEX idx_web_usuario_perfil_login (last_login_at)
+-- FOREIGN KEY (web_usuario_id) REFERENCES ops_web_usuarios(id) ON DELETE CASCADE
+
+-- =========================================================
+-- ops_web_usuario_eventos
+-- Source: src/modules/webUsers/webUsers.repository.js
+-- =========================================================
+-- id BIGINT AUTO_INCREMENT PRIMARY KEY
+-- web_usuario_id BIGINT NOT NULL
+-- event_type VARCHAR(40) NOT NULL
+-- metadata_json LONGTEXT NULL
+-- event_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+-- INDEX idx_web_usuario_eventos_user_date (web_usuario_id, event_at)
+-- INDEX idx_web_usuario_eventos_type_date (event_type, event_at)
+-- FOREIGN KEY (web_usuario_id) REFERENCES ops_web_usuarios(id) ON DELETE CASCADE
+
+-- =========================================================
+-- ops_web_puntos_movimientos
+-- Source: src/modules/webUsers/webUsers.repository.js
+-- =========================================================
+-- id BIGINT AUTO_INCREMENT PRIMARY KEY
+-- web_usuario_id BIGINT NOT NULL
+-- pedido_id BIGINT NULL
+-- tipo VARCHAR(20) NOT NULL
+-- puntos INT NOT NULL
+-- saldo_posterior INT NOT NULL
+-- motivo VARCHAR(120) NULL
+-- created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+-- INDEX idx_web_puntos_user_date (web_usuario_id, created_at)
+-- INDEX idx_web_puntos_pedido (pedido_id)
+-- FOREIGN KEY (web_usuario_id) REFERENCES ops_web_usuarios(id) ON DELETE CASCADE
+
+-- =========================================================
+-- ops_web_pedidos
+-- Source: src/modules/webOrders/webOrders.repository.js
+-- =========================================================
+-- id BIGINT AUTO_INCREMENT PRIMARY KEY
+-- web_usuario_id BIGINT NOT NULL
+-- estado VARCHAR(20) NOT NULL DEFAULT 'nuevo'
+-- notas VARCHAR(255) NULL
+-- total_estimado DECIMAL(12,2) NOT NULL DEFAULT 0.00
+-- created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+-- updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+-- INDEX idx_web_pedidos_estado_fecha (estado, created_at)
+-- INDEX idx_web_pedidos_usuario_fecha (web_usuario_id, created_at)
+-- FOREIGN KEY (web_usuario_id) REFERENCES ops_web_usuarios(id) ON DELETE CASCADE
+
+-- =========================================================
+-- ops_web_pedido_items
+-- Source: src/modules/webOrders/webOrders.repository.js
+-- =========================================================
+-- id BIGINT AUTO_INCREMENT PRIMARY KEY
+-- pedido_id BIGINT NOT NULL
+-- product_id INT NOT NULL
+-- product_name VARCHAR(190) NOT NULL
+-- quantity INT NOT NULL DEFAULT 1
+-- unit_price DECIMAL(12,2) NOT NULL DEFAULT 0.00
+-- line_total DECIMAL(12,2) NOT NULL DEFAULT 0.00
+-- created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+-- updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+-- INDEX idx_web_pedido_items_pedido (pedido_id)
+-- INDEX idx_web_pedido_items_product (product_id)
+-- FOREIGN KEY (pedido_id) REFERENCES ops_web_pedidos(id) ON DELETE CASCADE

@@ -6,6 +6,10 @@ import healthRoutes from './routes/healthRoutes.js';
 import productRoutes from './routes/productRoutes.js';
 import protectedRoutes from './routes/protectedRoutes.js';
 import supplierRoutes from './routes/supplierRoutes.js';
+import webAuthRoutes from './routes/webAuthRoutes.js';
+import webOrdersRoutes from './routes/webOrdersRoutes.js';
+import webRoutes from './routes/webRoutes.js';
+import webUsersRoutes from './routes/webUsersRoutes.js';
 
 export async function registerAppRoutes(app) {
   app.get('/', (_req, res) => {
@@ -16,6 +20,10 @@ export async function registerAppRoutes(app) {
   });
 
   app.use('/api', healthRoutes);
+  app.use('/api', webRoutes);
+  app.use('/api', webAuthRoutes);
+  app.use('/api', webUsersRoutes);
+  app.use('/api', webOrdersRoutes);
   app.use('/api/auth', authRoutes);
   app.use('/api', clientRoutes);
   app.use('/api', cajaRoutes);

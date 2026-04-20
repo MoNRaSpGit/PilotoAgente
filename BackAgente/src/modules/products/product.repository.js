@@ -1,11 +1,13 @@
 import { pool } from '../../config/db.js';
+import { resolveCategoryIdByName } from '../categories/category.repository.js';
 
 const PRODUCT_COLUMNS = `
   p.id,
   p.nombre,
   p.precio_venta,
   p.stock_actual,
-  p.categoria,
+  COALESCE(c.nombre, p.categoria) AS categoria,
+  p.categoria_id,
   p.supplier_id,
   s.nombre AS supplier_name,
   p.estado,
@@ -21,6 +23,7 @@ export async function findProductByBarcode(barcode) {
       SELECT ${PRODUCT_COLUMNS}
       FROM ops_producto p
       LEFT JOIN ops_proveedores s ON s.id = p.supplier_id
+      LEFT JOIN ops_categoria c ON c.id = p.categoria_id
       WHERE p.barcode_normalized = ? OR p.barcode = ?
       LIMIT 1
     `,
@@ -36,6 +39,7 @@ export async function findProductById(id) {
       SELECT ${PRODUCT_COLUMNS}
       FROM ops_producto p
       LEFT JOIN ops_proveedores s ON s.id = p.supplier_id
+      LEFT JOIN ops_categoria c ON c.id = p.categoria_id
       WHERE p.id = ?
       LIMIT 1
     `,
@@ -46,6 +50,8 @@ export async function findProductById(id) {
 }
 
 export async function insertManualProductFromScan({ barcode, precioVenta }) {
+  const categoriaId = await resolveCategoryIdByName('Manual');
+
   const [result] = await pool.query(
     `
       INSERT INTO ops_producto (
@@ -53,19 +59,21 @@ export async function insertManualProductFromScan({ barcode, precioVenta }) {
         precio_venta,
         stock_actual,
         categoria,
+        categoria_id,
         estado,
         barcode,
         barcode_normalized,
         tiene_imagen,
         imagen
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     [
       'Producto Manual',
       precioVenta,
       0,
       'Manual',
+      categoriaId,
       'activo',
       barcode,
       barcode,

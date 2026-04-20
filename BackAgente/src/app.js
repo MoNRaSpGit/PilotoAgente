@@ -7,7 +7,15 @@ const app = express();
 
 app.use(
   cors({
-    origin: env.clientUrl
+    origin(origin, callback) {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      const allowedOrigins = [env.clientUrl, env.webClientUrl].filter(Boolean);
+      callback(null, allowedOrigins.includes(origin));
+    }
   })
 );
 app.use(express.json());
