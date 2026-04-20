@@ -13,7 +13,7 @@ function RegPedidosPage() {
     import.meta.env.DEV || String(import.meta.env.VITE_SUPPLIERS_DEBUG || '').trim().toLowerCase() === 'true';
   const suppliersTestMode = String(import.meta.env.VITE_SUPPLIERS_TEST_MODE || '').trim().toLowerCase() === 'true';
   const [loading, setLoading] = useState(true);
-  const [date, setDate] = useState(getLocalISODate());
+  const [date] = useState(getLocalISODate());
   const [agenda, setAgenda] = useState({ today: { delivery_items: [] } });
   const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [receivedQty, setReceivedQty] = useState({});
@@ -44,7 +44,7 @@ function RegPedidosPage() {
     } finally {
       setLoading(false);
     }
-  }, [date]);
+  }, [date, suppliersDebug]);
 
   const loadPickupOrders = useCallback(async () => {
     try {
@@ -86,7 +86,7 @@ function RegPedidosPage() {
     } catch (error) {
       toast.error(error.message);
     }
-  }, [date]);
+  }, [date, suppliersDebug, suppliersTestMode]);
 
   useEffect(() => {
     loadAgenda();

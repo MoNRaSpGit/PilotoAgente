@@ -115,7 +115,7 @@ export function useObjetivosPageController() {
   }, [loadObjectives]);
 
   const goals = data?.goals || {};
-  const progress = data?.progress || {};
+  const progress = useMemo(() => data?.progress || {}, [data?.progress]);
   const currentSales = Number(progress.current_sales || 0);
   const record = Number(goals.record || 0);
   const objective = Number(goals.objective || 0);

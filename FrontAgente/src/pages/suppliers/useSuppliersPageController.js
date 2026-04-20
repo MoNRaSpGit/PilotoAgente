@@ -83,7 +83,6 @@ export function useSuppliersPageController() {
   const [recentOrders, setRecentOrders] = useState([]);
   const [quantityOverrides, setQuantityOverrides] = useState({});
   const [unitCostOverrides, setUnitCostOverrides] = useState({});
-  const [confirmedOrderOverrides, setConfirmedOrderOverrides] = useState({});
   const [confirmingWeekSupplierId, setConfirmingWeekSupplierId] = useState(null);
   const [receivingOrderId, setReceivingOrderId] = useState(null);
   const [receivedQtyOverrides, setReceivedQtyOverrides] = useState({});
@@ -138,7 +137,6 @@ export function useSuppliersPageController() {
         recentOrdersLoadedRef.current = true;
         // Backend becomes source of truth after each orders refresh.
         // This prevents stale local overrides from reviving old items in UI.
-        setConfirmedOrderOverrides({});
         setReceivedQtyOverrides({});
         setInvoiceAmountByOrderId({});
       }
@@ -150,7 +148,7 @@ export function useSuppliersPageController() {
     } finally {
       setLoading(false);
     }
-  }, [simulatedDate, realToday]);
+  }, [simulatedDate, realToday, suppliersDebug]);
 
   const loadInvoiceIncidents = useCallback(async () => {
     try {
@@ -638,10 +636,6 @@ export function useSuppliersPageController() {
 
       const supplierName = selectedDaySupplierDetail?.supplier?.nombre || 'Proveedor';
       toast.success(`Pedido confirmado para ${supplierName} (${deliveryDate})`);
-      setConfirmedOrderOverrides((current) => ({
-        ...current,
-        [`${supplierId}:${deliveryDate}`]: confirmedOrder
-      }));
       setReceivedQtyOverrides((current) => {
         const next = { ...current };
         for (const item of Array.isArray(confirmedOrder?.items) ? confirmedOrder.items : []) {
@@ -677,7 +671,15 @@ export function useSuppliersPageController() {
     } finally {
       setConfirmingWeekSupplierId(null);
     }
-  }, [selectedDaySupplier, selectedDaySupplierAlerts, selectedDaySupplierDetail, effectiveToday, loadData, simulatedDate]);
+  }, [
+    selectedDaySupplier,
+    selectedDaySupplierAlerts,
+    selectedDaySupplierDetail,
+    effectiveToday,
+    loadData,
+    loadInvoiceIncidents,
+    simulatedDate
+  ]);
 
   const selectedDaySupplierReceivingItems = useMemo(() => {
     const order = selectedDaySupplierDetail?.todayOrder || null;
@@ -770,7 +772,6 @@ export function useSuppliersPageController() {
   const handleReceiveSelectedDaySupplierOrder = useCallback(async () => {
     const orderId = Number(selectedDaySupplierDetail?.todayOrder?.id || 0);
     const supplierId = Number(selectedDaySupplierDetail?.supplier?.id || 0);
-    const deliveryDate = normalizeISODate(selectedDaySupplierDetail?.date || '');
 
     if (!orderId) {
       toast.error('No hay pedido confirmado para recibir');
@@ -813,13 +814,6 @@ export function useSuppliersPageController() {
         setSelectedDaySupplier((current) => (current ? { ...current } : current));
       }
 
-      if (supplierId && deliveryDate && item) {
-        setConfirmedOrderOverrides((current) => {
-          const next = { ...current };
-          delete next[`${supplierId}:${deliveryDate}`];
-          return next;
-        });
-      }
       setReceivedQtyOverrides((current) => {
         const next = { ...current };
         for (const receivingItem of selectedDaySupplierReceivingItems) {
@@ -844,7 +838,6 @@ export function useSuppliersPageController() {
     selectedDaySupplierReceivingItems,
     selectedDaySupplierInvoiceSummary,
     loadData,
-    loadInvoiceIncidents,
     simulatedDate,
     effectiveToday
   ]);

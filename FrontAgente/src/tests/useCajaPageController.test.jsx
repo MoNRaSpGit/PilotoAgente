@@ -1,6 +1,7 @@
-﻿import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { configureStore } from '@reduxjs/toolkit';
 import { Provider } from 'react-redux';
+import { afterAll, beforeAll } from 'vitest';
 import authReducer from '../store/slices/authSlice';
 import { useCajaPageController } from '../pages/caja/useCajaPageController';
 import {
