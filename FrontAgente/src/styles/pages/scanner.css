@@ -129,16 +129,6 @@
 
 .scanner-manual-button {
   transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, color 0.18s ease;
-  background: #dc2626;
-  border-color: #dc2626;
-  color: #ffffff;
-}
-
-.scanner-manual-button:hover,
-.scanner-manual-button:focus-visible {
-  background: #b91c1c;
-  border-color: #b91c1c;
-  color: #ffffff;
 }
 
 .scanner-manual-button.is-active {

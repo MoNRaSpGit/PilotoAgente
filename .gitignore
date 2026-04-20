@@ -7,3 +7,4 @@ coverage/
 .env.*.local
 FrontAgente/.vite/
 BackAgente/logs/
+WebAgente/
