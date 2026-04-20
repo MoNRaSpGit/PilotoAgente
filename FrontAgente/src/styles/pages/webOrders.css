@@ -1,0 +1,128 @@
+.web-orders-page {
+  gap: 1rem;
+}
+
+.web-orders-header {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.web-orders-header h2 {
+  margin: 0;
+}
+
+.web-orders-header-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.web-orders-header-actions small {
+  color: #64748b;
+}
+
+.web-orders-panel {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.web-orders-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.web-orders-item {
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 14px;
+  padding: 0.8rem;
+  background: #fff;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.web-orders-item-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.web-orders-item p {
+  margin: 0;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.web-orders-item small {
+  color: #64748b;
+}
+
+.web-orders-status {
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+
+.web-orders-status--pendiente {
+  background: #fff7e6;
+  color: #9a6700;
+  border-color: #f7d9a2;
+}
+
+.web-orders-status--en_proceso {
+  background: #e6f6ff;
+  color: #055f8a;
+  border-color: #b8def1;
+}
+
+.web-orders-status--listo {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+
+.web-orders-status--entregado {
+  background: #e9f9ef;
+  color: #18794e;
+  border-color: #b9e2ca;
+}
+
+.web-orders-item-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.web-orders-items {
+  list-style: none;
+  margin: 0;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  border-radius: 10px;
+  background: rgba(248, 250, 252, 0.8);
+  display: grid;
+  gap: 0.28rem;
+}
+
+.web-orders-items li {
+  display: flex;
+  gap: 0.4rem;
+  align-items: baseline;
+}
+
+.web-orders-items li span {
+  min-width: 34px;
+  color: #64748b;
+  font-size: 0.76rem;
+}
+
+.web-orders-items li strong {
+  color: #1e293b;
+  font-size: 0.8rem;
+}

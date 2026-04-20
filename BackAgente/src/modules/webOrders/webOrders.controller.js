@@ -1,9 +1,12 @@
 import {
   changeWebOrderStatus,
   createOrderFromWebUser,
+  hideAdminWebOrder,
+  hideMyWebOrder,
   listAdminIncomingWebOrders,
   listMyWebOrders
 } from './webOrders.service.js';
+import { openAdminWebOrdersStream, openUserWebOrdersStream } from './webOrders.events.js';
 
 function handleServiceError(res, error, fallbackMessage) {
   const status = error.status || 500;
@@ -50,4 +53,39 @@ export async function changeWebOrderStatusController(req, res) {
   } catch (error) {
     return handleServiceError(res, error, 'No se pudo actualizar el estado del pedido');
   }
+}
+
+export async function hideMyWebOrderController(req, res) {
+  try {
+    const data = await hideMyWebOrder(req.webUser, req.params.orderId);
+    return res.json(data);
+  } catch (error) {
+    return handleServiceError(res, error, 'No se pudo ocultar el pedido');
+  }
+}
+
+export async function hideAdminWebOrderController(req, res) {
+  try {
+    const data = await hideAdminWebOrder(req.params.orderId);
+    return res.json(data);
+  } catch (error) {
+    return handleServiceError(res, error, 'No se pudo ocultar el pedido');
+  }
+}
+
+function initSseResponse(res) {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders?.();
+}
+
+export function streamAdminWebOrdersController(_req, res) {
+  initSseResponse(res);
+  openAdminWebOrdersStream(res);
+}
+
+export function streamMyWebOrdersController(_req, res) {
+  initSseResponse(res);
+  openUserWebOrdersStream(res, { webUserId: _req.webUser?.id });
 }

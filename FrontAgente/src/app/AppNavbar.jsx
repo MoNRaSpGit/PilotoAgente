@@ -1,5 +1,5 @@
 import { Container, Nav, Navbar } from 'react-bootstrap';
-import { Barcode, BotMessageSquare, ClipboardCheck, Target } from 'lucide-react';
+import { Barcode, BotMessageSquare, ClipboardCheck, Globe, Target } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 
 export function AppNavbar({
@@ -33,6 +33,12 @@ export function AppNavbar({
               <Nav.Link as={NavLink} to="/proveedores">
                 Proveedores
               </Nav.Link>
+              <Nav.Link as={NavLink} to="/web-pedidos">
+                <span className="nav-icon-wrap">
+                  <Globe size={16} />
+                  Web
+                </span>
+              </Nav.Link>
             </>
           ) : (
             <>
@@ -46,6 +52,12 @@ export function AppNavbar({
                 <span className="nav-icon-wrap">
                   <Target size={16} />
                   Objetivos
+                </span>
+              </Nav.Link>
+              <Nav.Link as={NavLink} to="/web-pedidos">
+                <span className="nav-icon-wrap">
+                  <Globe size={16} />
+                  Web
                 </span>
               </Nav.Link>
             </>

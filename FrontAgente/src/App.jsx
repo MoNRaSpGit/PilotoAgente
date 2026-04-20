@@ -17,6 +17,7 @@ import './styles/pages/login.css';
 import './styles/pages/objetivos.css';
 import './styles/pages/scanner.css';
 import './styles/pages/suppliers.css';
+import './styles/pages/webOrders.css';
 
 function App() {
   const dispatch = useDispatch();

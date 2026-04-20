@@ -2,6 +2,21 @@ import { pool } from '../../config/db.js';
 
 let webOrdersTablesPromise = null;
 
+async function columnExists(tableName, columnName) {
+  const [rows] = await pool.query(
+    `
+      SELECT COUNT(*) AS count
+      FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = ?
+        AND COLUMN_NAME = ?
+    `,
+    [tableName, columnName]
+  );
+
+  return Boolean(rows[0]?.count);
+}
+
 async function indexExists(tableName, indexName) {
   const [rows] = await pool.query(
     `
@@ -43,7 +58,9 @@ export async function ensureWebOrdersTables() {
       CREATE TABLE IF NOT EXISTS ops_web_pedidos (
         id BIGINT AUTO_INCREMENT PRIMARY KEY,
         web_usuario_id BIGINT NOT NULL,
-        estado VARCHAR(20) NOT NULL DEFAULT 'nuevo',
+        estado VARCHAR(20) NOT NULL DEFAULT 'pendiente',
+        cliente_visible TINYINT(1) NOT NULL DEFAULT 1,
+        admin_visible TINYINT(1) NOT NULL DEFAULT 1,
         notas VARCHAR(255) NULL,
         total_estimado DECIMAL(12,2) NOT NULL DEFAULT 0.00,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -55,6 +72,22 @@ export async function ensureWebOrdersTables() {
           ON DELETE CASCADE
       )
     `);
+
+    const hasClienteVisibleColumn = await columnExists('ops_web_pedidos', 'cliente_visible');
+    if (!hasClienteVisibleColumn) {
+      await pool.query(`
+        ALTER TABLE ops_web_pedidos
+        ADD COLUMN cliente_visible TINYINT(1) NOT NULL DEFAULT 1 AFTER estado
+      `);
+    }
+
+    const hasAdminVisibleColumn = await columnExists('ops_web_pedidos', 'admin_visible');
+    if (!hasAdminVisibleColumn) {
+      await pool.query(`
+        ALTER TABLE ops_web_pedidos
+        ADD COLUMN admin_visible TINYINT(1) NOT NULL DEFAULT 1 AFTER cliente_visible
+      `);
+    }
 
     const hasEstadoIdIndex = await indexExists('ops_web_pedidos', 'idx_web_pedidos_estado_id');
     if (!hasEstadoIdIndex) {
@@ -69,6 +102,22 @@ export async function ensureWebOrdersTables() {
       await pool.query(`
         ALTER TABLE ops_web_pedidos
         ADD INDEX idx_web_pedidos_usuario_id (web_usuario_id, id)
+      `);
+    }
+
+    const hasUsuarioVisibleIdIndex = await indexExists('ops_web_pedidos', 'idx_web_pedidos_usuario_visible_id');
+    if (!hasUsuarioVisibleIdIndex) {
+      await pool.query(`
+        ALTER TABLE ops_web_pedidos
+        ADD INDEX idx_web_pedidos_usuario_visible_id (web_usuario_id, cliente_visible, id)
+      `);
+    }
+
+    const hasAdminVisibleEstadoIdIndex = await indexExists('ops_web_pedidos', 'idx_web_pedidos_admin_visible_estado_id');
+    if (!hasAdminVisibleEstadoIdIndex) {
+      await pool.query(`
+        ALTER TABLE ops_web_pedidos
+        ADD INDEX idx_web_pedidos_admin_visible_estado_id (admin_visible, estado, id)
       `);
     }
 
@@ -137,8 +186,8 @@ export async function createWebOrder({ webUserId, items, notes = null }) {
 
     const [orderResult] = await connection.query(
       `
-        INSERT INTO ops_web_pedidos (web_usuario_id, estado, notas, total_estimado)
-        VALUES (?, 'nuevo', ?, ?)
+        INSERT INTO ops_web_pedidos (web_usuario_id, estado, cliente_visible, notas, total_estimado)
+        VALUES (?, 'pendiente', 1, ?, ?)
       `,
       [webUserId, notes || null, safeTotalEstimado]
     );
@@ -191,6 +240,8 @@ export async function getWebOrderById(orderId) {
         p.id,
         p.web_usuario_id,
         p.estado,
+        p.cliente_visible,
+        p.admin_visible,
         p.notas,
         p.total_estimado,
         DATE_FORMAT(p.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
@@ -246,12 +297,15 @@ export async function listWebOrdersByUserId(webUserId, { limit = 20 } = {}) {
         id,
         web_usuario_id,
         estado,
+        cliente_visible,
+        admin_visible,
         notas,
         total_estimado,
         DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
         DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updated_at
       FROM ops_web_pedidos
       WHERE web_usuario_id = ?
+        AND cliente_visible = 1
       ORDER BY id DESC
       LIMIT ?
     `,
@@ -308,6 +362,8 @@ export async function listPendingWebOrders({ limit = 40 } = {}) {
         p.id,
         p.web_usuario_id,
         p.estado,
+        p.cliente_visible,
+        p.admin_visible,
         p.notas,
         p.total_estimado,
         DATE_FORMAT(p.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
@@ -316,14 +372,61 @@ export async function listPendingWebOrders({ limit = 40 } = {}) {
         u.email AS web_usuario_email
       FROM ops_web_pedidos p
       INNER JOIN ops_web_usuarios u ON u.id = p.web_usuario_id
-      WHERE p.estado IN ('nuevo', 'visto', 'preparando', 'listo_para_cobrar')
+      WHERE p.admin_visible = 1
+        AND p.estado IN (
+        'pendiente',
+        'en_proceso',
+        'en proceso',
+        'listo',
+        'entregado',
+        'nuevo',
+        'visto',
+        'preparando',
+        'listo_para_cobrar'
+      )
       ORDER BY p.id DESC
       LIMIT ?
     `,
     [safeLimit]
   );
 
-  return rows;
+  if (rows.length === 0) {
+    return rows;
+  }
+
+  const orderIds = rows.map((row) => Number(row.id)).filter((id) => Number.isFinite(id) && id > 0);
+  const placeholders = orderIds.map(() => '?').join(', ');
+
+  const [itemRows] = await pool.query(
+    `
+      SELECT
+        id,
+        pedido_id,
+        product_id,
+        product_name,
+        quantity,
+        unit_price,
+        line_total
+      FROM ops_web_pedido_items
+      WHERE pedido_id IN (${placeholders})
+      ORDER BY pedido_id DESC, id ASC
+    `,
+    orderIds
+  );
+
+  const itemsByOrderId = new Map();
+  for (const item of itemRows) {
+    const orderId = Number(item.pedido_id);
+    if (!itemsByOrderId.has(orderId)) {
+      itemsByOrderId.set(orderId, []);
+    }
+    itemsByOrderId.get(orderId).push(item);
+  }
+
+  return rows.map((order) => ({
+    ...order,
+    items: itemsByOrderId.get(Number(order.id)) || []
+  }));
 }
 
 export async function updateWebOrderStatus({ orderId, status }) {
@@ -339,4 +442,35 @@ export async function updateWebOrderStatus({ orderId, status }) {
   );
 
   return getWebOrderById(orderId);
+}
+
+export async function hideWebOrderForUser({ orderId, webUserId }) {
+  await ensureWebOrdersTables();
+
+  const [result] = await pool.query(
+    `
+      UPDATE ops_web_pedidos
+      SET cliente_visible = 0
+      WHERE id = ?
+        AND web_usuario_id = ?
+    `,
+    [orderId, webUserId]
+  );
+
+  return Number(result?.affectedRows || 0) > 0;
+}
+
+export async function hideWebOrderForAdmin({ orderId }) {
+  await ensureWebOrdersTables();
+
+  const [result] = await pool.query(
+    `
+      UPDATE ops_web_pedidos
+      SET admin_visible = 0
+      WHERE id = ?
+    `,
+    [orderId]
+  );
+
+  return Number(result?.affectedRows || 0) > 0;
 }

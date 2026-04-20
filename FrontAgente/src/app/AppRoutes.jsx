@@ -9,6 +9,7 @@ import ObjetivosPage from '../pages/ObjetivosPage';
 import RegPedidosPage from '../pages/RegPedidosPage';
 import ScannerPage from '../pages/ScannerPage';
 import SuppliersPage from '../pages/SuppliersPage';
+import WebPedidosPage from '../pages/WebPedidosPage';
 import { RoleGate } from './RoleGate';
 
 export function AppRoutes({ isLoggedIn, isAdmin, dashboardEnabled }) {
@@ -77,6 +78,14 @@ export function AppRoutes({ isLoggedIn, isAdmin, dashboardEnabled }) {
             element={
               <RoleGate allow={['operario']}>
                 <RegPedidosPage />
+              </RoleGate>
+            }
+          />
+          <Route
+            path="/web-pedidos"
+            element={
+              <RoleGate allow={['admin', 'operario']}>
+                <WebPedidosPage />
               </RoleGate>
             }
           />

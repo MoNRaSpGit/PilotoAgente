@@ -3,9 +3,10 @@ import { env } from '../../config/env.js';
 
 export function webAuthMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
+  const queryToken = typeof req.query?.token === 'string' ? req.query.token : null;
   const token = authHeader?.startsWith('Bearer ')
     ? authHeader.replace('Bearer ', '')
-    : null;
+    : queryToken;
 
   if (!token) {
     return res.status(401).json({ message: 'Token web requerido' });

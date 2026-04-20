@@ -1,21 +1,17 @@
 import {
   createWebOrder,
   findProductsForWebOrderItems,
+  getWebOrderById,
+  hideWebOrderForAdmin,
+  hideWebOrderForUser,
   listPendingWebOrders,
   listWebOrdersByUserId,
   updateWebOrderStatus
 } from './webOrders.repository.js';
 import { registerWebOrderMetrics } from '../webUsers/webUsers.repository.js';
 import { env } from '../../config/env.js';
-
-const ALLOWED_STATUSES = new Set([
-  'nuevo',
-  'visto',
-  'preparando',
-  'listo_para_cobrar',
-  'cobrado_en_scanner',
-  'cancelado'
-]);
+import { emitWebOrderEvent } from './webOrders.events.js';
+import { ALLOWED_WEB_ORDER_STATUSES, canHideWebOrder, normalizeWebOrderStatus } from './webOrders.status.js';
 
 function createServiceError(message, status = 500) {
   const error = new Error(message);
@@ -38,6 +34,7 @@ function calculateWebOrderPoints(orderTotal) {
   const steps = Math.floor(Number(orderTotal || 0) / stepAmount);
   return Math.max(0, steps * Math.floor(pointsPerStep));
 }
+
 
 export async function createOrderFromWebUser(webUser, payload = {}) {
   const items = Array.isArray(payload?.items) ? payload.items : [];
@@ -105,7 +102,9 @@ export async function createOrderFromWebUser(webUser, payload = {}) {
   const item = {
     id: createdOrder.id,
     web_usuario_id: webUser.id,
-    estado: 'nuevo',
+    estado: 'pendiente',
+    cliente_visible: 1,
+    admin_visible: 1,
     notas: notes || null,
     total_estimado: safeOrderTotal,
     created_at: timestamp,
@@ -120,6 +119,14 @@ export async function createOrderFromWebUser(webUser, payload = {}) {
       line_total: Number((Number(itemRow.unit_price || 0) * Number(itemRow.quantity || 0)).toFixed(2))
     }))
   };
+
+  emitWebOrderEvent({
+    type: 'order_created',
+    orderId: createdOrder.id,
+    status: 'pendiente',
+    webUserId: webUser.id,
+    order: item
+  });
 
   return {
     item,
@@ -158,13 +165,13 @@ export async function listAdminIncomingWebOrders(query = {}) {
 
 export async function changeWebOrderStatus(orderId, payload = {}) {
   const parsedOrderId = Number(orderId);
-  const status = String(payload?.status || '').trim();
+  const status = normalizeWebOrderStatus(payload?.status || '');
 
   if (!Number.isFinite(parsedOrderId) || parsedOrderId <= 0) {
     throw createServiceError('Pedido invalido', 400);
   }
 
-  if (!ALLOWED_STATUSES.has(status)) {
+  if (!ALLOWED_WEB_ORDER_STATUSES.has(status)) {
     throw createServiceError('Estado de pedido invalido', 400);
   }
 
@@ -177,5 +184,104 @@ export async function changeWebOrderStatus(orderId, payload = {}) {
     throw createServiceError('Pedido no encontrado', 404);
   }
 
+  emitWebOrderEvent({
+    type: 'order_status_changed',
+    orderId: parsedOrderId,
+    status,
+    webUserId: item.web_usuario_id,
+    order: item
+  });
+
   return { item };
+}
+
+export async function hideMyWebOrder(webUser, orderId) {
+  if (!webUser?.id) {
+    throw createServiceError('Usuario web invalido', 401);
+  }
+
+  const parsedOrderId = Number(orderId);
+  if (!Number.isFinite(parsedOrderId) || parsedOrderId <= 0) {
+    throw createServiceError('Pedido invalido', 400);
+  }
+
+  const order = await getWebOrderById(parsedOrderId);
+  if (!order || Number(order.web_usuario_id) !== Number(webUser.id)) {
+    throw createServiceError('Pedido no encontrado', 404);
+  }
+
+  const normalizedStatus = normalizeWebOrderStatus(order.estado);
+  if (!canHideWebOrder(normalizedStatus)) {
+    throw createServiceError('Solo podes eliminar pedidos entregados', 409);
+  }
+
+  const updated = await hideWebOrderForUser({
+    orderId: parsedOrderId,
+    webUserId: webUser.id
+  });
+
+  if (!updated) {
+    throw createServiceError('Pedido no encontrado', 404);
+  }
+
+  emitWebOrderEvent({
+    type: 'order_hidden_by_user',
+    orderId: parsedOrderId,
+    status: normalizedStatus,
+    webUserId: webUser.id,
+    order: {
+      ...order,
+      cliente_visible: 0
+    }
+  });
+
+  return {
+    item: {
+      id: parsedOrderId,
+      hidden: true
+    }
+  };
+}
+
+export async function hideAdminWebOrder(orderId) {
+  const parsedOrderId = Number(orderId);
+  if (!Number.isFinite(parsedOrderId) || parsedOrderId <= 0) {
+    throw createServiceError('Pedido invalido', 400);
+  }
+
+  const order = await getWebOrderById(parsedOrderId);
+  if (!order) {
+    throw createServiceError('Pedido no encontrado', 404);
+  }
+
+  const normalizedStatus = normalizeWebOrderStatus(order.estado);
+  if (!canHideWebOrder(normalizedStatus)) {
+    throw createServiceError('Solo podes eliminar pedidos entregados', 409);
+  }
+
+  const updated = await hideWebOrderForAdmin({
+    orderId: parsedOrderId
+  });
+
+  if (!updated) {
+    throw createServiceError('Pedido no encontrado', 404);
+  }
+
+  emitWebOrderEvent({
+    type: 'order_hidden_by_admin',
+    orderId: parsedOrderId,
+    status: normalizedStatus,
+    webUserId: order.web_usuario_id,
+    order: {
+      ...order,
+      admin_visible: 0
+    }
+  });
+
+  return {
+    item: {
+      id: parsedOrderId,
+      hidden: true
+    }
+  };
 }
