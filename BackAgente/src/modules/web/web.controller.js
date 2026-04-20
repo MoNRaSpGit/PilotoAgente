@@ -8,39 +8,10 @@ function handleServiceError(res, error, fallbackMessage) {
   });
 }
 
-function toAbsoluteUrl(req, pathOrUrl) {
-  if (!pathOrUrl) {
-    return null;
-  }
-  if (/^https?:\/\//i.test(pathOrUrl)) {
-    return pathOrUrl;
-  }
-  const protocol = req.protocol || 'http';
-  const host = req.get('host');
-  if (!host) {
-    return pathOrUrl;
-  }
-  return `${protocol}://${host}${pathOrUrl}`;
-}
-
-function attachProductImageUrls(req, data) {
-  if (!Array.isArray(data?.items)) {
-    return data;
-  }
-
-  return {
-    ...data,
-    items: data.items.map((item) => ({
-      ...item,
-      image_local_url: item.image_local_url || toAbsoluteUrl(req, item.image_path)
-    }))
-  };
-}
-
 export async function getWebProductsController(req, res) {
   try {
     const data = await getWebProducts(req.query);
-    return res.json(attachProductImageUrls(req, data));
+    return res.json(data);
   } catch (error) {
     return handleServiceError(res, error, 'No se pudieron cargar los productos web');
   }
@@ -49,7 +20,7 @@ export async function getWebProductsController(req, res) {
 export async function getWebInactiveProductsController(req, res) {
   try {
     const data = await getWebInactiveProducts(req.query);
-    return res.json(attachProductImageUrls(req, data));
+    return res.json(data);
   } catch (error) {
     return handleServiceError(res, error, 'No se pudieron cargar los productos web inactivos');
   }

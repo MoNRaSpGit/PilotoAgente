@@ -182,18 +182,6 @@ export async function registerWebOrderMetrics({
       [safeTotal, safePoints, safePoints, webUserId]
     );
 
-    const [rows] = await connection.query(
-      `
-        SELECT puntos_actuales
-        FROM ops_web_usuario_perfil
-        WHERE web_usuario_id = ?
-        LIMIT 1
-      `,
-      [webUserId]
-    );
-
-    const saldoPosterior = Number(rows[0]?.puntos_actuales || 0);
-
     if (safePoints > 0) {
       await connection.query(
         `
@@ -205,9 +193,18 @@ export async function registerWebOrderMetrics({
             saldo_posterior,
             motivo
           )
-          VALUES (?, ?, 'acreditacion', ?, ?, ?)
+          SELECT
+            web_usuario_id,
+            ?,
+            'acreditacion',
+            ?,
+            puntos_actuales,
+            ?
+          FROM ops_web_usuario_perfil
+          WHERE web_usuario_id = ?
+          LIMIT 1
         `,
-        [webUserId, orderId, safePoints, saldoPosterior, 'Compra web']
+        [orderId, safePoints, 'Compra web', webUserId]
       );
     }
 

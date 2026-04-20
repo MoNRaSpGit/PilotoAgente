@@ -3,7 +3,6 @@ import { env } from '../../config/env.js';
 import {
   createWebUser,
   findWebUserByName,
-  seedDemoWebUsers,
   verifyWebUserPassword
 } from './webAuth.repository.js';
 import { ensureWebUserProfile, logWebUserEvent, trackWebUserLogin } from '../webUsers/webUsers.repository.js';
@@ -41,8 +40,6 @@ function createWebToken(user) {
 }
 
 export async function registerWebUser(payload = {}) {
-  await seedDemoWebUsers();
-
   const nombre = sanitizeWebDisplayName(payload?.nombre || '');
   const password = String(payload?.password || '');
 
@@ -86,8 +83,6 @@ export async function registerWebUser(payload = {}) {
 }
 
 export async function loginWebUser(payload = {}) {
-  await seedDemoWebUsers();
-
   const nombre = sanitizeWebDisplayName(payload?.nombre || '');
   const password = String(payload?.password || '');
 

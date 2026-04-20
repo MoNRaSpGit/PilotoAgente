@@ -1,7 +1,6 @@
 import {
   createWebOrder,
   findProductsForWebOrderItems,
-  getWebOrderById,
   listPendingWebOrders,
   listWebOrdersByUserId,
   updateWebOrderStatus
@@ -82,27 +81,52 @@ export async function createOrderFromWebUser(webUser, payload = {}) {
     };
   });
 
-  const orderId = await createWebOrder({
+  const createdOrder = await createWebOrder({
     webUserId: webUser.id,
     items: resolvedItems,
     notes: notes || null
   });
 
-  const item = await getWebOrderById(orderId);
-  const awardedPoints = calculateWebOrderPoints(item?.total_estimado || 0);
+  const orderTotal = resolvedItems.reduce(
+    (sum, item) => sum + Number(item.unit_price || 0) * Number(item.quantity || 0),
+    0
+  );
+  const safeOrderTotal = Number(orderTotal.toFixed(2));
+  const awardedPoints = calculateWebOrderPoints(safeOrderTotal);
 
-  await registerWebOrderMetrics({
+  registerWebOrderMetrics({
     webUserId: webUser.id,
-    orderId,
-    orderTotal: item?.total_estimado || 0,
+    orderId: createdOrder.id,
+    orderTotal: safeOrderTotal,
     awardedPoints
-  });
+  }).catch(() => {});
+
+  const timestamp = new Date().toISOString().slice(0, 19).replace('T', ' ');
+  const item = {
+    id: createdOrder.id,
+    web_usuario_id: webUser.id,
+    estado: 'nuevo',
+    notas: notes || null,
+    total_estimado: safeOrderTotal,
+    created_at: timestamp,
+    updated_at: timestamp,
+    web_usuario_nombre: webUser.nombre,
+    web_usuario_email: webUser.email,
+    items: resolvedItems.map((itemRow) => ({
+      product_id: itemRow.product_id,
+      product_name: itemRow.product_name,
+      quantity: itemRow.quantity,
+      unit_price: Number(itemRow.unit_price || 0),
+      line_total: Number((Number(itemRow.unit_price || 0) * Number(itemRow.quantity || 0)).toFixed(2))
+    }))
+  };
 
   return {
     item,
     meta: {
       notification_text: `${webUser.nombre} te hizo un pedido`,
-      awarded_points: awardedPoints
+      awarded_points: awardedPoints,
+      order_total: safeOrderTotal
     }
   };
 }

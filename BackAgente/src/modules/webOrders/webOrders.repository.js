@@ -2,6 +2,21 @@ import { pool } from '../../config/db.js';
 
 let webOrdersTablesPromise = null;
 
+async function indexExists(tableName, indexName) {
+  const [rows] = await pool.query(
+    `
+      SELECT COUNT(*) AS count
+      FROM information_schema.STATISTICS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = ?
+        AND INDEX_NAME = ?
+    `,
+    [tableName, indexName]
+  );
+
+  return Boolean(rows[0]?.count);
+}
+
 async function withTransaction(work) {
   const connection = await pool.getConnection();
 
@@ -40,6 +55,22 @@ export async function ensureWebOrdersTables() {
           ON DELETE CASCADE
       )
     `);
+
+    const hasEstadoIdIndex = await indexExists('ops_web_pedidos', 'idx_web_pedidos_estado_id');
+    if (!hasEstadoIdIndex) {
+      await pool.query(`
+        ALTER TABLE ops_web_pedidos
+        ADD INDEX idx_web_pedidos_estado_id (estado, id)
+      `);
+    }
+
+    const hasUsuarioIdIndex = await indexExists('ops_web_pedidos', 'idx_web_pedidos_usuario_id');
+    if (!hasUsuarioIdIndex) {
+      await pool.query(`
+        ALTER TABLE ops_web_pedidos
+        ADD INDEX idx_web_pedidos_usuario_id (web_usuario_id, id)
+      `);
+    }
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS ops_web_pedido_items (
@@ -98,19 +129,35 @@ export async function createWebOrder({ webUserId, items, notes = null }) {
   await ensureWebOrdersTables();
 
   return withTransaction(async (connection) => {
+    const totalEstimado = items.reduce((sum, item) => {
+      const lineTotal = Number((Number(item.unit_price) * Number(item.quantity)).toFixed(2));
+      return sum + lineTotal;
+    }, 0);
+    const safeTotalEstimado = Number(totalEstimado.toFixed(2));
+
     const [orderResult] = await connection.query(
       `
         INSERT INTO ops_web_pedidos (web_usuario_id, estado, notas, total_estimado)
-        VALUES (?, 'nuevo', ?, 0)
+        VALUES (?, 'nuevo', ?, ?)
       `,
-      [webUserId, notes || null]
+      [webUserId, notes || null, safeTotalEstimado]
     );
 
-    let totalEstimado = 0;
+    if (items.length > 0) {
+      const placeholders = items.map(() => '(?, ?, ?, ?, ?, ?)').join(', ');
+      const values = [];
 
-    for (const item of items) {
-      const lineTotal = Number((Number(item.unit_price) * Number(item.quantity)).toFixed(2));
-      totalEstimado += lineTotal;
+      for (const item of items) {
+        const lineTotal = Number((Number(item.unit_price) * Number(item.quantity)).toFixed(2));
+        values.push(
+          orderResult.insertId,
+          item.product_id,
+          item.product_name,
+          item.quantity,
+          item.unit_price,
+          lineTotal
+        );
+      }
 
       await connection.query(
         `
@@ -122,29 +169,16 @@ export async function createWebOrder({ webUserId, items, notes = null }) {
             unit_price,
             line_total
           )
-          VALUES (?, ?, ?, ?, ?, ?)
+          VALUES ${placeholders}
         `,
-        [
-          orderResult.insertId,
-          item.product_id,
-          item.product_name,
-          item.quantity,
-          item.unit_price,
-          lineTotal
-        ]
+        values
       );
     }
 
-    await connection.query(
-      `
-        UPDATE ops_web_pedidos
-        SET total_estimado = ?
-        WHERE id = ?
-      `,
-      [Number(totalEstimado.toFixed(2)), orderResult.insertId]
-    );
-
-    return orderResult.insertId;
+    return {
+      id: Number(orderResult.insertId),
+      total_estimado: safeTotalEstimado
+    };
   });
 }
 
@@ -224,7 +258,43 @@ export async function listWebOrdersByUserId(webUserId, { limit = 20 } = {}) {
     [webUserId, safeLimit]
   );
 
-  return rows;
+  if (rows.length === 0) {
+    return rows;
+  }
+
+  const orderIds = rows.map((row) => Number(row.id)).filter((id) => Number.isFinite(id) && id > 0);
+  const placeholders = orderIds.map(() => '?').join(', ');
+
+  const [itemRows] = await pool.query(
+    `
+      SELECT
+        id,
+        pedido_id,
+        product_id,
+        product_name,
+        quantity,
+        unit_price,
+        line_total
+      FROM ops_web_pedido_items
+      WHERE pedido_id IN (${placeholders})
+      ORDER BY pedido_id DESC, id ASC
+    `,
+    orderIds
+  );
+
+  const itemsByOrderId = new Map();
+  for (const item of itemRows) {
+    const orderId = Number(item.pedido_id);
+    if (!itemsByOrderId.has(orderId)) {
+      itemsByOrderId.set(orderId, []);
+    }
+    itemsByOrderId.get(orderId).push(item);
+  }
+
+  return rows.map((order) => ({
+    ...order,
+    items: itemsByOrderId.get(Number(order.id)) || []
+  }));
 }
 
 export async function listPendingWebOrders({ limit = 40 } = {}) {

@@ -122,8 +122,6 @@ export async function listPublicProducts({ limit = 500, offset = 0, status = 'ac
     estado: row.estado || 'activo',
     supplier_id: row.supplier_id || null,
     supplier_name: row.supplier_name || null,
-    image_local_url: null,
-    image_path: Number(row.has_local_image || 0) ? `/api/web/products/${Number(row.id)}/image` : null,
     has_local_image: Boolean(Number(row.has_local_image || 0))
   }));
 }
@@ -171,8 +169,6 @@ export async function listPublicInactiveProducts({ limit = 500, offset = 0 } = {
     estado: row.estado || 'inactivo',
     supplier_id: row.supplier_id || null,
     supplier_name: row.supplier_name || null,
-    image_local_url: null,
-    image_path: Number(row.has_local_image || 0) ? `/api/web/products/${Number(row.id)}/image` : null,
     has_local_image: Boolean(Number(row.has_local_image || 0))
   }));
 }
