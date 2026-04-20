@@ -1,40 +1,79 @@
 import { pool } from '../../config/db.js';
 
-function toPublicLocalImageUrl(imageValue) {
-  if (!imageValue) {
-    return null;
-  }
+async function columnExists(tableName, columnName) {
+  const [rows] = await pool.query(
+    `
+      SELECT COUNT(*) AS count
+      FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = ?
+        AND COLUMN_NAME = ?
+    `,
+    [tableName, columnName]
+  );
 
-  if (Buffer.isBuffer(imageValue)) {
-    return `data:image/jpeg;base64,${imageValue.toString('base64')}`;
-  }
-
-  const textValue = String(imageValue).trim();
-  if (!textValue) {
-    return null;
-  }
-
-  if (/^https?:\/\//i.test(textValue) || /^data:image\//i.test(textValue)) {
-    return textValue;
-  }
-
-  const normalized = textValue.replace(/\s/g, '');
-  const looksLikeBase64 = normalized.length > 120 && /^[A-Za-z0-9+/=]+$/.test(normalized);
-
-  if (looksLikeBase64) {
-    return `data:image/jpeg;base64,${normalized}`;
-  }
-
-  return null;
+  return Boolean(rows[0]?.count);
 }
 
-export async function listPublicProducts({ limit = 50, offset = 0, status = 'activo' } = {}) {
-  const safeLimit = Math.max(1, Math.min(100, Math.floor(Number(limit) || 50)));
+async function indexExists(tableName, indexName) {
+  const [rows] = await pool.query(
+    `
+      SELECT COUNT(*) AS count
+      FROM information_schema.STATISTICS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = ?
+        AND INDEX_NAME = ?
+    `,
+    [tableName, indexName]
+  );
+
+  return Boolean(rows[0]?.count);
+}
+
+export async function removeLegacyImageUrlColumns() {
+  const hasImageSourceIndex = await indexExists('ops_producto', 'idx_producto_imagen_source');
+  if (hasImageSourceIndex) {
+    await pool.query(`
+      ALTER TABLE ops_producto
+      DROP INDEX idx_producto_imagen_source
+    `);
+  }
+
+  const hasImageSource = await columnExists('ops_producto', 'imagen_source');
+  if (hasImageSource) {
+    await pool.query(`
+      ALTER TABLE ops_producto
+      DROP COLUMN imagen_source
+    `);
+  }
+
+  const hasImagePublicId = await columnExists('ops_producto', 'imagen_public_id');
+  if (hasImagePublicId) {
+    await pool.query(`
+      ALTER TABLE ops_producto
+      DROP COLUMN imagen_public_id
+    `);
+  }
+
+  const hasImageUrl = await columnExists('ops_producto', 'imagen_url');
+  if (hasImageUrl) {
+    await pool.query(`
+      ALTER TABLE ops_producto
+      DROP COLUMN imagen_url
+    `);
+  }
+}
+
+export async function listPublicProducts({ limit = 500, offset = 0, status = 'activo', category = '' } = {}) {
+  const safeLimit = Math.max(1, Math.min(500, Math.floor(Number(limit) || 500)));
   const safeOffset = Math.max(0, Math.floor(Number(offset) || 0));
-  const safeStatus = String(status || 'activo').trim().toLowerCase();
-  const whereStatus = safeStatus === 'inactivo'
-    ? "LOWER(TRIM(COALESCE(p.estado, ''))) = 'inactivo'"
-    : "LOWER(TRIM(COALESCE(p.estado, ''))) = 'activo'";
+  const safeStatus = String(status || 'activo').trim().toLowerCase() === 'inactivo' ? 'inactivo' : 'activo';
+  const rawCategory = String(category || '').trim();
+  const normalizedCategory = rawCategory.toLowerCase().replace(/\s+/g, ' ').trim();
+  const hasCategoryFilter = Boolean(normalizedCategory);
+  const categoryParams = hasCategoryFilter
+    ? [normalizedCategory, normalizedCategory]
+    : [null, null];
 
   const [rows] = await pool.query(
     `
@@ -49,18 +88,27 @@ export async function listPublicProducts({ limit = 50, offset = 0, status = 'act
         p.estado,
         p.supplier_id,
         s.nombre AS supplier_name,
-        p.imagen
+        CASE
+          WHEN p.imagen IS NOT NULL AND p.imagen <> '' THEN 1
+          ELSE 0
+        END AS has_local_image
       FROM ops_producto p
       LEFT JOIN ops_proveedores s ON s.id = p.supplier_id
       LEFT JOIN ops_categoria c ON c.id = p.categoria_id
-      WHERE ${whereStatus}
-      ORDER BY
-        (p.imagen IS NOT NULL AND p.imagen <> '') DESC,
-        p.id DESC
+      WHERE p.estado = ?
+        AND (
+          ? IS NULL
+          OR c.nombre_normalized = ?
+          OR (
+            p.categoria_id IS NULL
+            AND LOWER(TRIM(COALESCE(p.categoria, ''))) = ?
+          )
+        )
+      ORDER BY p.id DESC
       LIMIT ?
       OFFSET ?
     `,
-    [safeLimit, safeOffset]
+    [safeStatus, normalizedCategory || null, ...categoryParams, safeLimit, safeOffset]
   );
 
   return rows.map((row) => ({
@@ -74,13 +122,14 @@ export async function listPublicProducts({ limit = 50, offset = 0, status = 'act
     estado: row.estado || 'activo',
     supplier_id: row.supplier_id || null,
     supplier_name: row.supplier_name || null,
-    image_local_url: toPublicLocalImageUrl(row.imagen),
-    has_local_image: Boolean(row.imagen)
+    image_local_url: null,
+    image_path: Number(row.has_local_image || 0) ? `/api/web/products/${Number(row.id)}/image` : null,
+    has_local_image: Boolean(Number(row.has_local_image || 0))
   }));
 }
 
-export async function listPublicInactiveProducts({ limit = 50, offset = 0 } = {}) {
-  const safeLimit = Math.max(1, Math.min(100, Math.floor(Number(limit) || 50)));
+export async function listPublicInactiveProducts({ limit = 500, offset = 0 } = {}) {
+  const safeLimit = Math.max(1, Math.min(500, Math.floor(Number(limit) || 500)));
   const safeOffset = Math.max(0, Math.floor(Number(offset) || 0));
 
   const [rows] = await pool.query(
@@ -96,14 +145,15 @@ export async function listPublicInactiveProducts({ limit = 50, offset = 0 } = {}
         p.estado,
         p.supplier_id,
         s.nombre AS supplier_name,
-        p.imagen
+        CASE
+          WHEN p.imagen IS NOT NULL AND p.imagen <> '' THEN 1
+          ELSE 0
+        END AS has_local_image
       FROM ops_producto p
       LEFT JOIN ops_proveedores s ON s.id = p.supplier_id
       LEFT JOIN ops_categoria c ON c.id = p.categoria_id
-      WHERE LOWER(TRIM(COALESCE(p.estado, ''))) = 'inactivo'
-      ORDER BY
-        (p.imagen IS NOT NULL AND p.imagen <> '') DESC,
-        p.id DESC
+      WHERE p.estado = 'inactivo'
+      ORDER BY p.id DESC
       LIMIT ?
       OFFSET ?
     `,
@@ -121,7 +171,51 @@ export async function listPublicInactiveProducts({ limit = 50, offset = 0 } = {}
     estado: row.estado || 'inactivo',
     supplier_id: row.supplier_id || null,
     supplier_name: row.supplier_name || null,
-    image_local_url: toPublicLocalImageUrl(row.imagen),
-    has_local_image: Boolean(row.imagen)
+    image_local_url: null,
+    image_path: Number(row.has_local_image || 0) ? `/api/web/products/${Number(row.id)}/image` : null,
+    has_local_image: Boolean(Number(row.has_local_image || 0))
   }));
+}
+
+export async function listPublicCategories({ status = 'activo' } = {}) {
+  const safeStatus = String(status || 'activo').trim().toLowerCase() === 'inactivo' ? 'inactivo' : 'activo';
+
+  const [rows] = await pool.query(
+    `
+      SELECT DISTINCT
+        TRIM(COALESCE(c.nombre, p.categoria)) AS category_name
+      FROM ops_producto p
+      LEFT JOIN ops_categoria c ON c.id = p.categoria_id
+      WHERE p.estado = ?
+        AND COALESCE(TRIM(COALESCE(c.nombre, p.categoria)), '') <> ''
+      ORDER BY category_name ASC
+    `,
+    [safeStatus]
+  );
+
+  return rows
+    .map((row) => String(row?.category_name || '').trim())
+    .filter(Boolean);
+}
+
+export async function findPublicProductImageById(productId) {
+  const parsedProductId = Number(productId);
+  if (!Number.isFinite(parsedProductId) || parsedProductId <= 0) {
+    return null;
+  }
+
+  const [rows] = await pool.query(
+    `
+      SELECT
+        id,
+        imagen,
+        tiene_imagen
+      FROM ops_producto
+      WHERE id = ?
+      LIMIT 1
+    `,
+    [parsedProductId]
+  );
+
+  return rows[0] || null;
 }

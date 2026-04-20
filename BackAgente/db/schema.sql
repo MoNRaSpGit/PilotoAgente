@@ -195,12 +195,8 @@
 -- =========================================================
 -- supplier_id INT NULL
 -- categoria_id INT NULL
--- imagen_url VARCHAR(500) NULL
--- imagen_public_id VARCHAR(255) NULL
--- imagen_source VARCHAR(20) NOT NULL DEFAULT 'local'
 -- INDEX idx_producto_supplier_id (supplier_id)
 -- INDEX idx_producto_categoria_id (categoria_id)
--- INDEX idx_producto_imagen_source (imagen_source)
 -- FOREIGN KEY (categoria_id) REFERENCES ops_categoria(id) ON DELETE SET NULL
 
 -- =========================================================
@@ -286,6 +282,7 @@
 -- nombre VARCHAR(140) NOT NULL
 -- nombre_normalized VARCHAR(140) NOT NULL UNIQUE
 -- email VARCHAR(190) NOT NULL UNIQUE
+-- role VARCHAR(30) NOT NULL DEFAULT 'cliente'
 -- password_salt VARCHAR(128) NOT NULL
 -- password_hash VARCHAR(255) NOT NULL
 -- estado VARCHAR(20) NOT NULL DEFAULT 'activo'

@@ -168,6 +168,22 @@ export async function ensureCategoriesTable() {
       `);
     }
 
+    const hasEstadoIndex = await indexExists('ops_producto', 'idx_producto_estado');
+    if (!hasEstadoIndex) {
+      await pool.query(`
+        ALTER TABLE ops_producto
+        ADD INDEX idx_producto_estado (estado)
+      `);
+    }
+
+    const hasEstadoCategoriaIndex = await indexExists('ops_producto', 'idx_producto_estado_categoria_id');
+    if (!hasEstadoCategoriaIndex) {
+      await pool.query(`
+        ALTER TABLE ops_producto
+        ADD INDEX idx_producto_estado_categoria_id (estado, categoria_id, id)
+      `);
+    }
+
     const hasCategoryFk = await foreignKeyExists('ops_producto', 'fk_producto_categoria');
     if (!hasCategoryFk) {
       await pool.query(`
