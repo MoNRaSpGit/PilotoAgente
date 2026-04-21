@@ -28,8 +28,8 @@ async function queryWithRetry(sql, params = [], attempt = 0) {
   try {
     return await pool.query(sql, params);
   } catch (error) {
-    if (attempt < 1 && isRetryableConnectionError(error)) {
-      await wait(120);
+    if (attempt < 3 && isRetryableConnectionError(error)) {
+      await wait(140 * (attempt + 1));
       return queryWithRetry(sql, params, attempt + 1);
     }
     throw error;
