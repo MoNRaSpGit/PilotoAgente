@@ -23,11 +23,23 @@ function logWebAuthFailure(req, stage, error) {
   console.warn('[web-auth] fallo', payload);
 }
 
+function isRetryableConnectionError(error) {
+  const message = String(error?.message || '').toLowerCase();
+  const code = String(error?.code || '').toUpperCase();
+  if (code === 'PROTOCOL_CONNECTION_LOST' || code === 'ECONNRESET' || code === 'EPIPE') {
+    return true;
+  }
+  return message.includes('read econnreset') || message.includes('connection lost');
+}
+
 function handleServiceError(res, error, fallbackMessage) {
-  const status = error.status || 500;
+  const status = error.status || (isRetryableConnectionError(error) ? 503 : 500);
+  const message = (isRetryableConnectionError(error) && !error.status)
+    ? 'Error temporal del servidor. Reintenta en unos segundos.'
+    : (error.message || fallbackMessage);
 
   return res.status(status).json({
-    message: error.message || fallbackMessage
+    message
   });
 }
 

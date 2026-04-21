@@ -9,7 +9,6 @@ import { ensureSupplierTables } from '../modules/suppliers/supplier.repository.j
 import { ensureWebUsersTable, seedDemoWebUsers } from '../modules/webAuth/webAuth.repository.js';
 import { ensureWebOrdersTables } from '../modules/webOrders/webOrders.repository.js';
 import { ensureWebUsersSupportTables } from '../modules/webUsers/webUsers.repository.js';
-import { removeLegacyImageUrlColumns } from '../modules/web/web.repository.js';
 import { env } from '../config/env.js';
 
 export async function initDatabase() {
@@ -25,7 +24,6 @@ export async function initDatabase() {
   await seedDemoWebUsers();
   await ensureWebUsersSupportTables();
   await ensureWebOrdersTables();
-  await removeLegacyImageUrlColumns();
   await seedDemoUsers();
 
   if (env.stockDemoSeedEnabled) {

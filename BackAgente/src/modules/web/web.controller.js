@@ -40,16 +40,13 @@ export async function getWebProductImageController(req, res) {
     const data = await getWebProductImage(req.params?.productId);
     const imageItem = data?.item || {};
 
-    if (imageItem.redirect_url) {
-      return res.redirect(imageItem.redirect_url);
-    }
-
     if (!imageItem.buffer) {
       return res.status(404).json({ message: 'Imagen no disponible' });
     }
 
     res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
     res.setHeader('Content-Type', imageItem.mime_type || 'image/jpeg');
+    res.setHeader('Content-Length', String(imageItem.buffer.length || 0));
     return res.send(imageItem.buffer);
   } catch (error) {
     return handleServiceError(res, error, 'No se pudo cargar la imagen del producto');

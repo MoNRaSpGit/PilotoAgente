@@ -1,69 +1,5 @@
 import { pool } from '../../config/db.js';
 
-async function columnExists(tableName, columnName) {
-  const [rows] = await pool.query(
-    `
-      SELECT COUNT(*) AS count
-      FROM information_schema.COLUMNS
-      WHERE TABLE_SCHEMA = DATABASE()
-        AND TABLE_NAME = ?
-        AND COLUMN_NAME = ?
-    `,
-    [tableName, columnName]
-  );
-
-  return Boolean(rows[0]?.count);
-}
-
-async function indexExists(tableName, indexName) {
-  const [rows] = await pool.query(
-    `
-      SELECT COUNT(*) AS count
-      FROM information_schema.STATISTICS
-      WHERE TABLE_SCHEMA = DATABASE()
-        AND TABLE_NAME = ?
-        AND INDEX_NAME = ?
-    `,
-    [tableName, indexName]
-  );
-
-  return Boolean(rows[0]?.count);
-}
-
-export async function removeLegacyImageUrlColumns() {
-  const hasImageSourceIndex = await indexExists('ops_producto', 'idx_producto_imagen_source');
-  if (hasImageSourceIndex) {
-    await pool.query(`
-      ALTER TABLE ops_producto
-      DROP INDEX idx_producto_imagen_source
-    `);
-  }
-
-  const hasImageSource = await columnExists('ops_producto', 'imagen_source');
-  if (hasImageSource) {
-    await pool.query(`
-      ALTER TABLE ops_producto
-      DROP COLUMN imagen_source
-    `);
-  }
-
-  const hasImagePublicId = await columnExists('ops_producto', 'imagen_public_id');
-  if (hasImagePublicId) {
-    await pool.query(`
-      ALTER TABLE ops_producto
-      DROP COLUMN imagen_public_id
-    `);
-  }
-
-  const hasImageUrl = await columnExists('ops_producto', 'imagen_url');
-  if (hasImageUrl) {
-    await pool.query(`
-      ALTER TABLE ops_producto
-      DROP COLUMN imagen_url
-    `);
-  }
-}
-
 export async function listPublicProducts({ limit = 500, offset = 0, status = 'activo', category = '' } = {}) {
   const safeLimit = Math.max(1, Math.min(500, Math.floor(Number(limit) || 500)));
   const safeOffset = Math.max(0, Math.floor(Number(offset) || 0));
@@ -89,8 +25,9 @@ export async function listPublicProducts({ limit = 500, offset = 0, status = 'ac
         p.supplier_id,
         s.nombre AS supplier_name,
         CASE
-          WHEN p.imagen IS NOT NULL AND p.imagen <> '' THEN 1
-          ELSE 0
+          WHEN p.imagen IS NULL OR p.imagen = '' THEN 0
+          WHEN LOWER(TRIM(CAST(p.imagen AS CHAR(16)))) LIKE 'http%' THEN 0
+          ELSE 1
         END AS has_local_image
       FROM ops_producto p
       LEFT JOIN ops_proveedores s ON s.id = p.supplier_id
@@ -144,8 +81,9 @@ export async function listPublicInactiveProducts({ limit = 500, offset = 0 } = {
         p.supplier_id,
         s.nombre AS supplier_name,
         CASE
-          WHEN p.imagen IS NOT NULL AND p.imagen <> '' THEN 1
-          ELSE 0
+          WHEN p.imagen IS NULL OR p.imagen = '' THEN 0
+          WHEN LOWER(TRIM(CAST(p.imagen AS CHAR(16)))) LIKE 'http%' THEN 0
+          ELSE 1
         END AS has_local_image
       FROM ops_producto p
       LEFT JOIN ops_proveedores s ON s.id = p.supplier_id

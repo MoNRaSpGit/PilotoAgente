@@ -13,8 +13,10 @@ function createServiceError(message, status = 500) {
 
 const WEB_PRODUCTS_CACHE_TTL_MS = 30 * 1000;
 const WEB_CATEGORIES_CACHE_TTL_MS = 60 * 1000;
+const WEB_IMAGE_CACHE_TTL_MS = 10 * 60 * 1000;
 const productsCache = new Map();
 const categoriesCache = new Map();
+const imagesCache = new Map();
 
 function getNow() {
   return Date.now();
@@ -87,10 +89,6 @@ function tryParseStringImagePayload(rawValue) {
   const normalizedValue = String(rawValue || '').trim();
   if (!normalizedValue) {
     return null;
-  }
-
-  if (/^https?:\/\//i.test(normalizedValue)) {
-    return { redirect_url: normalizedValue };
   }
 
   if (/^data:image\//i.test(normalizedValue)) {
@@ -240,7 +238,18 @@ export async function getWebCategories(query = {}) {
 }
 
 export async function getWebProductImage(productId) {
-  const item = await findPublicProductImageById(productId);
+  const parsedProductId = Number(productId);
+  if (!Number.isFinite(parsedProductId) || parsedProductId <= 0) {
+    throw createServiceError('Producto invalido', 400);
+  }
+
+  const imageCacheKey = `image:${parsedProductId}`;
+  const cachedImage = getCachedValue(imagesCache, imageCacheKey);
+  if (cachedImage) {
+    return { item: cachedImage };
+  }
+
+  const item = await findPublicProductImageById(parsedProductId);
   if (!item) {
     throw createServiceError('Producto no encontrado', 404);
   }
@@ -250,7 +259,6 @@ export async function getWebProductImage(productId) {
     throw createServiceError('Imagen no disponible', 404);
   }
 
-  return {
-    item: parsed
-  };
+  setCachedValue(imagesCache, imageCacheKey, parsed, WEB_IMAGE_CACHE_TTL_MS);
+  return { item: parsed };
 }
