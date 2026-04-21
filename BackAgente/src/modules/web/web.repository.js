@@ -25,14 +25,13 @@ export async function listPublicProducts({ limit = 500, offset = 0, status = 'ac
         p.supplier_id,
         s.nombre AS supplier_name,
         CASE
-          WHEN p.imagen IS NULL OR p.imagen = '' THEN 0
-          WHEN LOWER(TRIM(CAST(p.imagen AS CHAR(16)))) LIKE 'http%' THEN 0
-          ELSE 1
+          WHEN COALESCE(p.tiene_imagen, 0) = 1 THEN 1
+          ELSE 0
         END AS has_local_image
       FROM ops_producto p
       LEFT JOIN ops_proveedores s ON s.id = p.supplier_id
       LEFT JOIN ops_categoria c ON c.id = p.categoria_id
-      WHERE p.estado = ?
+      WHERE LOWER(TRIM(COALESCE(p.estado, ''))) = ?
         AND (
           ? IS NULL
           OR c.nombre_normalized = ?
@@ -56,7 +55,7 @@ export async function listPublicProducts({ limit = 500, offset = 0, status = 'ac
     categoria: row.categoria || '',
     barcode: row.barcode || '',
     barcode_normalized: row.barcode_normalized || '',
-    estado: row.estado || 'activo',
+    estado: String(row.estado || safeStatus).trim().toLowerCase(),
     supplier_id: row.supplier_id || null,
     supplier_name: row.supplier_name || null,
     has_local_image: Boolean(Number(row.has_local_image || 0))
@@ -81,14 +80,13 @@ export async function listPublicInactiveProducts({ limit = 500, offset = 0 } = {
         p.supplier_id,
         s.nombre AS supplier_name,
         CASE
-          WHEN p.imagen IS NULL OR p.imagen = '' THEN 0
-          WHEN LOWER(TRIM(CAST(p.imagen AS CHAR(16)))) LIKE 'http%' THEN 0
-          ELSE 1
+          WHEN COALESCE(p.tiene_imagen, 0) = 1 THEN 1
+          ELSE 0
         END AS has_local_image
       FROM ops_producto p
       LEFT JOIN ops_proveedores s ON s.id = p.supplier_id
       LEFT JOIN ops_categoria c ON c.id = p.categoria_id
-      WHERE p.estado = 'inactivo'
+      WHERE LOWER(TRIM(COALESCE(p.estado, ''))) = 'inactivo'
       ORDER BY p.id DESC
       LIMIT ?
       OFFSET ?
@@ -104,7 +102,7 @@ export async function listPublicInactiveProducts({ limit = 500, offset = 0 } = {
     categoria: row.categoria || '',
     barcode: row.barcode || '',
     barcode_normalized: row.barcode_normalized || '',
-    estado: row.estado || 'inactivo',
+    estado: String(row.estado || 'inactivo').trim().toLowerCase(),
     supplier_id: row.supplier_id || null,
     supplier_name: row.supplier_name || null,
     has_local_image: Boolean(Number(row.has_local_image || 0))
