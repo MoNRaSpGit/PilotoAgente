@@ -72,6 +72,34 @@ function formatOrderDate(dateText) {
   }).format(parsedDate);
 }
 
+function paymentLabel(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'pos') {
+    return 'POS';
+  }
+  if (normalized === 'efectivo') {
+    return 'Efectivo';
+  }
+  if (normalized === 'cuenta') {
+    return 'Cuenta';
+  }
+  if (normalized === 'puntos') {
+    return 'Puntos';
+  }
+  return normalized || '-';
+}
+
+function deliveryLabel(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'delivery') {
+    return 'Delivery';
+  }
+  if (normalized === 'pickup') {
+    return 'Yo voy';
+  }
+  return normalized || '-';
+}
+
 export default function WebPedidosPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -224,6 +252,8 @@ export default function WebPedidosPage() {
 
                   <small>{formatOrderDate(order?.created_at)}</small>
                   <p>Total: ${Number(order?.total_estimado || 0).toFixed(2)}</p>
+                  <p>Pago: {paymentLabel(order?.payment_method)}</p>
+                  <p>Entrega: {deliveryLabel(order?.delivery_mode)}</p>
 
                   <ul className="web-orders-items">
                     {(Array.isArray(order?.items) ? order.items : []).map((item) => (

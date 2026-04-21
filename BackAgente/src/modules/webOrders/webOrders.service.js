@@ -18,9 +18,36 @@ function createServiceError(message, status = 500) {
   return error;
 }
 
+function normalizePaymentMethod(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) {
+    return '';
+  }
+  if (raw === 'pos' || raw === 'efectivo' || raw === 'cuenta' || raw === 'puntos') {
+    return raw;
+  }
+  return '';
+}
+
+function normalizeDeliveryMode(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) {
+    return '';
+  }
+  if (raw === 'delivery' || raw === 'pickup') {
+    return raw;
+  }
+  if (raw === 'yo_voy' || raw === 'yo voy' || raw === 'retiro') {
+    return 'pickup';
+  }
+  return '';
+}
+
 export async function createOrderFromWebUser(webUser, payload = {}) {
   const items = Array.isArray(payload?.items) ? payload.items : [];
   const notes = String(payload?.notes || '').trim();
+  const paymentMethod = normalizePaymentMethod(payload?.payment_method ?? payload?.paymentMethod);
+  const deliveryMode = normalizeDeliveryMode(payload?.delivery_mode ?? payload?.deliveryMode);
 
   if (!webUser?.id) {
     throw createServiceError('Usuario web invalido', 401);
@@ -28,6 +55,12 @@ export async function createOrderFromWebUser(webUser, payload = {}) {
 
   if (items.length === 0) {
     throw createServiceError('El pedido debe incluir al menos un producto', 400);
+  }
+  if (!paymentMethod) {
+    throw createServiceError('Selecciona un tipo de pago', 400);
+  }
+  if (!deliveryMode) {
+    throw createServiceError('Selecciona un tipo de entrega', 400);
   }
 
   const normalizedItems = items.map((item) => ({
@@ -60,17 +93,22 @@ export async function createOrderFromWebUser(webUser, payload = {}) {
     };
   });
 
-  const createdOrder = await createWebOrder({
-    webUserId: webUser.id,
-    items: resolvedItems,
-    notes: notes || null
-  });
-
   const orderTotal = resolvedItems.reduce(
     (sum, item) => sum + Number(item.unit_price || 0) * Number(item.quantity || 0),
     0
   );
   const safeOrderTotal = Number(orderTotal.toFixed(2));
+  if (deliveryMode === 'delivery' && safeOrderTotal < 200) {
+    throw createServiceError('Delivery disponible desde $200', 409);
+  }
+
+  const createdOrder = await createWebOrder({
+    webUserId: webUser.id,
+    items: resolvedItems,
+    notes: notes || null,
+    paymentMethod,
+    deliveryMode
+  });
   registerWebOrderMetrics({
     webUserId: webUser.id,
     orderId: createdOrder.id,
@@ -86,6 +124,8 @@ export async function createOrderFromWebUser(webUser, payload = {}) {
     cliente_visible: 1,
     admin_visible: 1,
     notas: notes || null,
+    payment_method: paymentMethod,
+    delivery_mode: deliveryMode,
     total_estimado: safeOrderTotal,
     created_at: timestamp,
     updated_at: timestamp,

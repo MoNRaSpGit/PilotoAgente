@@ -62,6 +62,8 @@ export async function ensureWebOrdersTables() {
         cliente_visible TINYINT(1) NOT NULL DEFAULT 1,
         admin_visible TINYINT(1) NOT NULL DEFAULT 1,
         notas VARCHAR(255) NULL,
+        payment_method VARCHAR(20) NOT NULL DEFAULT 'efectivo',
+        delivery_mode VARCHAR(20) NOT NULL DEFAULT 'pickup',
         total_estimado DECIMAL(12,2) NOT NULL DEFAULT 0.00,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -86,6 +88,22 @@ export async function ensureWebOrdersTables() {
       await pool.query(`
         ALTER TABLE ops_web_pedidos
         ADD COLUMN admin_visible TINYINT(1) NOT NULL DEFAULT 1 AFTER cliente_visible
+      `);
+    }
+
+    const hasPaymentMethodColumn = await columnExists('ops_web_pedidos', 'payment_method');
+    if (!hasPaymentMethodColumn) {
+      await pool.query(`
+        ALTER TABLE ops_web_pedidos
+        ADD COLUMN payment_method VARCHAR(20) NOT NULL DEFAULT 'efectivo' AFTER notas
+      `);
+    }
+
+    const hasDeliveryModeColumn = await columnExists('ops_web_pedidos', 'delivery_mode');
+    if (!hasDeliveryModeColumn) {
+      await pool.query(`
+        ALTER TABLE ops_web_pedidos
+        ADD COLUMN delivery_mode VARCHAR(20) NOT NULL DEFAULT 'pickup' AFTER payment_method
       `);
     }
 
@@ -174,7 +192,7 @@ export async function findProductsForWebOrderItems(productIds = []) {
   return rows;
 }
 
-export async function createWebOrder({ webUserId, items, notes = null }) {
+export async function createWebOrder({ webUserId, items, notes = null, paymentMethod = 'efectivo', deliveryMode = 'pickup' }) {
   await ensureWebOrdersTables();
 
   return withTransaction(async (connection) => {
@@ -186,10 +204,18 @@ export async function createWebOrder({ webUserId, items, notes = null }) {
 
     const [orderResult] = await connection.query(
       `
-        INSERT INTO ops_web_pedidos (web_usuario_id, estado, cliente_visible, notas, total_estimado)
-        VALUES (?, 'pendiente', 1, ?, ?)
+        INSERT INTO ops_web_pedidos (
+          web_usuario_id,
+          estado,
+          cliente_visible,
+          notas,
+          payment_method,
+          delivery_mode,
+          total_estimado
+        )
+        VALUES (?, 'pendiente', 1, ?, ?, ?, ?)
       `,
-      [webUserId, notes || null, safeTotalEstimado]
+      [webUserId, notes || null, paymentMethod, deliveryMode, safeTotalEstimado]
     );
 
     if (items.length > 0) {
@@ -243,6 +269,8 @@ export async function getWebOrderById(orderId) {
         p.cliente_visible,
         p.admin_visible,
         p.notas,
+        p.payment_method,
+        p.delivery_mode,
         p.total_estimado,
         DATE_FORMAT(p.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
         DATE_FORMAT(p.updated_at, '%Y-%m-%d %H:%i:%s') AS updated_at,
@@ -300,6 +328,8 @@ export async function listWebOrdersByUserId(webUserId, { limit = 20 } = {}) {
         cliente_visible,
         admin_visible,
         notas,
+        payment_method,
+        delivery_mode,
         total_estimado,
         DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
         DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updated_at
@@ -365,6 +395,8 @@ export async function listPendingWebOrders({ limit = 40 } = {}) {
         p.cliente_visible,
         p.admin_visible,
         p.notas,
+        p.payment_method,
+        p.delivery_mode,
         p.total_estimado,
         DATE_FORMAT(p.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
         DATE_FORMAT(p.updated_at, '%Y-%m-%d %H:%i:%s') AS updated_at,
