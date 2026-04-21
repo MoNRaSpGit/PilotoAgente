@@ -103,7 +103,7 @@ export async function createOrderFromWebUser(webUser, payload = {}) {
   );
   const safeOrderTotal = Number(orderTotal.toFixed(2));
   if (deliveryMode === 'delivery' && safeOrderTotal < 200) {
-    throw createServiceError('Delivery disponible desde $200', 409);
+    throw createServiceError('Delivery habilitado con compra igual o mayor a $200', 409);
   }
 
   const createdOrder = await createWebOrder({
