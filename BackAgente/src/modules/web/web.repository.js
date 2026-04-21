@@ -37,8 +37,8 @@ export async function listPublicProducts({ limit = 500, offset = 0, status = 'ac
       `
         SELECT id
         FROM ops_categoria
-        WHERE REPLACE(REPLACE(REPLACE(LOWER(TRIM(COALESCE(nombre_normalized, nombre, ''))), ' ', ''), '_', ''), '-', '') = ?
-           OR REPLACE(REPLACE(REPLACE(LOWER(TRIM(COALESCE(nombre, ''))), ' ', ''), '_', ''), '-', '') = ?
+        WHERE nombre_compact = ?
+           OR nombre_normalized = ?
       `,
       [compactCategory, compactCategory]
     );
@@ -54,7 +54,7 @@ export async function listPublicProducts({ limit = 500, offset = 0, status = 'ac
           p.categoria_id IN (${placeholders})
           OR (
             p.categoria_id IS NULL
-            AND REPLACE(REPLACE(REPLACE(LOWER(TRIM(COALESCE(p.categoria, ''))), ' ', ''), '_', ''), '-', '') = ?
+            AND p.categoria_compact = ?
           )
         )
       `;
@@ -63,7 +63,7 @@ export async function listPublicProducts({ limit = 500, offset = 0, status = 'ac
       categoryFilterSql = `
         AND (
           p.categoria_id IS NULL
-          AND REPLACE(REPLACE(REPLACE(LOWER(TRIM(COALESCE(p.categoria, ''))), ' ', ''), '_', ''), '-', '') = ?
+          AND p.categoria_compact = ?
         )
       `;
       params.push(compactCategory);
@@ -90,7 +90,7 @@ export async function listPublicProducts({ limit = 500, offset = 0, status = 'ac
       FROM ops_producto p
       LEFT JOIN ops_proveedores s ON s.id = p.supplier_id
       LEFT JOIN ops_categoria c ON c.id = p.categoria_id
-      WHERE LOWER(TRIM(COALESCE(p.estado, ''))) = ?
+      WHERE p.estado = ?
         ${categoryFilterSql}
       ORDER BY p.id DESC
       LIMIT ?
@@ -104,7 +104,7 @@ export async function listPublicProducts({ limit = 500, offset = 0, status = 'ac
     nombre: row.nombre,
     precio_venta: Number(row.precio_venta || 0),
     stock_actual: Number(row.stock_actual || 0),
-    categoria: row.categoria || '',
+    categoria: toCategoryDisplayName(row.categoria || '', compactCategoryKey(row.categoria || '')),
     barcode: row.barcode || '',
     barcode_normalized: row.barcode_normalized || '',
     estado: String(row.estado || safeStatus).trim().toLowerCase(),
@@ -138,7 +138,7 @@ export async function listPublicInactiveProducts({ limit = 500, offset = 0 } = {
       FROM ops_producto p
       LEFT JOIN ops_proveedores s ON s.id = p.supplier_id
       LEFT JOIN ops_categoria c ON c.id = p.categoria_id
-      WHERE LOWER(TRIM(COALESCE(p.estado, ''))) = 'inactivo'
+      WHERE p.estado = 'inactivo'
       ORDER BY p.id DESC
       LIMIT ?
       OFFSET ?
@@ -151,7 +151,7 @@ export async function listPublicInactiveProducts({ limit = 500, offset = 0 } = {
     nombre: row.nombre,
     precio_venta: Number(row.precio_venta || 0),
     stock_actual: Number(row.stock_actual || 0),
-    categoria: row.categoria || '',
+    categoria: toCategoryDisplayName(row.categoria || '', compactCategoryKey(row.categoria || '')),
     barcode: row.barcode || '',
     barcode_normalized: row.barcode_normalized || '',
     estado: String(row.estado || 'inactivo').trim().toLowerCase(),
@@ -166,7 +166,7 @@ export async function countPublicInactiveProducts() {
     `
       SELECT COUNT(*) AS total
       FROM ops_producto p
-      WHERE LOWER(TRIM(COALESCE(p.estado, ''))) = 'inactivo'
+      WHERE p.estado = 'inactivo'
     `
   );
 
@@ -184,24 +184,24 @@ export async function listPublicCategories({ status = 'activo' } = {}) {
         SUM(product_count) AS product_count
       FROM (
         SELECT
-          REPLACE(REPLACE(REPLACE(LOWER(TRIM(COALESCE(c.nombre_normalized, c.nombre, ''))), ' ', ''), '_', ''), '-', '') AS category_key,
+          COALESCE(c.nombre_compact, c.nombre_normalized) AS category_key,
           TRIM(COALESCE(c.nombre, p.categoria)) AS category_name,
           COUNT(*) AS product_count
         FROM ops_producto p
         INNER JOIN ops_categoria c ON c.id = p.categoria_id
-        WHERE LOWER(TRIM(COALESCE(p.estado, ''))) = ?
-          AND LOWER(TRIM(COALESCE(c.estado, ''))) = 'activo'
+        WHERE p.estado = ?
+          AND c.estado = 'activo'
           AND COALESCE(TRIM(COALESCE(c.nombre, p.categoria)), '') <> ''
         GROUP BY category_key, category_name
 
         UNION ALL
 
         SELECT
-          REPLACE(REPLACE(REPLACE(LOWER(TRIM(COALESCE(p.categoria, ''))), ' ', ''), '_', ''), '-', '') AS category_key,
+          p.categoria_compact AS category_key,
           TRIM(COALESCE(p.categoria, '')) AS category_name,
           COUNT(*) AS product_count
         FROM ops_producto p
-        WHERE LOWER(TRIM(COALESCE(p.estado, ''))) = ?
+        WHERE p.estado = ?
           AND p.categoria_id IS NULL
           AND COALESCE(TRIM(COALESCE(p.categoria, '')), '') <> ''
         GROUP BY category_key, category_name
@@ -304,8 +304,10 @@ export async function updateWebAdminProductById({
 
   if (typeof categoria === 'string') {
     updates.push('categoria = ?');
+    updates.push('categoria_compact = ?');
     updates.push('categoria_id = NULL');
     params.push(categoria);
+    params.push(compactCategoryKey(categoria));
   }
 
   if (typeof tieneImagen === 'number') {

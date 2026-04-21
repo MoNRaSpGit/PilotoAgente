@@ -17,9 +17,12 @@ function createServiceError(message, status = 500) {
 const WEB_PRODUCTS_CACHE_TTL_MS = 30 * 1000;
 const WEB_CATEGORIES_CACHE_TTL_MS = 60 * 1000;
 const WEB_IMAGE_CACHE_TTL_MS = 10 * 60 * 1000;
+const WEB_IMAGE_CACHE_MAX_ITEMS = 300;
+const WEB_IMAGE_CACHE_MAX_BYTES = 64 * 1024 * 1024;
 const productsCache = new Map();
 const categoriesCache = new Map();
 const imagesCache = new Map();
+let imagesCacheBytes = 0;
 
 function getNow() {
   return Date.now();
@@ -44,6 +47,70 @@ function setCachedValue(cache, key, value, ttlMs) {
     value,
     expiresAt: getNow() + ttlMs
   });
+}
+
+function getImageCacheSizeBytes(imageValue) {
+  const size = Number(imageValue?.buffer?.length || 0);
+  return Number.isFinite(size) && size > 0 ? size : 0;
+}
+
+function deleteImageCacheEntry(key) {
+  const existing = imagesCache.get(key);
+  if (!existing) {
+    return;
+  }
+  imagesCacheBytes = Math.max(0, imagesCacheBytes - Number(existing.sizeBytes || 0));
+  imagesCache.delete(key);
+}
+
+function clearExpiredImageCacheEntries() {
+  const now = getNow();
+  for (const [key, entry] of imagesCache.entries()) {
+    if (entry.expiresAt <= now) {
+      deleteImageCacheEntry(key);
+    }
+  }
+}
+
+function getCachedImageValue(key) {
+  const entry = imagesCache.get(key);
+  if (!entry) {
+    return null;
+  }
+
+  if (entry.expiresAt <= getNow()) {
+    deleteImageCacheEntry(key);
+    return null;
+  }
+
+  // Refresh LRU order on hit.
+  imagesCache.delete(key);
+  imagesCache.set(key, entry);
+  return entry.value;
+}
+
+function setCachedImageValue(key, value, ttlMs) {
+  clearExpiredImageCacheEntries();
+
+  const sizeBytes = getImageCacheSizeBytes(value);
+  if (imagesCache.has(key)) {
+    deleteImageCacheEntry(key);
+  }
+
+  imagesCache.set(key, {
+    value,
+    expiresAt: getNow() + ttlMs,
+    sizeBytes
+  });
+  imagesCacheBytes += sizeBytes;
+
+  while (imagesCache.size > WEB_IMAGE_CACHE_MAX_ITEMS || imagesCacheBytes > WEB_IMAGE_CACHE_MAX_BYTES) {
+    const oldestKey = imagesCache.keys().next().value;
+    if (!oldestKey) {
+      break;
+    }
+    deleteImageCacheEntry(oldestKey);
+  }
 }
 
 function detectImageMime(bufferValue) {
@@ -251,7 +318,7 @@ export async function getWebProductImage(productId) {
   }
 
   const imageCacheKey = `image:${parsedProductId}`;
-  const cachedImage = getCachedValue(imagesCache, imageCacheKey);
+  const cachedImage = getCachedImageValue(imageCacheKey);
   if (cachedImage) {
     return { item: cachedImage };
   }
@@ -266,7 +333,7 @@ export async function getWebProductImage(productId) {
     throw createServiceError('Imagen no disponible', 404);
   }
 
-  setCachedValue(imagesCache, imageCacheKey, parsed, WEB_IMAGE_CACHE_TTL_MS);
+  setCachedImageValue(imageCacheKey, parsed, WEB_IMAGE_CACHE_TTL_MS);
   return { item: parsed };
 }
 
@@ -353,7 +420,7 @@ export async function updateWebAdminProduct(productId, payload = {}) {
 
   productsCache.clear();
   categoriesCache.clear();
-  imagesCache.delete(`image:${parsedProductId}`);
+  deleteImageCacheEntry(`image:${parsedProductId}`);
 
   return {
     item: {

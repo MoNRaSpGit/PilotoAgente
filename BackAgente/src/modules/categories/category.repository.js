@@ -9,6 +9,10 @@ function normalizeCategoryName(name) {
     .toLowerCase();
 }
 
+function compactCategoryName(name) {
+  return normalizeCategoryName(name).replace(/[\s_-]+/g, '');
+}
+
 function toCategoryDisplayName(name) {
   return String(name || '')
     .trim()
@@ -62,19 +66,21 @@ async function foreignKeyExists(tableName, constraintName) {
 }
 
 async function upsertCategoryWithId(nombre, nombreNormalized) {
+  const nombreCompact = compactCategoryName(nombre);
   const [result] = await pool.query(
     `
-      INSERT INTO ops_categoria (nombre, nombre_normalized, estado)
-      VALUES (?, ?, 'activo')
+      INSERT INTO ops_categoria (nombre, nombre_normalized, nombre_compact, estado)
+      VALUES (?, ?, ?, 'activo')
       ON DUPLICATE KEY UPDATE
         id = LAST_INSERT_ID(id),
         nombre = CASE
           WHEN nombre IS NULL OR nombre = '' THEN VALUES(nombre)
           ELSE nombre
         END,
+        nombre_compact = VALUES(nombre_compact),
         estado = 'activo'
     `,
-    [nombre, nombreNormalized]
+    [nombre, nombreNormalized, nombreCompact]
   );
 
   return Number(result.insertId);
@@ -122,13 +128,13 @@ async function migrateExistingProductCategories() {
       continue;
     }
 
-    await pool.query(
+      await pool.query(
       `
         UPDATE ops_producto
-        SET categoria = ?, categoria_id = ?
+        SET categoria = ?, categoria_compact = ?, categoria_id = ?
         WHERE id = ?
       `,
-      [match.nombre, match.id, row.id]
+      [match.nombre, compactCategoryName(match.nombre), match.id, row.id]
     );
   }
 }
@@ -144,13 +150,43 @@ export async function ensureCategoriesTable() {
         id INT AUTO_INCREMENT PRIMARY KEY,
         nombre VARCHAR(140) NOT NULL,
         nombre_normalized VARCHAR(140) NOT NULL,
+        nombre_compact VARCHAR(140) NULL,
         estado VARCHAR(20) NOT NULL DEFAULT 'activo',
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         UNIQUE KEY uniq_categoria_nombre_normalized (nombre_normalized),
+        INDEX idx_categoria_nombre_compact (nombre_compact),
         INDEX idx_categoria_estado (estado)
       )
     `);
+
+    const hasCategoryCompact = await columnExists('ops_categoria', 'nombre_compact');
+    if (!hasCategoryCompact) {
+      await pool.query(`
+        ALTER TABLE ops_categoria
+        ADD COLUMN nombre_compact VARCHAR(140) NULL AFTER nombre_normalized
+      `);
+    }
+
+    await pool.query(`
+      UPDATE ops_categoria
+      SET nombre_compact = REPLACE(REPLACE(REPLACE(LOWER(TRIM(COALESCE(nombre_normalized, nombre, ''))), ' ', ''), '_', ''), '-', '')
+      WHERE nombre_compact IS NULL OR TRIM(nombre_compact) = ''
+    `);
+
+    await pool.query(`
+      UPDATE ops_categoria
+      SET estado = LOWER(TRIM(COALESCE(estado, 'activo')))
+      WHERE estado IS NULL OR estado <> LOWER(TRIM(COALESCE(estado, 'activo')))
+    `);
+
+    const hasCategoryCompactIndex = await indexExists('ops_categoria', 'idx_categoria_nombre_compact');
+    if (!hasCategoryCompactIndex) {
+      await pool.query(`
+        ALTER TABLE ops_categoria
+        ADD INDEX idx_categoria_nombre_compact (nombre_compact)
+      `);
+    }
 
     const hasCategoryId = await columnExists('ops_producto', 'categoria_id');
     if (!hasCategoryId) {
@@ -159,6 +195,27 @@ export async function ensureCategoriesTable() {
         ADD COLUMN categoria_id INT NULL AFTER categoria
       `);
     }
+
+    const hasProductCategoryCompact = await columnExists('ops_producto', 'categoria_compact');
+    if (!hasProductCategoryCompact) {
+      await pool.query(`
+        ALTER TABLE ops_producto
+        ADD COLUMN categoria_compact VARCHAR(140) NULL AFTER categoria
+      `);
+    }
+
+    await pool.query(`
+      UPDATE ops_producto
+      SET categoria_compact = REPLACE(REPLACE(REPLACE(LOWER(TRIM(COALESCE(categoria, ''))), ' ', ''), '_', ''), '-', '')
+      WHERE categoria_id IS NULL
+        AND (categoria_compact IS NULL OR TRIM(categoria_compact) = '')
+    `);
+
+    await pool.query(`
+      UPDATE ops_producto
+      SET estado = LOWER(TRIM(COALESCE(estado, 'inactivo')))
+      WHERE estado IS NULL OR estado <> LOWER(TRIM(COALESCE(estado, 'inactivo')))
+    `);
 
     const hasCategoryIndex = await indexExists('ops_producto', 'idx_producto_categoria_id');
     if (!hasCategoryIndex) {
@@ -189,6 +246,14 @@ export async function ensureCategoriesTable() {
       await pool.query(`
         ALTER TABLE ops_producto
         ADD INDEX idx_producto_estado_categoria_text (estado, categoria, id)
+      `);
+    }
+
+    const hasEstadoCategoriaCompactIndex = await indexExists('ops_producto', 'idx_producto_estado_categoria_compact');
+    if (!hasEstadoCategoriaCompactIndex) {
+      await pool.query(`
+        ALTER TABLE ops_producto
+        ADD INDEX idx_producto_estado_categoria_compact (estado, categoria_compact, id)
       `);
     }
 
