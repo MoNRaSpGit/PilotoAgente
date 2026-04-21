@@ -184,6 +184,14 @@ export async function ensureCategoriesTable() {
       `);
     }
 
+    const hasEstadoCategoriaTextIndex = await indexExists('ops_producto', 'idx_producto_estado_categoria_text');
+    if (!hasEstadoCategoriaTextIndex) {
+      await pool.query(`
+        ALTER TABLE ops_producto
+        ADD INDEX idx_producto_estado_categoria_text (estado, categoria, id)
+      `);
+    }
+
     const hasCategoryFk = await foreignKeyExists('ops_producto', 'fk_producto_categoria');
     if (!hasCategoryFk) {
       await pool.query(`

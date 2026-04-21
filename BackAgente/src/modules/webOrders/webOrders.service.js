@@ -8,8 +8,7 @@ import {
   listWebOrdersByUserId,
   updateWebOrderStatus
 } from './webOrders.repository.js';
-import { registerWebOrderMetrics } from '../webUsers/webUsers.repository.js';
-import { env } from '../../config/env.js';
+import { awardWebPointsOnOrderDelivered, registerWebOrderMetrics } from '../webUsers/webUsers.repository.js';
 import { emitWebOrderEvent } from './webOrders.events.js';
 import { ALLOWED_WEB_ORDER_STATUSES, canHideWebOrder, normalizeWebOrderStatus } from './webOrders.status.js';
 
@@ -18,23 +17,6 @@ function createServiceError(message, status = 500) {
   error.status = status;
   return error;
 }
-
-function calculateWebOrderPoints(orderTotal) {
-  if (!env.webPointsEnabled) {
-    return 0;
-  }
-
-  const stepAmount = Number(env.webPointsStepAmount || 0);
-  const pointsPerStep = Number(env.webPointsPerStep || 0);
-
-  if (stepAmount <= 0 || pointsPerStep <= 0) {
-    return 0;
-  }
-
-  const steps = Math.floor(Number(orderTotal || 0) / stepAmount);
-  return Math.max(0, steps * Math.floor(pointsPerStep));
-}
-
 
 export async function createOrderFromWebUser(webUser, payload = {}) {
   const items = Array.isArray(payload?.items) ? payload.items : [];
@@ -89,13 +71,11 @@ export async function createOrderFromWebUser(webUser, payload = {}) {
     0
   );
   const safeOrderTotal = Number(orderTotal.toFixed(2));
-  const awardedPoints = calculateWebOrderPoints(safeOrderTotal);
-
   registerWebOrderMetrics({
     webUserId: webUser.id,
     orderId: createdOrder.id,
     orderTotal: safeOrderTotal,
-    awardedPoints
+    awardedPoints: 0
   }).catch(() => {});
 
   const timestamp = new Date().toISOString().slice(0, 19).replace('T', ' ');
@@ -132,7 +112,7 @@ export async function createOrderFromWebUser(webUser, payload = {}) {
     item,
     meta: {
       notification_text: `${webUser.nombre} te hizo un pedido`,
-      awarded_points: awardedPoints,
+      awarded_points: 0,
       order_total: safeOrderTotal
     }
   };
@@ -175,6 +155,12 @@ export async function changeWebOrderStatus(orderId, payload = {}) {
     throw createServiceError('Estado de pedido invalido', 400);
   }
 
+  const previousOrder = await getWebOrderById(parsedOrderId);
+  if (!previousOrder) {
+    throw createServiceError('Pedido no encontrado', 404);
+  }
+
+  const previousStatus = normalizeWebOrderStatus(previousOrder.estado);
   const item = await updateWebOrderStatus({
     orderId: parsedOrderId,
     status
@@ -182,6 +168,24 @@ export async function changeWebOrderStatus(orderId, payload = {}) {
 
   if (!item) {
     throw createServiceError('Pedido no encontrado', 404);
+  }
+
+  let pointsMeta = {
+    awarded_points: 0,
+    points_applied: false
+  };
+
+  if (status === 'entregado' && previousStatus !== 'entregado') {
+    const pointsResult = await awardWebPointsOnOrderDelivered({
+      webUserId: item.web_usuario_id,
+      orderId: parsedOrderId,
+      orderTotal: item.total_estimado
+    });
+
+    pointsMeta = {
+      awarded_points: Number(pointsResult?.awardedPoints || 0),
+      points_applied: Boolean(pointsResult?.applied)
+    };
   }
 
   emitWebOrderEvent({
@@ -192,7 +196,10 @@ export async function changeWebOrderStatus(orderId, payload = {}) {
     order: item
   });
 
-  return { item };
+  return {
+    item,
+    meta: pointsMeta
+  };
 }
 
 export async function hideMyWebOrder(webUser, orderId) {

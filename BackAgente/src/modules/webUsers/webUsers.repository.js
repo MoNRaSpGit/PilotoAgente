@@ -220,6 +220,125 @@ export async function registerWebOrderMetrics({
   });
 }
 
+export async function awardWebPointsOnOrderDelivered({
+  webUserId,
+  orderId,
+  orderTotal
+}) {
+  await ensureWebUsersSupportTables();
+
+  const parsedUserId = Number(webUserId);
+  const parsedOrderId = Number(orderId);
+  const safeOrderTotal = Number(Number(orderTotal || 0).toFixed(2));
+  const basePoints = Math.max(0, Math.floor(safeOrderTotal / 100) * 2);
+
+  if (!Number.isFinite(parsedUserId) || parsedUserId <= 0) {
+    return {
+      applied: false,
+      reason: 'invalid_user',
+      awardedPoints: 0
+    };
+  }
+
+  if (!Number.isFinite(parsedOrderId) || parsedOrderId <= 0) {
+    return {
+      applied: false,
+      reason: 'invalid_order',
+      awardedPoints: 0
+    };
+  }
+
+  return withTransaction(async (connection) => {
+    await ensureWebUserProfile(parsedUserId, connection);
+
+    const [existingRows] = await connection.query(
+      `
+        SELECT id, puntos, saldo_posterior
+        FROM ops_web_puntos_movimientos
+        WHERE web_usuario_id = ?
+          AND pedido_id = ?
+          AND tipo = 'acreditacion_entrega'
+        LIMIT 1
+      `,
+      [parsedUserId, parsedOrderId]
+    );
+
+    const existing = existingRows[0] || null;
+    if (existing) {
+      return {
+        applied: false,
+        reason: 'already_applied',
+        awardedPoints: Number(existing.puntos || 0),
+        currentPoints: Number(existing.saldo_posterior || 0)
+      };
+    }
+
+    const [[profileRow]] = await connection.query(
+      `
+        SELECT puntos_actuales
+        FROM ops_web_usuario_perfil
+        WHERE web_usuario_id = ?
+        LIMIT 1
+      `,
+      [parsedUserId]
+    );
+
+    const currentPoints = Math.max(0, Number(profileRow?.puntos_actuales || 0));
+    const availableUntilCap = Math.max(0, 500 - currentPoints);
+    const awardedPoints = Math.min(basePoints, availableUntilCap);
+    const nextPoints = currentPoints + awardedPoints;
+
+    await connection.query(
+      `
+        UPDATE ops_web_usuario_perfil
+        SET
+          puntos_actuales = ?,
+          puntos_acumulados = puntos_acumulados + ?
+        WHERE web_usuario_id = ?
+      `,
+      [nextPoints, awardedPoints, parsedUserId]
+    );
+
+    const movementReason = awardedPoints > 0
+      ? 'Pedido entregado'
+      : (basePoints > 0 ? 'Tope de 500 alcanzado' : 'Pedido entregado sin puntos');
+
+    await connection.query(
+      `
+        INSERT INTO ops_web_puntos_movimientos (
+          web_usuario_id,
+          pedido_id,
+          tipo,
+          puntos,
+          saldo_posterior,
+          motivo
+        )
+        VALUES (?, ?, 'acreditacion_entrega', ?, ?, ?)
+      `,
+      [parsedUserId, parsedOrderId, awardedPoints, nextPoints, movementReason]
+    );
+
+    await logWebUserEvent({
+      webUserId: parsedUserId,
+      eventType: 'points_awarded_on_delivery',
+      metadata: {
+        orderId: parsedOrderId,
+        orderTotal: safeOrderTotal,
+        awardedPoints,
+        basePoints,
+        pointsAfter: nextPoints
+      }
+    }, connection);
+
+    return {
+      applied: true,
+      reason: 'ok',
+      awardedPoints,
+      currentPoints: nextPoints
+    };
+  });
+}
+
 export async function getWebUserProfileSnapshot(webUserId) {
   await ensureWebUsersSupportTables();
 

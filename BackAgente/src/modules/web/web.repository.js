@@ -1,15 +1,74 @@
 import { pool } from '../../config/db.js';
 
+function compactCategoryKey(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, '');
+}
+
+function toCategoryDisplayName(rawName = '', compactKey = '') {
+  if (compactKey === 'bebidasconalcohol') {
+    return 'Bebidas - Con alcohol';
+  }
+  if (compactKey === 'bebidassinalcohol') {
+    return 'Bebidas - Sin alcohol';
+  }
+
+  return String(rawName || '')
+    .trim()
+    .replace(/_/g, ' ')
+    .replace(/\s+/g, ' ');
+}
+
 export async function listPublicProducts({ limit = 500, offset = 0, status = 'activo', category = '' } = {}) {
   const safeLimit = Math.max(1, Math.min(500, Math.floor(Number(limit) || 500)));
   const safeOffset = Math.max(0, Math.floor(Number(offset) || 0));
   const safeStatus = String(status || 'activo').trim().toLowerCase() === 'inactivo' ? 'inactivo' : 'activo';
   const rawCategory = String(category || '').trim();
   const normalizedCategory = rawCategory.toLowerCase().replace(/\s+/g, ' ').trim();
-  const hasCategoryFilter = Boolean(normalizedCategory);
-  const categoryParams = hasCategoryFilter
-    ? [normalizedCategory, normalizedCategory]
-    : [null, null];
+  const compactCategory = compactCategoryKey(normalizedCategory);
+  const hasCategoryFilter = Boolean(compactCategory);
+  const params = [safeStatus];
+
+  let categoryFilterSql = '';
+  if (hasCategoryFilter) {
+    const [categoryRows] = await pool.query(
+      `
+        SELECT id
+        FROM ops_categoria
+        WHERE REPLACE(REPLACE(REPLACE(LOWER(TRIM(COALESCE(nombre_normalized, nombre, ''))), ' ', ''), '_', ''), '-', '') = ?
+           OR REPLACE(REPLACE(REPLACE(LOWER(TRIM(COALESCE(nombre, ''))), ' ', ''), '_', ''), '-', '') = ?
+      `,
+      [compactCategory, compactCategory]
+    );
+
+    const categoryIds = categoryRows
+      .map((row) => Number(row?.id))
+      .filter((id) => Number.isFinite(id) && id > 0);
+
+    if (categoryIds.length > 0) {
+      const placeholders = categoryIds.map(() => '?').join(', ');
+      categoryFilterSql = `
+        AND (
+          p.categoria_id IN (${placeholders})
+          OR (
+            p.categoria_id IS NULL
+            AND REPLACE(REPLACE(REPLACE(LOWER(TRIM(COALESCE(p.categoria, ''))), ' ', ''), '_', ''), '-', '') = ?
+          )
+        )
+      `;
+      params.push(...categoryIds, compactCategory);
+    } else {
+      categoryFilterSql = `
+        AND (
+          p.categoria_id IS NULL
+          AND REPLACE(REPLACE(REPLACE(LOWER(TRIM(COALESCE(p.categoria, ''))), ' ', ''), '_', ''), '-', '') = ?
+        )
+      `;
+      params.push(compactCategory);
+    }
+  }
 
   const [rows] = await pool.query(
     `
@@ -32,19 +91,12 @@ export async function listPublicProducts({ limit = 500, offset = 0, status = 'ac
       LEFT JOIN ops_proveedores s ON s.id = p.supplier_id
       LEFT JOIN ops_categoria c ON c.id = p.categoria_id
       WHERE LOWER(TRIM(COALESCE(p.estado, ''))) = ?
-        AND (
-          ? IS NULL
-          OR c.nombre_normalized = ?
-          OR (
-            p.categoria_id IS NULL
-            AND LOWER(TRIM(COALESCE(p.categoria, ''))) = ?
-          )
-        )
+        ${categoryFilterSql}
       ORDER BY p.id DESC
       LIMIT ?
       OFFSET ?
     `,
-    [safeStatus, normalizedCategory || null, ...categoryParams, safeLimit, safeOffset]
+    [...params, safeLimit, safeOffset]
   );
 
   return rows.map((row) => ({
@@ -126,19 +178,47 @@ export async function listPublicCategories({ status = 'activo' } = {}) {
 
   const [rows] = await pool.query(
     `
-      SELECT DISTINCT
-        TRIM(COALESCE(c.nombre, p.categoria)) AS category_name
-      FROM ops_producto p
-      LEFT JOIN ops_categoria c ON c.id = p.categoria_id
-      WHERE p.estado = ?
-        AND COALESCE(TRIM(COALESCE(c.nombre, p.categoria)), '') <> ''
-      ORDER BY category_name ASC
+      SELECT
+        category_key,
+        MIN(category_name) AS category_name,
+        SUM(product_count) AS product_count
+      FROM (
+        SELECT
+          REPLACE(REPLACE(REPLACE(LOWER(TRIM(COALESCE(c.nombre_normalized, c.nombre, ''))), ' ', ''), '_', ''), '-', '') AS category_key,
+          TRIM(COALESCE(c.nombre, p.categoria)) AS category_name,
+          COUNT(*) AS product_count
+        FROM ops_producto p
+        INNER JOIN ops_categoria c ON c.id = p.categoria_id
+        WHERE LOWER(TRIM(COALESCE(p.estado, ''))) = ?
+          AND LOWER(TRIM(COALESCE(c.estado, ''))) = 'activo'
+          AND COALESCE(TRIM(COALESCE(c.nombre, p.categoria)), '') <> ''
+        GROUP BY category_key, category_name
+
+        UNION ALL
+
+        SELECT
+          REPLACE(REPLACE(REPLACE(LOWER(TRIM(COALESCE(p.categoria, ''))), ' ', ''), '_', ''), '-', '') AS category_key,
+          TRIM(COALESCE(p.categoria, '')) AS category_name,
+          COUNT(*) AS product_count
+        FROM ops_producto p
+        WHERE LOWER(TRIM(COALESCE(p.estado, ''))) = ?
+          AND p.categoria_id IS NULL
+          AND COALESCE(TRIM(COALESCE(p.categoria, '')), '') <> ''
+        GROUP BY category_key, category_name
+      ) category_source
+      WHERE category_key <> ''
+      GROUP BY category_key
+      ORDER BY product_count DESC, category_name ASC
     `,
-    [safeStatus]
+    [safeStatus, safeStatus]
   );
 
   return rows
-    .map((row) => String(row?.category_name || '').trim())
+    .map((row) => {
+      const key = compactCategoryKey(row?.category_key || '');
+      const display = toCategoryDisplayName(row?.category_name || '', key);
+      return display;
+    })
     .filter(Boolean);
 }
 
