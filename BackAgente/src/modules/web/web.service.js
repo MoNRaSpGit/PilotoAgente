@@ -302,11 +302,13 @@ export async function updateWebAdminProduct(productId, payload = {}) {
   const hasPrecio = Object.prototype.hasOwnProperty.call(payload, 'precio_venta')
     || Object.prototype.hasOwnProperty.call(payload, 'precioVenta');
   const hasEstado = Object.prototype.hasOwnProperty.call(payload, 'estado');
+  const hasCategoria = Object.prototype.hasOwnProperty.call(payload, 'categoria');
   const hasImagen = Object.prototype.hasOwnProperty.call(payload, 'imagen_base64');
 
   const nombre = hasNombre ? String(payload.nombre || '').trim() : undefined;
   const precioVenta = hasPrecio ? Number(payload.precio_venta ?? payload.precioVenta) : undefined;
   const estado = hasEstado ? String(payload.estado || '').trim().toLowerCase() : undefined;
+  const categoria = hasCategoria ? String(payload.categoria || '').trim() : undefined;
   const imagenBase64 = hasImagen ? String(payload.imagen_base64 || '').trim() : undefined;
 
   if (hasNombre && !nombre) {
@@ -321,11 +323,15 @@ export async function updateWebAdminProduct(productId, payload = {}) {
     throw createServiceError('Estado invalido. Usar activo o inactivo', 400);
   }
 
+  if (hasCategoria && !categoria) {
+    throw createServiceError('Categoria requerida', 400);
+  }
+
   if (hasImagen && !imagenBase64) {
     throw createServiceError('Imagen invalida', 400);
   }
 
-  if (!hasNombre && !hasPrecio && !hasEstado && !hasImagen) {
+  if (!hasNombre && !hasPrecio && !hasEstado && !hasCategoria && !hasImagen) {
     throw createServiceError('No hay cambios para actualizar', 400);
   }
 
@@ -333,6 +339,7 @@ export async function updateWebAdminProduct(productId, payload = {}) {
     productId: parsedProductId,
     nombre,
     precioVenta,
+    categoria,
     estado,
     hasImagenValue: hasImagen,
     imagenValue: hasImagen ? imagenBase64 : undefined,

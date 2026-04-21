@@ -256,6 +256,7 @@ export async function findWebAdminProductById(productId) {
         p.id,
         p.nombre,
         p.precio_venta,
+        COALESCE(c.nombre, p.categoria) AS categoria,
         p.estado,
         p.tiene_imagen,
         CASE
@@ -263,6 +264,7 @@ export async function findWebAdminProductById(productId) {
           ELSE 0
         END AS has_local_image
       FROM ops_producto p
+      LEFT JOIN ops_categoria c ON c.id = p.categoria_id
       WHERE p.id = ?
       LIMIT 1
     `,
@@ -276,6 +278,7 @@ export async function updateWebAdminProductById({
   productId,
   nombre,
   precioVenta,
+  categoria,
   estado,
   imagenValue,
   hasImagenValue = false,
@@ -297,6 +300,12 @@ export async function updateWebAdminProductById({
   if (typeof estado === 'string') {
     updates.push('estado = ?');
     params.push(estado);
+  }
+
+  if (typeof categoria === 'string') {
+    updates.push('categoria = ?');
+    updates.push('categoria_id = NULL');
+    params.push(categoria);
   }
 
   if (typeof tieneImagen === 'number') {
