@@ -1,4 +1,11 @@
-import { getWebCategories, getWebInactiveProducts, getWebProductImage, getWebProducts } from './web.service.js';
+import {
+  getWebAdminProductById,
+  getWebCategories,
+  getWebInactiveProducts,
+  getWebProductImage,
+  getWebProducts,
+  updateWebAdminProduct
+} from './web.service.js';
 
 function handleServiceError(res, error, fallbackMessage) {
   const status = error.status || 500;
@@ -50,5 +57,23 @@ export async function getWebProductImageController(req, res) {
     return res.send(imageItem.buffer);
   } catch (error) {
     return handleServiceError(res, error, 'No se pudo cargar la imagen del producto');
+  }
+}
+
+export async function getWebAdminProductByIdController(req, res) {
+  try {
+    const data = await getWebAdminProductById(req.params?.productId);
+    return res.json(data);
+  } catch (error) {
+    return handleServiceError(res, error, 'No se pudo obtener el producto');
+  }
+}
+
+export async function updateWebAdminProductController(req, res) {
+  try {
+    const data = await updateWebAdminProduct(req.params?.productId, req.body || {});
+    return res.json(data);
+  } catch (error) {
+    return handleServiceError(res, error, 'No se pudo actualizar el producto');
   }
 }

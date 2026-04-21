@@ -1,8 +1,11 @@
 import {
+  countPublicInactiveProducts,
+  findWebAdminProductById,
   findPublicProductImageById,
   listPublicCategories,
   listPublicInactiveProducts,
-  listPublicProducts
+  listPublicProducts,
+  updateWebAdminProductById
 } from './web.repository.js';
 
 function createServiceError(message, status = 500) {
@@ -206,13 +209,17 @@ export async function getWebInactiveProducts(query = {}) {
     throw createServiceError('Parametros de paginacion invalidos', 400);
   }
 
-  const items = await listPublicInactiveProducts({ limit: safeLimit, offset });
+  const [items, total] = await Promise.all([
+    listPublicInactiveProducts({ limit: safeLimit, offset }),
+    countPublicInactiveProducts()
+  ]);
 
   return {
     items,
     page: {
       offset,
       limit: safeLimit,
+      total,
       count: items.length,
       has_more: items.length === safeLimit
     }
@@ -261,4 +268,92 @@ export async function getWebProductImage(productId) {
 
   setCachedValue(imagesCache, imageCacheKey, parsed, WEB_IMAGE_CACHE_TTL_MS);
   return { item: parsed };
+}
+
+export async function getWebAdminProductById(productId) {
+  const parsedProductId = Number(productId);
+  if (!Number.isFinite(parsedProductId) || parsedProductId <= 0) {
+    throw createServiceError('Producto invalido', 400);
+  }
+
+  const item = await findWebAdminProductById(parsedProductId);
+  if (!item) {
+    throw createServiceError('Producto no encontrado', 404);
+  }
+
+  return {
+    item: {
+      id: Number(item.id),
+      nombre: String(item.nombre || ''),
+      precio_venta: Number(item.precio_venta || 0),
+      estado: String(item.estado || '').trim().toLowerCase() || 'inactivo',
+      has_local_image: Boolean(Number(item.has_local_image || 0))
+    }
+  };
+}
+
+export async function updateWebAdminProduct(productId, payload = {}) {
+  const parsedProductId = Number(productId);
+  if (!Number.isFinite(parsedProductId) || parsedProductId <= 0) {
+    throw createServiceError('Producto invalido', 400);
+  }
+
+  const hasNombre = Object.prototype.hasOwnProperty.call(payload, 'nombre');
+  const hasPrecio = Object.prototype.hasOwnProperty.call(payload, 'precio_venta')
+    || Object.prototype.hasOwnProperty.call(payload, 'precioVenta');
+  const hasEstado = Object.prototype.hasOwnProperty.call(payload, 'estado');
+  const hasImagen = Object.prototype.hasOwnProperty.call(payload, 'imagen_base64');
+
+  const nombre = hasNombre ? String(payload.nombre || '').trim() : undefined;
+  const precioVenta = hasPrecio ? Number(payload.precio_venta ?? payload.precioVenta) : undefined;
+  const estado = hasEstado ? String(payload.estado || '').trim().toLowerCase() : undefined;
+  const imagenBase64 = hasImagen ? String(payload.imagen_base64 || '').trim() : undefined;
+
+  if (hasNombre && !nombre) {
+    throw createServiceError('Nombre requerido', 400);
+  }
+
+  if (hasPrecio && (!Number.isFinite(precioVenta) || precioVenta <= 0)) {
+    throw createServiceError('Precio valido requerido', 400);
+  }
+
+  if (hasEstado && estado !== 'activo' && estado !== 'inactivo') {
+    throw createServiceError('Estado invalido. Usar activo o inactivo', 400);
+  }
+
+  if (hasImagen && !imagenBase64) {
+    throw createServiceError('Imagen invalida', 400);
+  }
+
+  if (!hasNombre && !hasPrecio && !hasEstado && !hasImagen) {
+    throw createServiceError('No hay cambios para actualizar', 400);
+  }
+
+  const updated = await updateWebAdminProductById({
+    productId: parsedProductId,
+    nombre,
+    precioVenta,
+    estado,
+    hasImagenValue: hasImagen,
+    imagenValue: hasImagen ? imagenBase64 : undefined,
+    tieneImagen: hasImagen ? 1 : undefined
+  });
+
+  if (!updated) {
+    throw createServiceError('Producto no encontrado', 404);
+  }
+
+  productsCache.clear();
+  categoriesCache.clear();
+  imagesCache.delete(`image:${parsedProductId}`);
+
+  return {
+    item: {
+      id: Number(updated.id),
+      nombre: String(updated.nombre || ''),
+      precio_venta: Number(updated.precio_venta || 0),
+      estado: String(updated.estado || '').trim().toLowerCase() || 'inactivo',
+      has_local_image: Boolean(Number(updated.has_local_image || 0))
+    }
+  };
 }
