@@ -286,6 +286,7 @@ export async function getWebAdminProductById(productId) {
       id: Number(item.id),
       nombre: String(item.nombre || ''),
       precio_venta: Number(item.precio_venta || 0),
+      categoria: String(item.categoria || '').trim(),
       estado: String(item.estado || '').trim().toLowerCase() || 'inactivo',
       has_local_image: Boolean(Number(item.has_local_image || 0))
     }
@@ -359,6 +360,7 @@ export async function updateWebAdminProduct(productId, payload = {}) {
       id: Number(updated.id),
       nombre: String(updated.nombre || ''),
       precio_venta: Number(updated.precio_venta || 0),
+      categoria: String(updated.categoria || '').trim(),
       estado: String(updated.estado || '').trim().toLowerCase() || 'inactivo',
       has_local_image: Boolean(Number(updated.has_local_image || 0))
     }
