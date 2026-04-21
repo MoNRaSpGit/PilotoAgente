@@ -85,16 +85,20 @@ export async function createOrderFromWebUser(webUser, payload = {}) {
       throw createServiceError(`Producto no disponible: ${item.product_id}`, 409);
     }
 
+    const unitPrice = Number(product.precio_venta || 0);
+    const lineTotal = Number((unitPrice * Number(item.quantity || 0)).toFixed(2));
+
     return {
       product_id: item.product_id,
       product_name: product.nombre,
       quantity: item.quantity,
-      unit_price: Number(product.precio_venta || 0)
+      unit_price: unitPrice,
+      line_total: lineTotal
     };
   });
 
   const orderTotal = resolvedItems.reduce(
-    (sum, item) => sum + Number(item.unit_price || 0) * Number(item.quantity || 0),
+    (sum, item) => sum + Number(item.line_total || 0),
     0
   );
   const safeOrderTotal = Number(orderTotal.toFixed(2));
@@ -136,7 +140,7 @@ export async function createOrderFromWebUser(webUser, payload = {}) {
       product_name: itemRow.product_name,
       quantity: itemRow.quantity,
       unit_price: Number(itemRow.unit_price || 0),
-      line_total: Number((Number(itemRow.unit_price || 0) * Number(itemRow.quantity || 0)).toFixed(2))
+      line_total: Number(itemRow.line_total || 0)
     }))
   };
 

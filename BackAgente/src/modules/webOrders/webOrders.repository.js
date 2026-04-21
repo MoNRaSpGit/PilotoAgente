@@ -196,10 +196,22 @@ export async function createWebOrder({ webUserId, items, notes = null, paymentMe
   await ensureWebOrdersTables();
 
   return withTransaction(async (connection) => {
-    const totalEstimado = items.reduce((sum, item) => {
-      const lineTotal = Number((Number(item.unit_price) * Number(item.quantity)).toFixed(2));
-      return sum + lineTotal;
-    }, 0);
+    const normalizedItems = items.map((item) => {
+      const unitPrice = Number(item.unit_price || 0);
+      const quantity = Number(item.quantity || 0);
+      const lineTotal = Number.isFinite(Number(item.line_total))
+        ? Number(item.line_total || 0)
+        : Number((unitPrice * quantity).toFixed(2));
+
+      return {
+        ...item,
+        unit_price: unitPrice,
+        quantity,
+        line_total: Number(lineTotal.toFixed(2))
+      };
+    });
+
+    const totalEstimado = normalizedItems.reduce((sum, item) => sum + Number(item.line_total || 0), 0);
     const safeTotalEstimado = Number(totalEstimado.toFixed(2));
 
     const [orderResult] = await connection.query(
@@ -218,19 +230,18 @@ export async function createWebOrder({ webUserId, items, notes = null, paymentMe
       [webUserId, notes || null, paymentMethod, deliveryMode, safeTotalEstimado]
     );
 
-    if (items.length > 0) {
-      const placeholders = items.map(() => '(?, ?, ?, ?, ?, ?)').join(', ');
+    if (normalizedItems.length > 0) {
+      const placeholders = normalizedItems.map(() => '(?, ?, ?, ?, ?, ?)').join(', ');
       const values = [];
 
-      for (const item of items) {
-        const lineTotal = Number((Number(item.unit_price) * Number(item.quantity)).toFixed(2));
+      for (const item of normalizedItems) {
         values.push(
           orderResult.insertId,
           item.product_id,
           item.product_name,
           item.quantity,
           item.unit_price,
-          lineTotal
+          item.line_total
         );
       }
 
