@@ -1,6 +1,5 @@
 import {
   createWebOrder,
-  findProductsForWebOrderItems,
   getWebOrderById,
   hideWebOrderForAdmin,
   hideWebOrderForUser,
@@ -92,45 +91,15 @@ export async function createOrderFromWebUser(webUser, payload = {}) {
     deliveryMode
   } = parseCreateOrderPayload(payload);
 
-  const productIds = [...new Set(normalizedItems.map((item) => item.product_id))];
-  const products = await findProductsForWebOrderItems(productIds);
-  const productMap = new Map(products.map((product) => [Number(product.id), product]));
-
-  const resolvedItems = normalizedItems.map((item) => {
-    const product = productMap.get(item.product_id);
-
-    if (!product || product.estado !== 'activo') {
-      throw createServiceError(`Producto no disponible: ${item.product_id}`, 409);
-    }
-
-    const unitPrice = Number(product.precio_venta || 0);
-    const lineTotal = Number((unitPrice * Number(item.quantity || 0)).toFixed(2));
-
-    return {
-      product_id: item.product_id,
-      product_name: product.nombre,
-      quantity: item.quantity,
-      unit_price: unitPrice,
-      line_total: lineTotal
-    };
-  });
-
-  const orderTotal = resolvedItems.reduce(
-    (sum, item) => sum + Number(item.line_total || 0),
-    0
-  );
-  const safeOrderTotal = Number(orderTotal.toFixed(2));
-  if (deliveryMode === 'delivery' && safeOrderTotal < 200) {
-    throw createServiceError('Delivery habilitado con compra igual o mayor a $200', 409);
-  }
-
   const createdOrder = await createWebOrder({
     webUserId: webUser.id,
-    items: resolvedItems,
+    items: normalizedItems,
     notes,
     paymentMethod,
     deliveryMode
   });
+  const resolvedItems = Array.isArray(createdOrder?.items) ? createdOrder.items : [];
+  const safeOrderTotal = Number(Number(createdOrder?.total_estimado || 0).toFixed(2));
   upsertWebUserProductHistory({
     webUserId: webUser.id,
     items: resolvedItems

@@ -5,6 +5,7 @@ const storage = new AsyncLocalStorage();
 const routeStats = new Map();
 
 const REQUEST_SLOW_MS = Number(process.env.OBS_REQUEST_SLOW_MS || 1200);
+const REQUEST_LOG_MIN_MS = Number(process.env.OBS_REQUEST_LOG_MIN_MS || 300);
 const DB_QUERY_SLOW_MS = Number(process.env.OBS_DB_QUERY_SLOW_MS || 700);
 const ROUTE_SUMMARY_EVERY = Math.max(10, Number(process.env.OBS_ROUTE_SUMMARY_EVERY || 50));
 const ROUTE_SUMMARY_WINDOW_SIZE = Math.max(20, Number(process.env.OBS_ROUTE_WINDOW_SIZE || 200));
@@ -245,7 +246,14 @@ export function observabilityRequestMiddleware(req, res, next) {
         user_id: req.user?.id || req.webUser?.id || null
       };
 
-      emitLog(payload);
+      const shouldLogRequest =
+        statusCode >= 400
+        || totalMs >= REQUEST_LOG_MIN_MS
+        || totalMs >= REQUEST_SLOW_MS;
+
+      if (shouldLogRequest) {
+        emitLog(payload);
+      }
 
       updateRouteStats({
         method,

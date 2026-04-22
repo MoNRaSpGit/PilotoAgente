@@ -1,8 +1,32 @@
 import { pool } from '../../config/db.js';
 import { runMigrations } from '../../bootstrap/migrations/runMigrations.js';
 import { ensureWebUsersTable } from '../webAuth/webAuth.repository.js';
+import { getRequestContext } from '../../observability/telemetry.js';
 
 let webOrdersTablesPromise = null;
+const ORDER_STAGE_SLOW_MS = Math.max(1, Number(process.env.OBS_ORDER_STAGE_SLOW_MS || 250));
+
+function nowMs() {
+  return Number(process.hrtime.bigint()) / 1e6;
+}
+
+function logOrderStage(stage, startedAtMs, extra = {}, options = {}) {
+  const durationMs = Number((nowMs() - Number(startedAtMs || 0)).toFixed(2));
+  const forceLog = Boolean(options?.force);
+  if (!forceLog && durationMs < ORDER_STAGE_SLOW_MS) {
+    return durationMs;
+  }
+
+  const requestId = getRequestContext()?.requestId || 'no-req';
+  const extras = Object.entries(extra || {})
+    .filter(([, value]) => value !== undefined && value !== null && value !== '')
+    .map(([key, value]) => `${key}=${value}`)
+    .join(' | ');
+  const suffix = extras ? ` | ${extras}` : '';
+
+  console.log(`[OBS][ORDER] ${stage} | ${durationMs}ms | req=${requestId}${suffix}`);
+  return durationMs;
+}
 
 async function withTransaction(work) {
   const connection = await pool.getConnection();
@@ -63,79 +87,164 @@ export async function findProductsForWebOrderItems(productIds = []) {
   return rows;
 }
 
+function createRepoError(message, status = 500) {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+}
+
 export async function createWebOrder({ webUserId, items, notes = null, paymentMethod = 'efectivo', deliveryMode = 'pickup' }) {
   await ensureWebOrdersTables();
 
   return withTransaction(async (connection) => {
-    const normalizedItems = items.map((item) => {
-      const unitPrice = Number(item.unit_price || 0);
-      const quantity = Number(item.quantity || 0);
-      const lineTotal = Number.isFinite(Number(item.line_total))
-        ? Number(item.line_total || 0)
-        : Number((unitPrice * quantity).toFixed(2));
-
-      return {
-        ...item,
-        unit_price: unitPrice,
-        quantity,
-        line_total: Number(lineTotal.toFixed(2))
-      };
-    });
-
-    const totalEstimado = normalizedItems.reduce((sum, item) => sum + Number(item.line_total || 0), 0);
-    const safeTotalEstimado = Number(totalEstimado.toFixed(2));
-
-    const [orderResult] = await connection.query(
-      `
-        INSERT INTO ops_web_pedidos (
-          web_usuario_id,
-          estado,
-          cliente_visible,
-          notas,
-          payment_method,
-          delivery_mode,
-          total_estimado
-        )
-        VALUES (?, 'pendiente', 1, ?, ?, ?, ?)
-      `,
-      [webUserId, notes || null, paymentMethod, deliveryMode, safeTotalEstimado]
-    );
-
-    if (normalizedItems.length > 0) {
-      const placeholders = normalizedItems.map(() => '(?, ?, ?, ?, ?, ?)').join(', ');
-      const values = [];
-
-      for (const item of normalizedItems) {
-        values.push(
-          orderResult.insertId,
-          item.product_id,
-          item.product_name,
-          item.quantity,
-          item.unit_price,
-          item.line_total
-        );
+    const txStartedAtMs = nowMs();
+    let stageStartedAtMs = nowMs();
+    let resolvedItemsCount = 0;
+    try {
+      const quantityByProductId = new Map();
+      for (const item of items) {
+        const productId = Number(item?.product_id || 0);
+        const quantity = Math.max(1, Math.floor(Number(item?.quantity) || 1));
+        if (!Number.isFinite(productId) || productId <= 0) {
+          continue;
+        }
+        quantityByProductId.set(productId, (quantityByProductId.get(productId) || 0) + quantity);
       }
 
-      await connection.query(
-        `
-          INSERT INTO ops_web_pedido_items (
-            pedido_id,
-            product_id,
-            product_name,
-            quantity,
-            unit_price,
-            line_total
-          )
-          VALUES ${placeholders}
-        `,
-        values
-      );
-    }
+      const normalizedItems = [...quantityByProductId.entries()].map(([product_id, quantity]) => ({
+        product_id: Number(product_id),
+        quantity: Number(quantity)
+      }));
+      if (normalizedItems.length === 0) {
+        throw createRepoError('El pedido debe incluir al menos un producto valido', 400);
+      }
+      logOrderStage('normalize_items', stageStartedAtMs, {
+        raw_items: Array.isArray(items) ? items.length : 0,
+        distinct_items: normalizedItems.length
+      });
 
-    return {
-      id: Number(orderResult.insertId),
-      total_estimado: safeTotalEstimado
-    };
+      const productIds = normalizedItems.map((item) => item.product_id);
+      const productPlaceholders = productIds.map(() => '?').join(', ');
+      stageStartedAtMs = nowMs();
+      const [productRows] = await connection.query(
+        `
+          SELECT
+            p.id,
+            p.nombre,
+            p.precio_venta,
+            p.estado
+          FROM ops_producto p
+          WHERE p.id IN (${productPlaceholders})
+        `,
+        productIds
+      );
+      logOrderStage('select_products', stageStartedAtMs, {
+        requested_products: productIds.length,
+        found_products: Array.isArray(productRows) ? productRows.length : 0
+      });
+
+      const productMap = new Map(
+        (Array.isArray(productRows) ? productRows : [])
+          .map((row) => [Number(row.id), row])
+      );
+
+      const missingOrInactive = [];
+      const resolvedItems = normalizedItems.map((item) => {
+        const product = productMap.get(item.product_id);
+        if (!product || String(product.estado || '').trim().toLowerCase() !== 'activo') {
+          missingOrInactive.push(item.product_id);
+          return null;
+        }
+
+        const unitPrice = Number(product.precio_venta || 0);
+        const lineTotal = Number((unitPrice * Number(item.quantity || 0)).toFixed(2));
+
+        return {
+          product_id: item.product_id,
+          product_name: String(product.nombre || '').trim(),
+          quantity: Number(item.quantity || 0),
+          unit_price: unitPrice,
+          line_total: lineTotal
+        };
+      }).filter(Boolean);
+      resolvedItemsCount = resolvedItems.length;
+
+      if (missingOrInactive.length > 0 || resolvedItems.length !== normalizedItems.length) {
+        throw createRepoError(`Producto no disponible: ${missingOrInactive[0] || ''}`.trim(), 409);
+      }
+
+      const totalEstimado = resolvedItems.reduce((sum, item) => sum + Number(item.line_total || 0), 0);
+      const safeTotalEstimado = Number(totalEstimado.toFixed(2));
+      if (deliveryMode === 'delivery' && safeTotalEstimado < 200) {
+        throw createRepoError('Delivery habilitado con compra igual o mayor a $200', 409);
+      }
+
+      stageStartedAtMs = nowMs();
+      const [orderResult] = await connection.query(
+        `
+          INSERT INTO ops_web_pedidos (
+            web_usuario_id,
+            estado,
+            cliente_visible,
+            notas,
+            payment_method,
+            delivery_mode,
+            total_estimado
+          )
+          VALUES (?, 'pendiente', 1, ?, ?, ?, ?)
+        `,
+        [webUserId, notes || null, paymentMethod, deliveryMode, safeTotalEstimado]
+      );
+      logOrderStage('insert_order', stageStartedAtMs, {
+        order_id: Number(orderResult?.insertId || 0),
+        total: safeTotalEstimado
+      });
+
+      if (resolvedItems.length > 0) {
+        const placeholders = resolvedItems.map(() => '(?, ?, ?, ?, ?, ?)').join(', ');
+        const values = [];
+
+        for (const item of resolvedItems) {
+          values.push(
+            orderResult.insertId,
+            item.product_id,
+            item.product_name,
+            item.quantity,
+            item.unit_price,
+            item.line_total
+          );
+        }
+
+        stageStartedAtMs = nowMs();
+        await connection.query(
+          `
+            INSERT INTO ops_web_pedido_items (
+              pedido_id,
+              product_id,
+              product_name,
+              quantity,
+              unit_price,
+              line_total
+            )
+            VALUES ${placeholders}
+          `,
+          values
+        );
+        logOrderStage('insert_order_items', stageStartedAtMs, {
+          item_rows: resolvedItems.length
+        });
+      }
+
+      return {
+        id: Number(orderResult.insertId),
+        total_estimado: safeTotalEstimado,
+        items: resolvedItems
+      };
+    } finally {
+      logOrderStage('tx_total', txStartedAtMs, {
+        item_rows: resolvedItemsCount
+      }, { force: true });
+    }
   });
 }
 
