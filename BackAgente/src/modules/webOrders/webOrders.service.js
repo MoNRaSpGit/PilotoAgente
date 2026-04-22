@@ -7,6 +7,7 @@ import {
   listWebUserTopProducts,
   listPendingWebOrders,
   listWebOrdersByUserId,
+  upsertWebUserProductHistory,
   updateWebOrderStatus
 } from './webOrders.repository.js';
 import { awardWebPointsOnOrderDelivered, registerWebOrderMetrics } from '../webUsers/webUsers.repository.js';
@@ -130,6 +131,10 @@ export async function createOrderFromWebUser(webUser, payload = {}) {
     paymentMethod,
     deliveryMode
   });
+  upsertWebUserProductHistory({
+    webUserId: webUser.id,
+    items: resolvedItems
+  }).catch(() => {});
   registerWebOrderMetrics({
     webUserId: webUser.id,
     orderId: createdOrder.id,

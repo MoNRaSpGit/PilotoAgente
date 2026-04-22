@@ -10,6 +10,7 @@ import {
   listPublicCategories,
   listPublicInactiveProducts,
   listPublicProducts,
+  upsertProductMediaBatch,
   upsertProductMediaByProductId,
   updateWebAdminProductById
 } from './web.repository.js';
@@ -313,6 +314,14 @@ function runSingleFlight(inFlightMap, cacheKey, factory) {
   return task;
 }
 
+function scheduleAsync(task) {
+  setTimeout(() => {
+    Promise.resolve()
+      .then(task)
+      .catch(() => {});
+  }, 0);
+}
+
 export async function getWebProducts(query = {}) {
   const rawLimit = Number(query?.limit);
   const limit = Number.isFinite(rawLimit) ? rawLimit : 500;
@@ -362,6 +371,13 @@ export async function getWebProducts(query = {}) {
     setCachedValue(productsCache, cacheKey, payload, WEB_PRODUCTS_CACHE_TTL_MS);
     return payload;
   });
+}
+
+export async function warmWebCatalogCache() {
+  await Promise.allSettled([
+    getWebCategories({ status: 'activo' }),
+    getWebProducts({ status: 'activo', limit: 500, offset: 0 })
+  ]);
 }
 
 export async function getWebInactiveProducts(query = {}) {
@@ -518,6 +534,7 @@ export async function getWebProductImagesBatch(payload = {}) {
     const missingIds = idsToResolve.filter((id) => !mediaFoundIds.has(id));
     if (missingIds.length > 0) {
       const productRows = await findPublicProductImagesByIds(missingIds);
+      const pendingMediaUpserts = [];
       for (const row of productRows) {
         const productId = Number(row?.id || 0);
         if (!Number.isFinite(productId) || productId <= 0) {
@@ -536,14 +553,18 @@ export async function getWebProductImagesBatch(payload = {}) {
         imageItemsById.set(productId, imageItem);
         setCachedImageValue(`image:${productId}`, imageItem, WEB_IMAGE_CACHE_TTL_MS);
 
-        upsertProductMediaByProductId({
+        pendingMediaUpserts.push({
           productId,
           thumbSmall: imageItem.buffer,
           mimeType: imageItem.mime_type,
           etag: imageItem.etag,
           sourceHash: imageItem.source_hash,
           sourceSize: imageItem.buffer.length
-        }).catch(() => {});
+        });
+      }
+
+      if (pendingMediaUpserts.length > 0) {
+        scheduleAsync(() => upsertProductMediaBatch(pendingMediaUpserts));
       }
     }
   }

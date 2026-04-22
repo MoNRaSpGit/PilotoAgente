@@ -130,63 +130,6 @@ export async function createWebOrder({ webUserId, items, notes = null, paymentMe
         `,
         values
       );
-
-      const aggregatedByProduct = new Map();
-      for (const item of normalizedItems) {
-        const productId = Number(item.product_id || 0);
-        if (!Number.isFinite(productId) || productId <= 0) {
-          continue;
-        }
-        const quantity = Math.max(0, Math.floor(Number(item.quantity) || 0));
-        const unitPrice = Number(Number(item.unit_price || 0).toFixed(2));
-        const current = aggregatedByProduct.get(productId) || {
-          productId,
-          timesOrdered: 0,
-          quantityTotal: 0,
-          lastUnitPrice: 0
-        };
-        current.timesOrdered += 1;
-        current.quantityTotal += quantity;
-        current.lastUnitPrice = unitPrice;
-        aggregatedByProduct.set(productId, current);
-      }
-
-      if (aggregatedByProduct.size > 0) {
-        const historyRows = [...aggregatedByProduct.values()];
-        const historyPlaceholders = historyRows.map(() => '(?, ?, ?, ?, ?, NOW())').join(', ');
-        const historyValues = [];
-
-        for (const row of historyRows) {
-          historyValues.push(
-            webUserId,
-            row.productId,
-            row.timesOrdered,
-            row.quantityTotal,
-            row.lastUnitPrice
-          );
-        }
-
-        await connection.query(
-          `
-            INSERT INTO ops_web_usuario_producto_historial (
-              web_usuario_id,
-              product_id,
-              times_ordered,
-              quantity_total,
-              last_unit_price,
-              last_order_at
-            )
-            VALUES ${historyPlaceholders}
-            ON DUPLICATE KEY UPDATE
-              times_ordered = times_ordered + VALUES(times_ordered),
-              quantity_total = quantity_total + VALUES(quantity_total),
-              last_unit_price = VALUES(last_unit_price),
-              last_order_at = VALUES(last_order_at),
-              updated_at = CURRENT_TIMESTAMP
-          `,
-          historyValues
-        );
-      }
     }
 
     return {
@@ -194,6 +137,76 @@ export async function createWebOrder({ webUserId, items, notes = null, paymentMe
       total_estimado: safeTotalEstimado
     };
   });
+}
+
+export async function upsertWebUserProductHistory({ webUserId, items = [] } = {}) {
+  await ensureWebOrdersTables();
+
+  const parsedWebUserId = Number(webUserId);
+  if (!Number.isFinite(parsedWebUserId) || parsedWebUserId <= 0 || !Array.isArray(items) || items.length === 0) {
+    return 0;
+  }
+
+  const aggregatedByProduct = new Map();
+  for (const item of items) {
+    const productId = Number(item?.product_id || 0);
+    if (!Number.isFinite(productId) || productId <= 0) {
+      continue;
+    }
+    const quantity = Math.max(0, Math.floor(Number(item?.quantity) || 0));
+    const unitPrice = Number(Number(item?.unit_price || 0).toFixed(2));
+    const current = aggregatedByProduct.get(productId) || {
+      productId,
+      timesOrdered: 0,
+      quantityTotal: 0,
+      lastUnitPrice: 0
+    };
+    current.timesOrdered += 1;
+    current.quantityTotal += quantity;
+    current.lastUnitPrice = unitPrice;
+    aggregatedByProduct.set(productId, current);
+  }
+
+  if (aggregatedByProduct.size === 0) {
+    return 0;
+  }
+
+  const historyRows = [...aggregatedByProduct.values()];
+  const historyPlaceholders = historyRows.map(() => '(?, ?, ?, ?, ?, NOW())').join(', ');
+  const historyValues = [];
+
+  for (const row of historyRows) {
+    historyValues.push(
+      parsedWebUserId,
+      row.productId,
+      row.timesOrdered,
+      row.quantityTotal,
+      row.lastUnitPrice
+    );
+  }
+
+  await pool.query(
+    `
+      INSERT INTO ops_web_usuario_producto_historial (
+        web_usuario_id,
+        product_id,
+        times_ordered,
+        quantity_total,
+        last_unit_price,
+        last_order_at
+      )
+      VALUES ${historyPlaceholders}
+      ON DUPLICATE KEY UPDATE
+        times_ordered = times_ordered + VALUES(times_ordered),
+        quantity_total = quantity_total + VALUES(quantity_total),
+        last_unit_price = VALUES(last_unit_price),
+        last_order_at = VALUES(last_order_at),
+        updated_at = CURRENT_TIMESTAMP
+    `,
+    historyValues
+  );
+
+  return historyRows.length;
 }
 
 export async function listWebUserTopProducts(webUserId, { limit = 10 } = {}) {

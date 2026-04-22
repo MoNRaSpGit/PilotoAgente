@@ -6,6 +6,7 @@ import {
   verifyWebUserPassword
 } from './webAuth.repository.js';
 import { ensureWebUserProfile, logWebUserEvent, trackWebUserLogin } from '../webUsers/webUsers.repository.js';
+import { warmWebCatalogCache } from '../web/web.service.js';
 import { parseLoginWebUserPayload, parseRegisterWebUserPayload } from './webAuth.contract.js';
 
 function createServiceError(message, status = 500) {
@@ -72,6 +73,8 @@ export async function loginWebUser(payload = {}) {
   const user = normalizeWebUser(userRow);
   // Login tracking is non-blocking to keep auth response fast.
   trackWebUserLogin(user.id).catch(() => {});
+  // Warm web catalog caches in background to improve first screen after login.
+  warmWebCatalogCache().catch(() => {});
   const token = createWebToken(user);
 
   return { token, user, profile: null };

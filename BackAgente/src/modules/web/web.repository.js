@@ -325,6 +325,62 @@ export async function upsertProductMediaByProductId({
   return true;
 }
 
+export async function upsertProductMediaBatch(rows = []) {
+  const normalizedRows = Array.isArray(rows)
+    ? rows
+      .map((row) => ({
+        productId: Number(row?.productId),
+        thumbSmall: row?.thumbSmall || null,
+        mimeType: row?.mimeType || null,
+        etag: row?.etag || null,
+        sourceHash: row?.sourceHash || null,
+        sourceSize: Math.max(0, Math.floor(Number(row?.sourceSize) || 0))
+      }))
+      .filter((row) => Number.isFinite(row.productId) && row.productId > 0)
+    : [];
+
+  if (!normalizedRows.length) {
+    return 0;
+  }
+
+  const placeholders = normalizedRows.map(() => '(?, ?, ?, ?, ?, ?)').join(', ');
+  const values = [];
+  for (const row of normalizedRows) {
+    values.push(
+      row.productId,
+      row.thumbSmall,
+      row.mimeType,
+      row.etag,
+      row.sourceHash,
+      row.sourceSize
+    );
+  }
+
+  await pool.query(
+    `
+      INSERT INTO ops_producto_media (
+        product_id,
+        thumb_small,
+        mime_type,
+        etag,
+        source_hash,
+        source_size
+      )
+      VALUES ${placeholders}
+      ON DUPLICATE KEY UPDATE
+        thumb_small = VALUES(thumb_small),
+        mime_type = VALUES(mime_type),
+        etag = VALUES(etag),
+        source_hash = VALUES(source_hash),
+        source_size = VALUES(source_size),
+        updated_at = CURRENT_TIMESTAMP
+    `,
+    values
+  );
+
+  return normalizedRows.length;
+}
+
 export async function deleteProductMediaByProductId(productId) {
   const parsedProductId = Number(productId);
   if (!Number.isFinite(parsedProductId) || parsedProductId <= 0) {
