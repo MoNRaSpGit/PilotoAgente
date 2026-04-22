@@ -6,8 +6,7 @@ import {
   verifyWebUserPassword
 } from './webAuth.repository.js';
 import { ensureWebUserProfile, logWebUserEvent, trackWebUserLogin } from '../webUsers/webUsers.repository.js';
-import { validateWebPassword } from './webAuth.passwordPolicy.js';
-import { isValidWebUserName, sanitizeWebDisplayName } from './webAuth.identity.js';
+import { parseLoginWebUserPayload, parseRegisterWebUserPayload } from './webAuth.contract.js';
 
 function createServiceError(message, status = 500) {
   const error = new Error(message);
@@ -40,28 +39,7 @@ function createWebToken(user) {
 }
 
 export async function registerWebUser(payload = {}) {
-  const nombre = sanitizeWebDisplayName(payload?.nombre || '');
-  const password = String(payload?.password || '');
-
-  if (!nombre || !password) {
-    throw createServiceError('Nombre y password son requeridos', 400);
-  }
-
-  if (nombre.length < 3) {
-    throw createServiceError('El nombre debe tener al menos 3 caracteres', 400);
-  }
-
-  if (!isValidWebUserName(nombre)) {
-    throw createServiceError('El nombre tiene formato invalido', 400);
-  }
-
-  const passwordPolicy = validateWebPassword(password, nombre);
-  if (!passwordPolicy.isValid) {
-    throw createServiceError(
-      'La password debe tener 8+ caracteres, mayuscula, minuscula, numero y simbolo',
-      400
-    );
-  }
+  const { nombre, password } = parseRegisterWebUserPayload(payload);
 
   const existing = await findWebUserByName(nombre);
   if (existing) {
@@ -83,12 +61,7 @@ export async function registerWebUser(payload = {}) {
 }
 
 export async function loginWebUser(payload = {}) {
-  const nombre = sanitizeWebDisplayName(payload?.nombre || '');
-  const password = String(payload?.password || '');
-
-  if (!nombre || !password) {
-    throw createServiceError('Credenciales invalidas', 401);
-  }
+  const { nombre, password } = parseLoginWebUserPayload(payload);
 
   const userRow = await findWebUserByName(nombre);
 

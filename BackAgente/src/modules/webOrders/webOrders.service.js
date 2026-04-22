@@ -11,7 +11,8 @@ import {
 } from './webOrders.repository.js';
 import { awardWebPointsOnOrderDelivered, registerWebOrderMetrics } from '../webUsers/webUsers.repository.js';
 import { emitWebOrderEvent } from './webOrders.events.js';
-import { ALLOWED_WEB_ORDER_STATUSES, canHideWebOrder, normalizeWebOrderStatus } from './webOrders.status.js';
+import { canHideWebOrder, normalizeWebOrderStatus } from './webOrders.status.js';
+import { parseCreateOrderPayload, parseOrderId, parseOrderStatusPayload } from './webOrders.contract.js';
 
 function createServiceError(message, status = 500) {
   const error = new Error(message);
@@ -19,61 +20,17 @@ function createServiceError(message, status = 500) {
   return error;
 }
 
-function normalizePaymentMethod(value) {
-  const raw = String(value || '').trim().toLowerCase();
-  if (!raw) {
-    return '';
-  }
-  if (raw === 'pos' || raw === 'efectivo' || raw === 'cuenta' || raw === 'puntos') {
-    return raw;
-  }
-  return '';
-}
-
-function normalizeDeliveryMode(value) {
-  const raw = String(value || '').trim().toLowerCase();
-  if (!raw) {
-    return '';
-  }
-  if (raw === 'delivery' || raw === 'pickup') {
-    return raw;
-  }
-  if (raw === 'yo_voy' || raw === 'yo voy' || raw === 'retiro') {
-    return 'pickup';
-  }
-  return '';
-}
-
 export async function createOrderFromWebUser(webUser, payload = {}) {
-  const items = Array.isArray(payload?.items) ? payload.items : [];
-  const notes = String(payload?.notes || '').trim();
-  const paymentMethod = normalizePaymentMethod(payload?.payment_method ?? payload?.paymentMethod);
-  const deliveryMode = normalizeDeliveryMode(payload?.delivery_mode ?? payload?.deliveryMode);
-
   if (!webUser?.id) {
     throw createServiceError('Usuario web invalido', 401);
   }
 
-  if (items.length === 0) {
-    throw createServiceError('El pedido debe incluir al menos un producto', 400);
-  }
-  if (!paymentMethod) {
-    throw createServiceError('Selecciona un tipo de pago', 400);
-  }
-  if (!deliveryMode) {
-    throw createServiceError('Selecciona un tipo de entrega', 400);
-  }
-
-  const normalizedItems = items.map((item) => ({
-    product_id: Number(item?.product_id ?? item?.productId),
-    quantity: Math.max(1, Math.floor(Number(item?.quantity) || 1))
-  }));
-
-  const hasInvalidProductId = normalizedItems.some((item) => !Number.isFinite(item.product_id) || item.product_id <= 0);
-
-  if (hasInvalidProductId) {
-    throw createServiceError('Hay productos invalidos en el pedido', 400);
-  }
+  const {
+    items: normalizedItems,
+    notes,
+    paymentMethod,
+    deliveryMode
+  } = parseCreateOrderPayload(payload);
 
   const productIds = [...new Set(normalizedItems.map((item) => item.product_id))];
   const products = await findProductsForWebOrderItems(productIds);
@@ -110,7 +67,7 @@ export async function createOrderFromWebUser(webUser, payload = {}) {
   const createdOrder = await createWebOrder({
     webUserId: webUser.id,
     items: resolvedItems,
-    notes: notes || null,
+    notes,
     paymentMethod,
     deliveryMode
   });
@@ -128,7 +85,7 @@ export async function createOrderFromWebUser(webUser, payload = {}) {
     estado: 'pendiente',
     cliente_visible: 1,
     admin_visible: 1,
-    notas: notes || null,
+    notas: notes,
     payment_method: paymentMethod,
     delivery_mode: deliveryMode,
     total_estimado: safeOrderTotal,
@@ -201,16 +158,8 @@ export async function listAdminIncomingWebOrders(query = {}) {
 }
 
 export async function changeWebOrderStatus(orderId, payload = {}) {
-  const parsedOrderId = Number(orderId);
-  const status = normalizeWebOrderStatus(payload?.status || '');
-
-  if (!Number.isFinite(parsedOrderId) || parsedOrderId <= 0) {
-    throw createServiceError('Pedido invalido', 400);
-  }
-
-  if (!ALLOWED_WEB_ORDER_STATUSES.has(status)) {
-    throw createServiceError('Estado de pedido invalido', 400);
-  }
+  const parsedOrderId = parseOrderId(orderId);
+  const { status } = parseOrderStatusPayload(payload);
 
   const previousOrder = await getWebOrderById(parsedOrderId);
   if (!previousOrder) {
@@ -264,10 +213,7 @@ export async function hideMyWebOrder(webUser, orderId) {
     throw createServiceError('Usuario web invalido', 401);
   }
 
-  const parsedOrderId = Number(orderId);
-  if (!Number.isFinite(parsedOrderId) || parsedOrderId <= 0) {
-    throw createServiceError('Pedido invalido', 400);
-  }
+  const parsedOrderId = parseOrderId(orderId);
 
   const order = await getWebOrderById(parsedOrderId);
   if (!order || Number(order.web_usuario_id) !== Number(webUser.id)) {
@@ -308,10 +254,7 @@ export async function hideMyWebOrder(webUser, orderId) {
 }
 
 export async function hideAdminWebOrder(orderId) {
-  const parsedOrderId = Number(orderId);
-  if (!Number.isFinite(parsedOrderId) || parsedOrderId <= 0) {
-    throw createServiceError('Pedido invalido', 400);
-  }
+  const parsedOrderId = parseOrderId(orderId);
 
   const order = await getWebOrderById(parsedOrderId);
   if (!order) {
