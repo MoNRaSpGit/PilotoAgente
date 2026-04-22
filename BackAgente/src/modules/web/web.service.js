@@ -1,10 +1,16 @@
+import crypto from 'crypto';
 import {
   countPublicInactiveProducts,
+  deleteProductMediaByProductId,
   findWebAdminProductById,
+  findProductMediaByProductId,
+  findProductMediaByProductIds,
+  findPublicProductImagesByIds,
   findPublicProductImageById,
   listPublicCategories,
   listPublicInactiveProducts,
   listPublicProducts,
+  upsertProductMediaByProductId,
   updateWebAdminProductById
 } from './web.repository.js';
 
@@ -19,9 +25,11 @@ const WEB_CATEGORIES_CACHE_TTL_MS = 60 * 1000;
 const WEB_IMAGE_CACHE_TTL_MS = 10 * 60 * 1000;
 const WEB_IMAGE_CACHE_MAX_ITEMS = 300;
 const WEB_IMAGE_CACHE_MAX_BYTES = 64 * 1024 * 1024;
+const WEB_IMAGE_BATCH_LIMIT = 40;
 const productsCache = new Map();
 const categoriesCache = new Map();
 const imagesCache = new Map();
+const imageLoadInFlight = new Map();
 let imagesCacheBytes = 0;
 
 function getNow() {
@@ -221,6 +229,73 @@ function parseImagePayload(imageValue) {
   return null;
 }
 
+function normalizeEtag(value = '') {
+  return String(value || '').trim().replace(/^W\//i, '').replace(/^"|"$/g, '');
+}
+
+function computeImageHash(bufferValue) {
+  if (!Buffer.isBuffer(bufferValue) || bufferValue.length === 0) {
+    return '';
+  }
+  return crypto.createHash('sha1').update(bufferValue).digest('hex');
+}
+
+function buildEtagFromHash(hashValue = '') {
+  const normalizedHash = String(hashValue || '').trim();
+  return normalizedHash ? `"${normalizedHash}"` : '';
+}
+
+function toImageCacheItem({
+  buffer,
+  mimeType,
+  sourceHash = '',
+  updatedAt = ''
+}) {
+  const safeBuffer = Buffer.isBuffer(buffer) ? buffer : Buffer.alloc(0);
+  const hash = sourceHash || computeImageHash(safeBuffer);
+  const etag = buildEtagFromHash(hash);
+  return {
+    buffer: safeBuffer,
+    mime_type: mimeType || detectImageMime(safeBuffer),
+    source_hash: hash,
+    etag,
+    last_modified: String(updatedAt || '').trim()
+  };
+}
+
+function parseMediaThumbPayload(mediaRow) {
+  if (!mediaRow) {
+    return null;
+  }
+
+  const parsed = parseImagePayload(mediaRow.thumb_small);
+  if (!parsed || !Buffer.isBuffer(parsed.buffer) || parsed.buffer.length === 0) {
+    return null;
+  }
+
+  return toImageCacheItem({
+    buffer: parsed.buffer,
+    mimeType: mediaRow.mime_type || parsed.mime_type,
+    sourceHash: String(mediaRow.source_hash || '').trim(),
+    updatedAt: mediaRow.updated_at
+  });
+}
+
+function runImageSingleFlight(cacheKey, factory) {
+  if (imageLoadInFlight.has(cacheKey)) {
+    return imageLoadInFlight.get(cacheKey);
+  }
+
+  const task = Promise.resolve()
+    .then(factory)
+    .finally(() => {
+      imageLoadInFlight.delete(cacheKey);
+    });
+
+  imageLoadInFlight.set(cacheKey, task);
+  return task;
+}
+
 export async function getWebProducts(query = {}) {
   const rawLimit = Number(query?.limit);
   const limit = Number.isFinite(rawLimit) ? rawLimit : 500;
@@ -323,18 +398,141 @@ export async function getWebProductImage(productId) {
     return { item: cachedImage };
   }
 
-  const item = await findPublicProductImageById(parsedProductId);
-  if (!item) {
-    throw createServiceError('Producto no encontrado', 404);
+  const item = await runImageSingleFlight(imageCacheKey, async () => {
+    const mediaRow = await findProductMediaByProductId(parsedProductId);
+    const parsedMedia = parseMediaThumbPayload(mediaRow);
+    if (parsedMedia) {
+      setCachedImageValue(imageCacheKey, parsedMedia, WEB_IMAGE_CACHE_TTL_MS);
+      return parsedMedia;
+    }
+
+    const productRow = await findPublicProductImageById(parsedProductId);
+    if (!productRow) {
+      throw createServiceError('Producto no encontrado', 404);
+    }
+
+    const parsed = parseImagePayload(productRow.imagen);
+    if (!parsed) {
+      throw createServiceError('Imagen no disponible', 404);
+    }
+
+    const imageItem = toImageCacheItem({
+      buffer: parsed.buffer,
+      mimeType: parsed.mime_type
+    });
+
+    setCachedImageValue(imageCacheKey, imageItem, WEB_IMAGE_CACHE_TTL_MS);
+
+    // Persistimos thumb/local-cache en tabla media para evitar leer blob grande de ops_producto.
+    upsertProductMediaByProductId({
+      productId: parsedProductId,
+      thumbSmall: imageItem.buffer,
+      mimeType: imageItem.mime_type,
+      etag: imageItem.etag,
+      sourceHash: imageItem.source_hash,
+      sourceSize: imageItem.buffer.length
+    }).catch(() => {});
+
+    return imageItem;
+  });
+
+  return { item };
+}
+
+export async function getWebProductImagesBatch(payload = {}) {
+  const rawIds = Array.isArray(payload?.ids) ? payload.ids : [];
+  const productIds = [...new Set(
+    rawIds
+      .map((id) => Number(id))
+      .filter((id) => Number.isFinite(id) && id > 0)
+  )].slice(0, WEB_IMAGE_BATCH_LIMIT);
+
+  if (!productIds.length) {
+    return { items: [] };
   }
 
-  const parsed = parseImagePayload(item.imagen);
-  if (!parsed) {
-    throw createServiceError('Imagen no disponible', 404);
+  const imageItemsById = new Map();
+  const idsToResolve = [];
+
+  for (const productId of productIds) {
+    const cacheKey = `image:${productId}`;
+    const cached = getCachedImageValue(cacheKey);
+    if (cached) {
+      imageItemsById.set(productId, cached);
+      continue;
+    }
+    idsToResolve.push(productId);
   }
 
-  setCachedImageValue(imageCacheKey, parsed, WEB_IMAGE_CACHE_TTL_MS);
-  return { item: parsed };
+  if (idsToResolve.length > 0) {
+    const mediaRows = await findProductMediaByProductIds(idsToResolve);
+    const mediaFoundIds = new Set();
+
+    for (const mediaRow of mediaRows) {
+      const productId = Number(mediaRow?.product_id || 0);
+      if (!Number.isFinite(productId) || productId <= 0) {
+        continue;
+      }
+
+      const parsedMedia = parseMediaThumbPayload(mediaRow);
+      if (!parsedMedia) {
+        continue;
+      }
+
+      mediaFoundIds.add(productId);
+      imageItemsById.set(productId, parsedMedia);
+      setCachedImageValue(`image:${productId}`, parsedMedia, WEB_IMAGE_CACHE_TTL_MS);
+    }
+
+    const missingIds = idsToResolve.filter((id) => !mediaFoundIds.has(id));
+    if (missingIds.length > 0) {
+      const productRows = await findPublicProductImagesByIds(missingIds);
+      for (const row of productRows) {
+        const productId = Number(row?.id || 0);
+        if (!Number.isFinite(productId) || productId <= 0) {
+          continue;
+        }
+        const parsed = parseImagePayload(row.imagen);
+        if (!parsed) {
+          continue;
+        }
+
+        const imageItem = toImageCacheItem({
+          buffer: parsed.buffer,
+          mimeType: parsed.mime_type
+        });
+
+        imageItemsById.set(productId, imageItem);
+        setCachedImageValue(`image:${productId}`, imageItem, WEB_IMAGE_CACHE_TTL_MS);
+
+        upsertProductMediaByProductId({
+          productId,
+          thumbSmall: imageItem.buffer,
+          mimeType: imageItem.mime_type,
+          etag: imageItem.etag,
+          sourceHash: imageItem.source_hash,
+          sourceSize: imageItem.buffer.length
+        }).catch(() => {});
+      }
+    }
+  }
+
+  const items = productIds
+    .map((productId) => {
+      const imageItem = imageItemsById.get(productId);
+      if (!imageItem?.buffer) {
+        return null;
+      }
+      return {
+        product_id: productId,
+        mime_type: imageItem.mime_type || 'image/jpeg',
+        data_base64: imageItem.buffer.toString('base64'),
+        etag: imageItem.etag || ''
+      };
+    })
+    .filter(Boolean);
+
+  return { items };
 }
 
 export async function getWebAdminProductById(productId) {
@@ -421,6 +619,9 @@ export async function updateWebAdminProduct(productId, payload = {}) {
   productsCache.clear();
   categoriesCache.clear();
   deleteImageCacheEntry(`image:${parsedProductId}`);
+  if (hasImagen) {
+    await deleteProductMediaByProductId(parsedProductId);
+  }
 
   return {
     item: {

@@ -5,6 +5,7 @@ import {
   getWebCategoriesController,
   getWebAdminProductByIdController,
   getWebInactiveProductsController,
+  getWebProductImagesBatchController,
   getWebProductImageController,
   getWebProductsController,
   updateWebAdminProductController
@@ -14,6 +15,7 @@ const router = Router();
 
 router.get('/web/products', getWebProductsController);
 router.get('/web/products/inactive', getWebInactiveProductsController);
+router.post('/web/products/images/batch', getWebProductImagesBatchController);
 router.get('/web/products/:productId/image', getWebProductImageController);
 router.get('/web/categories', getWebCategoriesController);
 router.get('/web/admin/products/:productId', webAuthMiddleware, requireWebRole('admin'), getWebAdminProductByIdController);

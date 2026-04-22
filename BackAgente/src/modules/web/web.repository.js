@@ -244,6 +244,149 @@ export async function findPublicProductImageById(productId) {
   return rows[0] || null;
 }
 
+export async function findPublicProductImagesByIds(productIds = []) {
+  const ids = Array.isArray(productIds)
+    ? [...new Set(productIds.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0))]
+    : [];
+
+  if (!ids.length) {
+    return [];
+  }
+
+  const placeholders = ids.map(() => '?').join(', ');
+  const [rows] = await pool.query(
+    `
+      SELECT
+        id,
+        imagen,
+        tiene_imagen
+      FROM ops_producto
+      WHERE id IN (${placeholders})
+    `,
+    ids
+  );
+
+  return rows;
+}
+
+export async function findProductMediaByProductId(productId) {
+  const parsedProductId = Number(productId);
+  if (!Number.isFinite(parsedProductId) || parsedProductId <= 0) {
+    return null;
+  }
+
+  const [rows] = await pool.query(
+    `
+      SELECT
+        product_id,
+        thumb_small,
+        mime_type,
+        etag,
+        source_hash,
+        source_size,
+        DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updated_at
+      FROM ops_producto_media
+      WHERE product_id = ?
+      LIMIT 1
+    `,
+    [parsedProductId]
+  );
+
+  return rows[0] || null;
+}
+
+export async function findProductMediaByProductIds(productIds = []) {
+  const ids = Array.isArray(productIds)
+    ? [...new Set(productIds.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0))]
+    : [];
+
+  if (!ids.length) {
+    return [];
+  }
+
+  const placeholders = ids.map(() => '?').join(', ');
+  const [rows] = await pool.query(
+    `
+      SELECT
+        product_id,
+        thumb_small,
+        mime_type,
+        etag,
+        source_hash,
+        source_size,
+        DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updated_at
+      FROM ops_producto_media
+      WHERE product_id IN (${placeholders})
+    `,
+    ids
+  );
+
+  return rows;
+}
+
+export async function upsertProductMediaByProductId({
+  productId,
+  thumbSmall,
+  mimeType,
+  etag,
+  sourceHash,
+  sourceSize
+}) {
+  const parsedProductId = Number(productId);
+  if (!Number.isFinite(parsedProductId) || parsedProductId <= 0) {
+    return null;
+  }
+
+  await pool.query(
+    `
+      INSERT INTO ops_producto_media (
+        product_id,
+        thumb_small,
+        mime_type,
+        etag,
+        source_hash,
+        source_size
+      )
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE
+        thumb_small = VALUES(thumb_small),
+        mime_type = VALUES(mime_type),
+        etag = VALUES(etag),
+        source_hash = VALUES(source_hash),
+        source_size = VALUES(source_size),
+        updated_at = CURRENT_TIMESTAMP
+    `,
+    [
+      parsedProductId,
+      thumbSmall || null,
+      mimeType || null,
+      etag || null,
+      sourceHash || null,
+      Math.max(0, Math.floor(Number(sourceSize) || 0))
+    ]
+  );
+
+  return true;
+}
+
+export async function deleteProductMediaByProductId(productId) {
+  const parsedProductId = Number(productId);
+  if (!Number.isFinite(parsedProductId) || parsedProductId <= 0) {
+    return false;
+  }
+
+  const [result] = await pool.query(
+    `
+      DELETE FROM ops_producto_media
+      WHERE product_id = ?
+      LIMIT 1
+    `,
+    [parsedProductId]
+  );
+
+  return Number(result?.affectedRows || 0) > 0;
+}
+
 export async function findWebAdminProductById(productId) {
   const parsedProductId = Number(productId);
   if (!Number.isFinite(parsedProductId) || parsedProductId <= 0) {

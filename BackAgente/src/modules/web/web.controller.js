@@ -1,6 +1,7 @@
 import {
   getWebAdminProductById,
   getWebCategories,
+  getWebProductImagesBatch,
   getWebInactiveProducts,
   getWebProductImage,
   getWebProducts,
@@ -51,12 +52,38 @@ export async function getWebProductImageController(req, res) {
       return res.status(404).json({ message: 'Imagen no disponible' });
     }
 
+    const incomingIfNoneMatch = String(req.headers['if-none-match'] || '').trim();
+    const normalizedIncomingEtag = incomingIfNoneMatch.replace(/^W\//i, '').replace(/^"|"$/g, '');
+    const normalizedCurrentEtag = String(imageItem.etag || '').replace(/^W\//i, '').replace(/^"|"$/g, '');
+    if (normalizedIncomingEtag && normalizedCurrentEtag && normalizedIncomingEtag === normalizedCurrentEtag) {
+      res.status(304);
+      if (imageItem.etag) {
+        res.setHeader('ETag', imageItem.etag);
+      }
+      return res.end();
+    }
+
     res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+    if (imageItem.etag) {
+      res.setHeader('ETag', imageItem.etag);
+    }
+    if (imageItem.last_modified) {
+      res.setHeader('Last-Modified', new Date(imageItem.last_modified).toUTCString());
+    }
     res.setHeader('Content-Type', imageItem.mime_type || 'image/jpeg');
     res.setHeader('Content-Length', String(imageItem.buffer.length || 0));
     return res.send(imageItem.buffer);
   } catch (error) {
     return handleServiceError(res, error, 'No se pudo cargar la imagen del producto');
+  }
+}
+
+export async function getWebProductImagesBatchController(req, res) {
+  try {
+    const data = await getWebProductImagesBatch(req.body || {});
+    return res.json(data);
+  } catch (error) {
+    return handleServiceError(res, error, 'No se pudieron cargar imagenes de productos');
   }
 }
 
