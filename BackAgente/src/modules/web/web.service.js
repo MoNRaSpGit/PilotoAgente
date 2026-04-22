@@ -27,12 +27,14 @@ const WEB_IMAGE_CACHE_TTL_MS = 10 * 60 * 1000;
 const WEB_IMAGE_CACHE_MAX_ITEMS = 300;
 const WEB_IMAGE_CACHE_MAX_BYTES = 64 * 1024 * 1024;
 const WEB_IMAGE_BATCH_LIMIT = 40;
+const WEB_IMAGE_HYDRATE_CHUNK_SIZE = 16;
 const productsCache = new Map();
 const categoriesCache = new Map();
 const imagesCache = new Map();
 const imageLoadInFlight = new Map();
 const productsLoadInFlight = new Map();
 const categoriesLoadInFlight = new Map();
+const imageHydrateInFlight = new Set();
 let imagesCacheBytes = 0;
 
 function getNow() {
@@ -322,6 +324,73 @@ function scheduleAsync(task) {
   }, 0);
 }
 
+function chunkArray(items = [], size = 10) {
+  const safeSize = Math.max(1, Math.floor(Number(size) || 10));
+  const chunks = [];
+  for (let i = 0; i < items.length; i += safeSize) {
+    chunks.push(items.slice(i, i + safeSize));
+  }
+  return chunks;
+}
+
+function scheduleHydrateProductMedia(productIds = []) {
+  const ids = [...new Set(
+    (Array.isArray(productIds) ? productIds : [])
+      .map((id) => Number(id))
+      .filter((id) => Number.isFinite(id) && id > 0)
+  )].filter((id) => !imageHydrateInFlight.has(id));
+
+  if (!ids.length) {
+    return;
+  }
+
+  for (const id of ids) {
+    imageHydrateInFlight.add(id);
+  }
+
+  scheduleAsync(async () => {
+    try {
+      const chunks = chunkArray(ids, WEB_IMAGE_HYDRATE_CHUNK_SIZE);
+      for (const batchIds of chunks) {
+        const productRows = await findPublicProductImagesByIds(batchIds);
+        const upserts = [];
+        for (const row of productRows) {
+          const productId = Number(row?.id || 0);
+          if (!Number.isFinite(productId) || productId <= 0) {
+            continue;
+          }
+          const parsed = parseImagePayload(row.imagen);
+          if (!parsed) {
+            continue;
+          }
+          const imageItem = toImageCacheItem({
+            buffer: parsed.buffer,
+            mimeType: parsed.mime_type
+          });
+          setCachedImageValue(`image:${productId}`, imageItem, WEB_IMAGE_CACHE_TTL_MS);
+          upserts.push({
+            productId,
+            thumbSmall: imageItem.buffer,
+            mimeType: imageItem.mime_type,
+            etag: imageItem.etag,
+            sourceHash: imageItem.source_hash,
+            sourceSize: imageItem.buffer.length
+          });
+        }
+        if (upserts.length > 0) {
+          await upsertProductMediaBatch(upserts);
+        }
+      }
+    } catch {
+      // noop
+    } finally {
+      for (const id of ids) {
+        imageHydrateInFlight.delete(id);
+      }
+    }
+  });
+}
+
 export async function getWebProducts(query = {}) {
   const rawLimit = Number(query?.limit);
   const limit = Number.isFinite(rawLimit) ? rawLimit : 500;
@@ -533,39 +602,9 @@ export async function getWebProductImagesBatch(payload = {}) {
 
     const missingIds = idsToResolve.filter((id) => !mediaFoundIds.has(id));
     if (missingIds.length > 0) {
-      const productRows = await findPublicProductImagesByIds(missingIds);
-      const pendingMediaUpserts = [];
-      for (const row of productRows) {
-        const productId = Number(row?.id || 0);
-        if (!Number.isFinite(productId) || productId <= 0) {
-          continue;
-        }
-        const parsed = parseImagePayload(row.imagen);
-        if (!parsed) {
-          continue;
-        }
-
-        const imageItem = toImageCacheItem({
-          buffer: parsed.buffer,
-          mimeType: parsed.mime_type
-        });
-
-        imageItemsById.set(productId, imageItem);
-        setCachedImageValue(`image:${productId}`, imageItem, WEB_IMAGE_CACHE_TTL_MS);
-
-        pendingMediaUpserts.push({
-          productId,
-          thumbSmall: imageItem.buffer,
-          mimeType: imageItem.mime_type,
-          etag: imageItem.etag,
-          sourceHash: imageItem.source_hash,
-          sourceSize: imageItem.buffer.length
-        });
-      }
-
-      if (pendingMediaUpserts.length > 0) {
-        scheduleAsync(() => upsertProductMediaBatch(pendingMediaUpserts));
-      }
+      // No bloqueamos la respuesta batch con lectura de blob original:
+      // hidratamos media table en segundo plano para siguientes requests.
+      scheduleHydrateProductMedia(missingIds);
     }
   }
 
