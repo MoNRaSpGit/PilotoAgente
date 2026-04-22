@@ -288,24 +288,23 @@ export async function awardWebPointsOnOrderDelivered({
 export async function getWebUserProfileSnapshot(webUserId) {
   await ensureWebUsersSupportTables();
 
-  await ensureWebUserProfile(webUserId);
-
   const [rows] = await pool.query(
     `
       SELECT
-        web_usuario_id,
-        telefono,
-        direccion_base,
-        puntos_actuales,
-        puntos_acumulados,
-        nivel_fidelidad,
-        total_compras,
-        monto_total_compras,
+        wu.id AS web_usuario_id,
+        wup.telefono,
+        wup.direccion_base,
+        COALESCE(wup.puntos_actuales, 0) AS puntos_actuales,
+        COALESCE(wup.puntos_acumulados, 0) AS puntos_acumulados,
+        COALESCE(wup.nivel_fidelidad, 'base') AS nivel_fidelidad,
+        COALESCE(wup.total_compras, 0) AS total_compras,
+        COALESCE(wup.monto_total_compras, 0) AS monto_total_compras,
         DATE_FORMAT(ultima_compra_at, '%Y-%m-%d %H:%i:%s') AS ultima_compra_at,
-        login_count,
+        COALESCE(wup.login_count, 0) AS login_count,
         DATE_FORMAT(last_login_at, '%Y-%m-%d %H:%i:%s') AS last_login_at
-      FROM ops_web_usuario_perfil
-      WHERE web_usuario_id = ?
+      FROM ops_web_usuarios wu
+      LEFT JOIN ops_web_usuario_perfil wup ON wup.web_usuario_id = wu.id
+      WHERE wu.id = ?
       LIMIT 1
     `,
     [webUserId]

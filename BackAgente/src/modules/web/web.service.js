@@ -30,6 +30,8 @@ const productsCache = new Map();
 const categoriesCache = new Map();
 const imagesCache = new Map();
 const imageLoadInFlight = new Map();
+const productsLoadInFlight = new Map();
+const categoriesLoadInFlight = new Map();
 let imagesCacheBytes = 0;
 
 function getNow() {
@@ -296,6 +298,21 @@ function runImageSingleFlight(cacheKey, factory) {
   return task;
 }
 
+function runSingleFlight(inFlightMap, cacheKey, factory) {
+  if (inFlightMap.has(cacheKey)) {
+    return inFlightMap.get(cacheKey);
+  }
+
+  const task = Promise.resolve()
+    .then(factory)
+    .finally(() => {
+      inFlightMap.delete(cacheKey);
+    });
+
+  inFlightMap.set(cacheKey, task);
+  return task;
+}
+
 export async function getWebProducts(query = {}) {
   const rawLimit = Number(query?.limit);
   const limit = Number.isFinite(rawLimit) ? rawLimit : 500;
@@ -319,25 +336,32 @@ export async function getWebProducts(query = {}) {
     return cached;
   }
 
-  const items = await listPublicProducts({
-    limit: safeLimit,
-    offset,
-    status,
-    category
-  });
-
-  const payload = {
-    items,
-    page: {
-      offset,
-      limit: safeLimit,
-      count: items.length,
-      has_more: items.length === safeLimit
+  return runSingleFlight(productsLoadInFlight, cacheKey, async () => {
+    const secondCached = getCachedValue(productsCache, cacheKey);
+    if (secondCached) {
+      return secondCached;
     }
-  };
 
-  setCachedValue(productsCache, cacheKey, payload, WEB_PRODUCTS_CACHE_TTL_MS);
-  return payload;
+    const items = await listPublicProducts({
+      limit: safeLimit,
+      offset,
+      status,
+      category
+    });
+
+    const payload = {
+      items,
+      page: {
+        offset,
+        limit: safeLimit,
+        count: items.length,
+        has_more: items.length === safeLimit
+      }
+    };
+
+    setCachedValue(productsCache, cacheKey, payload, WEB_PRODUCTS_CACHE_TTL_MS);
+    return payload;
+  });
 }
 
 export async function getWebInactiveProducts(query = {}) {
@@ -380,10 +404,17 @@ export async function getWebCategories(query = {}) {
     return cached;
   }
 
-  const items = await listPublicCategories({ status });
-  const payload = { items };
-  setCachedValue(categoriesCache, cacheKey, payload, WEB_CATEGORIES_CACHE_TTL_MS);
-  return payload;
+  return runSingleFlight(categoriesLoadInFlight, cacheKey, async () => {
+    const secondCached = getCachedValue(categoriesCache, cacheKey);
+    if (secondCached) {
+      return secondCached;
+    }
+
+    const items = await listPublicCategories({ status });
+    const payload = { items };
+    setCachedValue(categoriesCache, cacheKey, payload, WEB_CATEGORIES_CACHE_TTL_MS);
+    return payload;
+  });
 }
 
 export async function getWebProductImage(productId) {

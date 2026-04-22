@@ -10,14 +10,73 @@ import {
   updateWebOrderStatus
 } from './webOrders.repository.js';
 import { awardWebPointsOnOrderDelivered, registerWebOrderMetrics } from '../webUsers/webUsers.repository.js';
+import { invalidateWebAuthProfileCache } from '../webUsers/webUsers.service.js';
 import { emitWebOrderEvent } from './webOrders.events.js';
 import { canHideWebOrder, normalizeWebOrderStatus } from './webOrders.status.js';
 import { parseCreateOrderPayload, parseOrderId, parseOrderStatusPayload } from './webOrders.contract.js';
+
+const WEB_MY_ORDERS_CACHE_TTL_MS = 30 * 1000;
+const webMyOrdersCache = new Map();
+const webMyOrdersInFlight = new Map();
 
 function createServiceError(message, status = 500) {
   const error = new Error(message);
   error.status = status;
   return error;
+}
+
+function getNow() {
+  return Date.now();
+}
+
+function getMyOrdersCacheKey(webUserId, limit) {
+  return `${Number(webUserId)}:${Number(limit)}`;
+}
+
+function getCachedMyOrders(webUserId, limit) {
+  const cacheKey = getMyOrdersCacheKey(webUserId, limit);
+  const entry = webMyOrdersCache.get(cacheKey);
+  if (!entry) {
+    return null;
+  }
+  if (entry.expiresAt <= getNow()) {
+    webMyOrdersCache.delete(cacheKey);
+    return null;
+  }
+  return entry.value;
+}
+
+function setCachedMyOrders(webUserId, limit, value) {
+  const cacheKey = getMyOrdersCacheKey(webUserId, limit);
+  webMyOrdersCache.set(cacheKey, {
+    value,
+    expiresAt: getNow() + WEB_MY_ORDERS_CACHE_TTL_MS
+  });
+}
+
+function runMyOrdersSingleFlight(webUserId, limit, factory) {
+  const cacheKey = getMyOrdersCacheKey(webUserId, limit);
+  if (webMyOrdersInFlight.has(cacheKey)) {
+    return webMyOrdersInFlight.get(cacheKey);
+  }
+
+  const task = Promise.resolve()
+    .then(factory)
+    .finally(() => {
+      webMyOrdersInFlight.delete(cacheKey);
+    });
+
+  webMyOrdersInFlight.set(cacheKey, task);
+  return task;
+}
+
+function invalidateMyOrdersCacheForUser(webUserId) {
+  const userIdPrefix = `${Number(webUserId)}:`;
+  for (const key of webMyOrdersCache.keys()) {
+    if (String(key).startsWith(userIdPrefix)) {
+      webMyOrdersCache.delete(key);
+    }
+  }
 }
 
 export async function createOrderFromWebUser(webUser, payload = {}) {
@@ -77,6 +136,8 @@ export async function createOrderFromWebUser(webUser, payload = {}) {
     orderTotal: safeOrderTotal,
     awardedPoints: 0
   }).catch(() => {});
+  invalidateMyOrdersCacheForUser(webUser.id);
+  invalidateWebAuthProfileCache(webUser.id);
 
   const timestamp = new Date().toISOString().slice(0, 19).replace('T', ' ');
   const item = {
@@ -125,11 +186,22 @@ export async function listMyWebOrders(webUser, query = {}) {
     throw createServiceError('Usuario web invalido', 401);
   }
 
-  const items = await listWebOrdersByUserId(webUser.id, {
-    limit: query?.limit
-  });
+  const parsedLimit = Math.max(1, Math.min(100, Math.floor(Number(query?.limit) || 20)));
+  const cached = getCachedMyOrders(webUser.id, parsedLimit);
+  if (cached) {
+    return { items: cached };
+  }
 
-  return { items };
+  return runMyOrdersSingleFlight(webUser.id, parsedLimit, async () => {
+    const secondCached = getCachedMyOrders(webUser.id, parsedLimit);
+    if (secondCached) {
+      return { items: secondCached };
+    }
+
+    const items = await listWebOrdersByUserId(webUser.id, { limit: parsedLimit });
+    setCachedMyOrders(webUser.id, parsedLimit, items);
+    return { items };
+  });
 }
 
 export async function listMyRepeatProducts(webUser, query = {}) {
@@ -201,6 +273,8 @@ export async function changeWebOrderStatus(orderId, payload = {}) {
     webUserId: item.web_usuario_id,
     order: item
   });
+  invalidateMyOrdersCacheForUser(item.web_usuario_id);
+  invalidateWebAuthProfileCache(item.web_usuario_id);
 
   return {
     item,
@@ -244,6 +318,7 @@ export async function hideMyWebOrder(webUser, orderId) {
       cliente_visible: 0
     }
   });
+  invalidateMyOrdersCacheForUser(webUser.id);
 
   return {
     item: {
@@ -284,6 +359,7 @@ export async function hideAdminWebOrder(orderId) {
       admin_visible: 0
     }
   });
+  invalidateMyOrdersCacheForUser(order.web_usuario_id);
 
   return {
     item: {

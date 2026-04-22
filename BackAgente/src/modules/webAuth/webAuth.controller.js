@@ -1,6 +1,6 @@
 import { findWebUserById } from './webAuth.repository.js';
 import { loginWebUser, registerWebUser } from './webAuth.service.js';
-import { getWebUserProfileSnapshot } from '../webUsers/webUsers.repository.js';
+import { getWebAuthProfile } from '../webUsers/webUsers.service.js';
 import { webLoginRateLimiter, webRegisterRateLimiter } from './webAuth.rateLimit.js';
 
 function getClientIp(req) {
@@ -93,7 +93,7 @@ export async function meWebUserController(req, res) {
       return res.status(401).json({ message: 'Usuario web no autorizado' });
     }
 
-    const profile = await getWebUserProfileSnapshot(req.webUser?.id);
+    const { profile } = await getWebAuthProfile(req.webUser?.id);
     return res.json({ user, profile });
   } catch (error) {
     return handleServiceError(res, error, 'No se pudo obtener el usuario web');

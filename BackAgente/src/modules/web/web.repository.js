@@ -33,41 +33,19 @@ export async function listPublicProducts({ limit = 500, offset = 0, status = 'ac
 
   let categoryFilterSql = '';
   if (hasCategoryFilter) {
-    const [categoryRows] = await pool.query(
-      `
-        SELECT id
-        FROM ops_categoria
-        WHERE nombre_compact = ?
-           OR nombre_normalized = ?
-      `,
-      [compactCategory, compactCategory]
-    );
-
-    const categoryIds = categoryRows
-      .map((row) => Number(row?.id))
-      .filter((id) => Number.isFinite(id) && id > 0);
-
-    if (categoryIds.length > 0) {
-      const placeholders = categoryIds.map(() => '?').join(', ');
-      categoryFilterSql = `
-        AND (
-          p.categoria_id IN (${placeholders})
-          OR (
-            p.categoria_id IS NULL
-            AND p.categoria_compact = ?
-          )
+    categoryFilterSql = `
+      AND (
+        (
+          p.categoria_id IS NOT NULL
+          AND (c.nombre_compact = ? OR c.nombre_normalized = ?)
         )
-      `;
-      params.push(...categoryIds, compactCategory);
-    } else {
-      categoryFilterSql = `
-        AND (
+        OR (
           p.categoria_id IS NULL
           AND p.categoria_compact = ?
         )
-      `;
-      params.push(compactCategory);
-    }
+      )
+    `;
+    params.push(compactCategory, compactCategory, compactCategory);
   }
 
   const [rows] = await pool.query(
@@ -76,19 +54,13 @@ export async function listPublicProducts({ limit = 500, offset = 0, status = 'ac
         p.id,
         p.nombre,
         p.precio_venta,
-        COALESCE(p.stock_actual, 0) AS stock_actual,
         COALESCE(c.nombre, p.categoria) AS categoria,
-        p.barcode,
-        p.barcode_normalized,
         p.estado,
-        p.supplier_id,
-        s.nombre AS supplier_name,
         CASE
           WHEN COALESCE(p.tiene_imagen, 0) = 1 THEN 1
           ELSE 0
         END AS has_local_image
       FROM ops_producto p
-      LEFT JOIN ops_proveedores s ON s.id = p.supplier_id
       LEFT JOIN ops_categoria c ON c.id = p.categoria_id
       WHERE p.estado = ?
         ${categoryFilterSql}
@@ -103,13 +75,8 @@ export async function listPublicProducts({ limit = 500, offset = 0, status = 'ac
     id: row.id,
     nombre: row.nombre,
     precio_venta: Number(row.precio_venta || 0),
-    stock_actual: Number(row.stock_actual || 0),
     categoria: toCategoryDisplayName(row.categoria || '', compactCategoryKey(row.categoria || '')),
-    barcode: row.barcode || '',
-    barcode_normalized: row.barcode_normalized || '',
     estado: String(row.estado || safeStatus).trim().toLowerCase(),
-    supplier_id: row.supplier_id || null,
-    supplier_name: row.supplier_name || null,
     has_local_image: Boolean(Number(row.has_local_image || 0))
   }));
 }
@@ -124,19 +91,13 @@ export async function listPublicInactiveProducts({ limit = 500, offset = 0 } = {
         p.id,
         p.nombre,
         p.precio_venta,
-        COALESCE(p.stock_actual, 0) AS stock_actual,
         COALESCE(c.nombre, p.categoria) AS categoria,
-        p.barcode,
-        p.barcode_normalized,
         p.estado,
-        p.supplier_id,
-        s.nombre AS supplier_name,
         CASE
           WHEN COALESCE(p.tiene_imagen, 0) = 1 THEN 1
           ELSE 0
         END AS has_local_image
       FROM ops_producto p
-      LEFT JOIN ops_proveedores s ON s.id = p.supplier_id
       LEFT JOIN ops_categoria c ON c.id = p.categoria_id
       WHERE p.estado = 'inactivo'
       ORDER BY p.id DESC
@@ -150,13 +111,8 @@ export async function listPublicInactiveProducts({ limit = 500, offset = 0 } = {
     id: row.id,
     nombre: row.nombre,
     precio_venta: Number(row.precio_venta || 0),
-    stock_actual: Number(row.stock_actual || 0),
     categoria: toCategoryDisplayName(row.categoria || '', compactCategoryKey(row.categoria || '')),
-    barcode: row.barcode || '',
-    barcode_normalized: row.barcode_normalized || '',
     estado: String(row.estado || 'inactivo').trim().toLowerCase(),
-    supplier_id: row.supplier_id || null,
-    supplier_name: row.supplier_name || null,
     has_local_image: Boolean(Number(row.has_local_image || 0))
   }));
 }
