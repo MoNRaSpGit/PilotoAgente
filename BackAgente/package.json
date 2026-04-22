@@ -6,6 +6,7 @@
   "scripts": {
     "db:migrate": "node src/scripts/runMigrations.js",
     "test:smoke:web": "node src/scripts/smokeWebFlow.js",
+    "test:bench:web": "node src/scripts/benchmarkWebFlow.js",
     "dev": "node src/server.js",
     "dev:watch": "node --watch src/server.js",
     "dev:clean": "powershell -Command \"$conn = Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1; if ($conn) { Stop-Process -Id $conn.OwningProcess -Force }; node src/server.js\"",
