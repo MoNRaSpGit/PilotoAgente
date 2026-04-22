@@ -9,6 +9,7 @@ import { ensureSupplierTables } from '../modules/suppliers/supplier.repository.j
 import { ensureWebUsersTable, seedDemoWebUsers } from '../modules/webAuth/webAuth.repository.js';
 import { ensureWebOrdersTables } from '../modules/webOrders/webOrders.repository.js';
 import { ensureWebUsersSupportTables } from '../modules/webUsers/webUsers.repository.js';
+import { runMigrations } from './migrations/runMigrations.js';
 import { env } from '../config/env.js';
 
 export async function initDatabase() {
@@ -21,6 +22,7 @@ export async function initDatabase() {
   await ensureCategoriesTable();
   await ensureStockTables();
   await ensureWebUsersTable();
+  await runMigrations();
   await seedDemoWebUsers();
   await ensureWebUsersSupportTables();
   await ensureWebOrdersTables();
