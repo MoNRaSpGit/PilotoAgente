@@ -4,6 +4,7 @@ import {
   hideAdminWebOrder,
   hideMyWebOrder,
   listAdminIncomingWebOrders,
+  listMyRepeatProducts,
   listMyWebOrders
 } from './webOrders.service.js';
 import { openAdminWebOrdersStream, openUserWebOrdersStream } from './webOrders.events.js';
@@ -34,6 +35,15 @@ export async function listMyWebOrdersController(req, res) {
     return res.json(data);
   } catch (error) {
     return handleServiceError(res, error, 'No se pudieron cargar tus pedidos');
+  }
+}
+
+export async function listMyRepeatProductsController(req, res) {
+  try {
+    const data = await listMyRepeatProducts(req.webUser, req.query);
+    return res.json(data);
+  } catch (error) {
+    return handleServiceError(res, error, 'No se pudo cargar tu historial');
   }
 }
 

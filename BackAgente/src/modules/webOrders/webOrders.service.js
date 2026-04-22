@@ -4,6 +4,7 @@ import {
   getWebOrderById,
   hideWebOrderForAdmin,
   hideWebOrderForUser,
+  listWebUserTopProducts,
   listPendingWebOrders,
   listWebOrdersByUserId,
   updateWebOrderStatus
@@ -168,6 +169,18 @@ export async function listMyWebOrders(webUser, query = {}) {
   }
 
   const items = await listWebOrdersByUserId(webUser.id, {
+    limit: query?.limit
+  });
+
+  return { items };
+}
+
+export async function listMyRepeatProducts(webUser, query = {}) {
+  if (!webUser?.id) {
+    throw createServiceError('Usuario web invalido', 401);
+  }
+
+  const items = await listWebUserTopProducts(webUser.id, {
     limit: query?.limit
   });
 

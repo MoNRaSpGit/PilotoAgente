@@ -7,6 +7,7 @@ import {
   hideAdminWebOrderController,
   hideMyWebOrderController,
   listAdminIncomingWebOrdersController,
+  listMyRepeatProductsController,
   listMyWebOrdersController,
   streamAdminWebOrdersController,
   streamMyWebOrdersController
@@ -16,6 +17,7 @@ const router = Router();
 
 router.post('/web/orders', webAuthMiddleware, createWebOrderController);
 router.get('/web/orders/mine', webAuthMiddleware, listMyWebOrdersController);
+router.get('/web/orders/repeat-products', webAuthMiddleware, listMyRepeatProductsController);
 router.patch('/web/orders/:orderId/hide', webAuthMiddleware, hideMyWebOrderController);
 router.get('/web/orders/stream', webAuthMiddleware, streamMyWebOrdersController);
 

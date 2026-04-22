@@ -157,6 +157,26 @@ export async function ensureWebOrdersTables() {
           ON DELETE CASCADE
       )
     `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ops_web_usuario_producto_historial (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        web_usuario_id BIGINT NOT NULL,
+        product_id BIGINT NOT NULL,
+        times_ordered INT NOT NULL DEFAULT 0,
+        quantity_total INT NOT NULL DEFAULT 0,
+        last_unit_price DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+        last_order_at DATETIME NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_web_usuario_producto_historial (web_usuario_id, product_id),
+        INDEX idx_web_historial_user_rank (web_usuario_id, times_ordered, quantity_total, last_order_at),
+        INDEX idx_web_historial_product (product_id),
+        CONSTRAINT fk_web_historial_usuario
+          FOREIGN KEY (web_usuario_id) REFERENCES ops_web_usuarios(id)
+          ON DELETE CASCADE
+      )
+    `);
   })();
 
   try {
@@ -259,6 +279,63 @@ export async function createWebOrder({ webUserId, items, notes = null, paymentMe
         `,
         values
       );
+
+      const aggregatedByProduct = new Map();
+      for (const item of normalizedItems) {
+        const productId = Number(item.product_id || 0);
+        if (!Number.isFinite(productId) || productId <= 0) {
+          continue;
+        }
+        const quantity = Math.max(0, Math.floor(Number(item.quantity) || 0));
+        const unitPrice = Number(Number(item.unit_price || 0).toFixed(2));
+        const current = aggregatedByProduct.get(productId) || {
+          productId,
+          timesOrdered: 0,
+          quantityTotal: 0,
+          lastUnitPrice: 0
+        };
+        current.timesOrdered += 1;
+        current.quantityTotal += quantity;
+        current.lastUnitPrice = unitPrice;
+        aggregatedByProduct.set(productId, current);
+      }
+
+      if (aggregatedByProduct.size > 0) {
+        const historyRows = [...aggregatedByProduct.values()];
+        const historyPlaceholders = historyRows.map(() => '(?, ?, ?, ?, ?, NOW())').join(', ');
+        const historyValues = [];
+
+        for (const row of historyRows) {
+          historyValues.push(
+            webUserId,
+            row.productId,
+            row.timesOrdered,
+            row.quantityTotal,
+            row.lastUnitPrice
+          );
+        }
+
+        await connection.query(
+          `
+            INSERT INTO ops_web_usuario_producto_historial (
+              web_usuario_id,
+              product_id,
+              times_ordered,
+              quantity_total,
+              last_unit_price,
+              last_order_at
+            )
+            VALUES ${historyPlaceholders}
+            ON DUPLICATE KEY UPDATE
+              times_ordered = times_ordered + VALUES(times_ordered),
+              quantity_total = quantity_total + VALUES(quantity_total),
+              last_unit_price = VALUES(last_unit_price),
+              last_order_at = VALUES(last_order_at),
+              updated_at = CURRENT_TIMESTAMP
+          `,
+          historyValues
+        );
+      }
     }
 
     return {
@@ -266,6 +343,34 @@ export async function createWebOrder({ webUserId, items, notes = null, paymentMe
       total_estimado: safeTotalEstimado
     };
   });
+}
+
+export async function listWebUserTopProducts(webUserId, { limit = 10 } = {}) {
+  await ensureWebOrdersTables();
+
+  const safeLimit = Math.max(1, Math.min(50, Math.floor(Number(limit) || 10)));
+
+  const [rows] = await pool.query(
+    `
+      SELECT
+        h.product_id,
+        p.nombre AS product_name,
+        p.precio_venta AS unit_price,
+        p.estado AS product_status,
+        h.times_ordered AS purchase_count,
+        h.quantity_total,
+        DATE_FORMAT(h.last_order_at, '%Y-%m-%d %H:%i:%s') AS last_order_at
+      FROM ops_web_usuario_producto_historial h
+      INNER JOIN ops_producto p ON p.id = h.product_id
+      WHERE h.web_usuario_id = ?
+        AND p.estado = 'activo'
+      ORDER BY h.times_ordered DESC, h.quantity_total DESC, h.last_order_at DESC, h.product_id DESC
+      LIMIT ?
+    `,
+    [webUserId, safeLimit]
+  );
+
+  return rows;
 }
 
 export async function getWebOrderById(orderId) {
