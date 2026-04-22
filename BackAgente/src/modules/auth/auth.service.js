@@ -1,8 +1,23 @@
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { env } from '../../config/env.js';
-import { findUserByEmail } from './auth.repository.js';
+import { findUserByEmail, seedDemoUsers } from './auth.repository.js';
 import { verifyPassword } from './password.utils.js';
+
+let demoUsersSeedPromise = null;
+
+async function ensureDemoUsersSeededForLogin() {
+  if (demoUsersSeedPromise) {
+    return demoUsersSeedPromise;
+  }
+
+  demoUsersSeedPromise = seedDemoUsers().catch((error) => {
+    demoUsersSeedPromise = null;
+    throw error;
+  });
+
+  return demoUsersSeedPromise;
+}
 
 function buildAuthUser(userRow) {
   return {
@@ -22,6 +37,10 @@ export async function loginWithCredentials(email, password) {
     error.status = 401;
     throw error;
   }
+
+  // Hardening: garantiza que los quick-logins demo existan aun si el servidor
+  // recibio intentos antes de terminar la inicializacion async.
+  await ensureDemoUsersSeededForLogin();
 
   const userRow = await findUserByEmail(normalizedEmail);
 
