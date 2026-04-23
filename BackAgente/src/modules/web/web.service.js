@@ -24,6 +24,8 @@ function createServiceError(message, status = 500) {
 const WEB_PRODUCTS_CACHE_TTL_MS = 30 * 1000;
 const WEB_CATEGORIES_CACHE_TTL_MS = 60 * 1000;
 const WEB_IMAGE_CACHE_TTL_MS = 10 * 60 * 1000;
+const WEB_IMAGE_BATCH_RESPONSE_CACHE_TTL_MS = 30 * 1000;
+const WEB_IMAGE_BATCH_RESPONSE_CACHE_MAX_ITEMS = 80;
 const WEB_IMAGE_CACHE_MAX_ITEMS = 300;
 const WEB_IMAGE_CACHE_MAX_BYTES = 64 * 1024 * 1024;
 const WEB_IMAGE_BATCH_LIMIT = 40;
@@ -31,6 +33,7 @@ const WEB_IMAGE_HYDRATE_CHUNK_SIZE = 8;
 const productsCache = new Map();
 const categoriesCache = new Map();
 const imagesCache = new Map();
+const imageBatchResponseCache = new Map();
 const imageLoadInFlight = new Map();
 const productsLoadInFlight = new Map();
 const categoriesLoadInFlight = new Map();
@@ -67,6 +70,40 @@ function setCachedValue(cache, key, value, ttlMs) {
 function getImageCacheSizeBytes(imageValue) {
   const size = Number(imageValue?.buffer?.length || 0);
   return Number.isFinite(size) && size > 0 ? size : 0;
+}
+
+function getCachedImageBatchResponse(cacheKey) {
+  const entry = imageBatchResponseCache.get(cacheKey);
+  if (!entry) {
+    return null;
+  }
+  if (entry.expiresAt <= getNow()) {
+    imageBatchResponseCache.delete(cacheKey);
+    return null;
+  }
+
+  // LRU refresh
+  imageBatchResponseCache.delete(cacheKey);
+  imageBatchResponseCache.set(cacheKey, entry);
+  return entry.value;
+}
+
+function setCachedImageBatchResponse(cacheKey, value) {
+  if (!cacheKey) {
+    return;
+  }
+  imageBatchResponseCache.set(cacheKey, {
+    value,
+    expiresAt: getNow() + WEB_IMAGE_BATCH_RESPONSE_CACHE_TTL_MS
+  });
+
+  while (imageBatchResponseCache.size > WEB_IMAGE_BATCH_RESPONSE_CACHE_MAX_ITEMS) {
+    const oldestKey = imageBatchResponseCache.keys().next().value;
+    if (!oldestKey) {
+      break;
+    }
+    imageBatchResponseCache.delete(oldestKey);
+  }
 }
 
 function deleteImageCacheEntry(key) {
@@ -603,6 +640,12 @@ export async function getWebProductImagesBatch(payload = {}) {
     return { items: [] };
   }
 
+  const batchCacheKey = `batch:${productIds.join(',')}`;
+  const cachedBatch = getCachedImageBatchResponse(batchCacheKey);
+  if (cachedBatch) {
+    return cachedBatch;
+  }
+
   const imageItemsById = new Map();
   const idsToResolve = [];
 
@@ -659,7 +702,9 @@ export async function getWebProductImagesBatch(payload = {}) {
     })
     .filter(Boolean);
 
-  return { items };
+  const response = { items };
+  setCachedImageBatchResponse(batchCacheKey, response);
+  return response;
 }
 
 export async function getWebAdminProductById(productId) {
@@ -745,6 +790,7 @@ export async function updateWebAdminProduct(productId, payload = {}) {
 
   productsCache.clear();
   categoriesCache.clear();
+  imageBatchResponseCache.clear();
   deleteImageCacheEntry(`image:${parsedProductId}`);
   if (hasImagen) {
     await deleteProductMediaByProductId(parsedProductId);
