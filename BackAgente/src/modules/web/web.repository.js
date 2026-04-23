@@ -240,7 +240,7 @@ export async function findProductMediaByProductId(productId) {
         etag,
         source_hash,
         source_size,
-        DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updated_at
+        updated_at
       FROM ops_producto_media
       WHERE product_id = ?
       LIMIT 1
@@ -270,7 +270,7 @@ export async function findProductMediaByProductIds(productIds = []) {
         etag,
         source_hash,
         source_size,
-        DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updated_at
+        updated_at
       FROM ops_producto_media
       WHERE product_id IN (${placeholders})
     `,
