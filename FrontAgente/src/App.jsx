@@ -1,5 +1,5 @@
 import { Button, Modal } from 'react-bootstrap';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { featureFlags } from './config/featureFlags';
@@ -7,6 +7,11 @@ import { AppNavbar } from './app/AppNavbar';
 import { AppRoutes } from './app/AppRoutes';
 import { normalizeRole } from './app/roleGate.utils';
 import { useWebOrdersUnreadCounter } from './app/useWebOrdersUnreadCounter';
+import {
+  createWebOrdersBeepPlayer,
+  loadWebOrdersSoundEnabled,
+  loadWebOrdersSoundStyleId
+} from './pages/webOrders/webOrdersAudioAlert';
 import { clearSession } from './store/slices/authSlice';
 import { clearAuthSession } from './utils/authSession';
 import './styles/layout.css';
@@ -42,10 +47,36 @@ function App() {
   const hideNavbar = location.pathname === '/login';
   const dashboardEnabled = featureFlags.dashboardEnabled;
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const globalBeepPlayerRef = useRef(null);
+
+  const getGlobalBeepPlayer = useCallback(() => {
+    if (!globalBeepPlayerRef.current) {
+      globalBeepPlayerRef.current = createWebOrdersBeepPlayer();
+    }
+    return globalBeepPlayerRef.current;
+  }, []);
+
+  const handleWebOrderCreatedAlert = useCallback(() => {
+    if (!loadWebOrdersSoundEnabled()) {
+      return;
+    }
+
+    const styleId = loadWebOrdersSoundStyleId();
+    getGlobalBeepPlayer().playStyle(styleId);
+  }, [getGlobalBeepPlayer]);
+
   const webOrdersUnreadCount = useWebOrdersUnreadCounter({
     enabled: isLoggedIn && (userRole === 'admin' || userRole === 'operario'),
-    currentPath: location.pathname
+    currentPath: location.pathname,
+    onOrderCreated: handleWebOrderCreatedAlert
   });
+
+  useEffect(() => () => {
+    if (globalBeepPlayerRef.current) {
+      globalBeepPlayerRef.current.destroy();
+      globalBeepPlayerRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     if (!supportsAppBadgeApi()) {

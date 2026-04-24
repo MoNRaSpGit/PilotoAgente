@@ -10,7 +10,6 @@ import {
 import {
   createWebOrdersBeepPlayer,
   getNextWebOrdersSoundStyleId,
-  getOrderCreatedEventId,
   getWebOrdersSoundStyleLabel,
   loadWebOrdersSoundEnabled,
   loadWebOrdersSoundStyleId,
@@ -127,7 +126,6 @@ export default function WebPedidosPage() {
   const [pushEnabled, setPushEnabled] = useState(() => loadWebOrdersPushEnabled());
   const [savingPush, setSavingPush] = useState(false);
   const beepPlayerRef = useRef(null);
-  const lastBeepOrderIdRef = useRef(0);
   const soundStyles = useMemo(() => getWebOrdersSoundStyles(), []);
   const pushSupported = useMemo(() => isPushRuntimeSupported(), []);
 
@@ -173,11 +171,6 @@ export default function WebPedidosPage() {
         if (payload?.type === 'keepalive' || payload?.type === 'connected') {
           return;
         }
-        const createdOrderId = getOrderCreatedEventId(payload);
-        if (createdOrderId && soundEnabled && lastBeepOrderIdRef.current !== createdOrderId) {
-          lastBeepOrderIdRef.current = createdOrderId;
-          getBeepPlayer().playStyle(soundStyleId);
-        }
         if (payload?.order || payload?.order_id) {
           setOrders((current) => applyAdminWebOrderEvent(current, payload));
           return;
@@ -194,7 +187,7 @@ export default function WebPedidosPage() {
     return () => {
       eventSource.close();
     };
-  }, [getBeepPlayer, loadOrders, soundEnabled, soundStyleId]);
+  }, [loadOrders]);
 
   useEffect(() => {
     saveWebOrdersSoundEnabled(soundEnabled);

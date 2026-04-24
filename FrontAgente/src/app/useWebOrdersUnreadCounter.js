@@ -10,7 +10,7 @@ function getOrderCreatedEventId(payload) {
   return Number.isFinite(orderId) && orderId > 0 ? orderId : 0;
 }
 
-export function useWebOrdersUnreadCounter({ enabled = false, currentPath = '' } = {}) {
+export function useWebOrdersUnreadCounter({ enabled = false, currentPath = '', onOrderCreated = null } = {}) {
   const [unreadCount, setUnreadCount] = useState(0);
   const seenEventOrderIdsRef = useRef(new Set());
 
@@ -46,6 +46,9 @@ export function useWebOrdersUnreadCounter({ enabled = false, currentPath = '' } 
         }
 
         seenEventOrderIdsRef.current.add(eventOrderId);
+        if (typeof onOrderCreated === 'function') {
+          onOrderCreated({ orderId: eventOrderId, payload });
+        }
 
         if (String(currentPath || '').toLowerCase() === '/web-pedidos') {
           return;
@@ -60,7 +63,7 @@ export function useWebOrdersUnreadCounter({ enabled = false, currentPath = '' } 
     return () => {
       eventSource.close();
     };
-  }, [enabled, currentPath]);
+  }, [enabled, currentPath, onOrderCreated]);
 
   return unreadCount;
 }
