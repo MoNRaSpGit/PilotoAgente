@@ -5,8 +5,6 @@ import {
 } from '../../services/api';
 
 const WEB_ORDERS_PUSH_PREF_KEY = 'frontagente:web-orders-push-enabled';
-const WEB_ORDERS_PUSH_MARK_READ_EVENT = 'web_orders_mark_read';
-const WEB_ORDERS_PUSH_CLEAR_DELAYS_MS = [0, 300, 1200, 2600];
 
 function getAppBaseUrl() {
   const baseUrl = String(import.meta.env.BASE_URL || '/').trim();
@@ -60,82 +58,12 @@ export function isPushRuntimeSupported() {
   );
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
-}
-
-function isWebOrderNotification(notification = {}) {
-  const targetUrl = String(notification?.data?.url || '');
-  const targetTag = String(notification?.tag || '');
-  return targetUrl.includes('/web-pedidos') || targetTag.startsWith('web-order');
-}
-
-async function clearWebOrderNotificationsFromPage() {
-  const scope = new URL(getPushWorkerScope(), window.location.origin).href;
-  let registration = await navigator.serviceWorker.getRegistration(scope);
-  if (!registration) {
-    registration = await ensurePushWorkerRegistration();
-  }
-
-  const notifications = await registration.getNotifications({ includeTriggered: true }).catch(() => []);
-  notifications.forEach((notification) => {
-    if (isWebOrderNotification(notification)) {
-      notification.close();
-    }
-  });
-}
-
-async function postMessageToPushWorker(payload = {}) {
-  if (!('serviceWorker' in navigator)) {
-    return;
-  }
-
-  const scope = new URL(getPushWorkerScope(), window.location.origin).href;
-  let registration = await navigator.serviceWorker.getRegistration(scope);
-  if (!registration) {
-    registration = await ensurePushWorkerRegistration();
-  }
-  const worker = registration.active || registration.waiting || registration.installing;
-  if (!worker) {
-    return;
-  }
-
-  worker.postMessage(payload);
-}
-
-export async function markWebOrdersPushAsRead() {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  for (const delayMs of WEB_ORDERS_PUSH_CLEAR_DELAYS_MS) {
-    if (delayMs > 0) {
-      await sleep(delayMs);
-    }
-
-    if (typeof navigator.clearAppBadge === 'function') {
-      await navigator.clearAppBadge().catch(() => {});
-    }
-
-    if (!('serviceWorker' in navigator)) {
-      continue;
-    }
-
-    await postMessageToPushWorker({
-      type: WEB_ORDERS_PUSH_MARK_READ_EVENT
-    }).catch(() => {});
-
-    await clearWebOrderNotificationsFromPage().catch(() => {});
-  }
-}
-
 async function ensurePushWorkerRegistration() {
   const scriptUrl = getPushWorkerScriptUrl();
   const scope = getPushWorkerScope();
-  const registration = await navigator.serviceWorker.register(scriptUrl, { scope });
-  return registration;
+  await navigator.serviceWorker.register(scriptUrl, { scope });
+  const readyRegistration = await navigator.serviceWorker.ready;
+  return readyRegistration;
 }
 
 function normalizePushSubscribeError(error) {
