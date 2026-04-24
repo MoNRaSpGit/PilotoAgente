@@ -6,6 +6,7 @@ import {
 
 const WEB_ORDERS_PUSH_PREF_KEY = 'frontagente:web-orders-push-enabled';
 const WEB_ORDERS_PUSH_MARK_READ_EVENT = 'web_orders_mark_read';
+const WEB_ORDERS_PUSH_CLEAR_DELAYS_MS = [0, 300, 1200, 2600];
 
 function getAppBaseUrl() {
   const baseUrl = String(import.meta.env.BASE_URL || '/').trim();
@@ -59,6 +60,33 @@ export function isPushRuntimeSupported() {
   );
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+function isWebOrderNotification(notification = {}) {
+  const targetUrl = String(notification?.data?.url || '');
+  const targetTag = String(notification?.tag || '');
+  return targetUrl.includes('/web-pedidos') || targetTag.startsWith('web-order');
+}
+
+async function clearWebOrderNotificationsFromPage() {
+  const scope = new URL(getPushWorkerScope(), window.location.origin).href;
+  let registration = await navigator.serviceWorker.getRegistration(scope);
+  if (!registration) {
+    registration = await ensurePushWorkerRegistration();
+  }
+
+  const notifications = await registration.getNotifications({ includeTriggered: true }).catch(() => []);
+  notifications.forEach((notification) => {
+    if (isWebOrderNotification(notification)) {
+      notification.close();
+    }
+  });
+}
+
 async function postMessageToPushWorker(payload = {}) {
   if (!('serviceWorker' in navigator)) {
     return;
@@ -82,17 +110,25 @@ export async function markWebOrdersPushAsRead() {
     return;
   }
 
-  if (typeof navigator.clearAppBadge === 'function') {
-    await navigator.clearAppBadge().catch(() => {});
-  }
+  for (const delayMs of WEB_ORDERS_PUSH_CLEAR_DELAYS_MS) {
+    if (delayMs > 0) {
+      await sleep(delayMs);
+    }
 
-  if (!('serviceWorker' in navigator)) {
-    return;
-  }
+    if (typeof navigator.clearAppBadge === 'function') {
+      await navigator.clearAppBadge().catch(() => {});
+    }
 
-  await postMessageToPushWorker({
-    type: WEB_ORDERS_PUSH_MARK_READ_EVENT
-  }).catch(() => {});
+    if (!('serviceWorker' in navigator)) {
+      continue;
+    }
+
+    await postMessageToPushWorker({
+      type: WEB_ORDERS_PUSH_MARK_READ_EVENT
+    }).catch(() => {});
+
+    await clearWebOrderNotificationsFromPage().catch(() => {});
+  }
 }
 
 async function ensurePushWorkerRegistration() {

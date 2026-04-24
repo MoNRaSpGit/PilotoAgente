@@ -21,7 +21,8 @@ import {
   disableWebOrdersPushNotifications,
   enableWebOrdersPushNotifications,
   isPushRuntimeSupported,
-  loadWebOrdersPushEnabled
+  loadWebOrdersPushEnabled,
+  markWebOrdersPushAsRead
 } from './webOrders/webOrdersPushAlerts';
 import { applyAdminWebOrderEvent, normalizeWebOrderStatus } from './webOrders/webOrdersRealtime';
 
@@ -159,6 +160,28 @@ export default function WebPedidosPage() {
   }, [loadOrders]);
 
   useEffect(() => {
+    markWebOrdersPushAsRead().catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const handleAppVisible = () => {
+      if (document.visibilityState === 'visible') {
+        markWebOrdersPushAsRead().catch(() => {});
+      }
+    };
+    const handleWindowFocus = () => {
+      markWebOrdersPushAsRead().catch(() => {});
+    };
+
+    window.addEventListener('focus', handleWindowFocus);
+    document.addEventListener('visibilitychange', handleAppVisible);
+    return () => {
+      window.removeEventListener('focus', handleWindowFocus);
+      document.removeEventListener('visibilitychange', handleAppVisible);
+    };
+  }, []);
+
+  useEffect(() => {
     const streamUrl = buildAdminWebOrdersStreamUrl();
     if (!streamUrl) {
       return undefined;
@@ -230,6 +253,7 @@ export default function WebPedidosPage() {
           ? { ...item, ...updated, estado: normalizedUpdated }
           : item
       )));
+      markWebOrdersPushAsRead().catch(() => {});
     } catch (error) {
       toast.error(error.message || 'No se pudo actualizar estado');
     } finally {
@@ -254,6 +278,7 @@ export default function WebPedidosPage() {
       await hideIncomingWebOrder(orderId);
       setOrders((current) => current.filter((item) => Number(item.id) !== orderId));
       toast.success(`Pedido ${orderId} eliminado`);
+      markWebOrdersPushAsRead().catch(() => {});
     } catch (error) {
       toast.error(error.message || 'No se pudo eliminar el pedido');
     } finally {
