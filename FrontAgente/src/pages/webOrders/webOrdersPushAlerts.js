@@ -64,7 +64,11 @@ async function postMessageToPushWorker(payload = {}) {
     return;
   }
 
-  const registration = await navigator.serviceWorker.ready;
+  const scope = new URL(getPushWorkerScope(), window.location.origin).href;
+  let registration = await navigator.serviceWorker.getRegistration(scope);
+  if (!registration) {
+    registration = await ensurePushWorkerRegistration();
+  }
   const worker = registration.active || registration.waiting || registration.installing;
   if (!worker) {
     return;
@@ -94,9 +98,8 @@ export async function markWebOrdersPushAsRead() {
 async function ensurePushWorkerRegistration() {
   const scriptUrl = getPushWorkerScriptUrl();
   const scope = getPushWorkerScope();
-  await navigator.serviceWorker.register(scriptUrl, { scope });
-  const readyRegistration = await navigator.serviceWorker.ready;
-  return readyRegistration;
+  const registration = await navigator.serviceWorker.register(scriptUrl, { scope });
+  return registration;
 }
 
 function normalizePushSubscribeError(error) {
