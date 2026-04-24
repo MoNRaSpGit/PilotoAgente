@@ -21,6 +21,7 @@ Handles supplier CRUD and supplier-related movement flows.
 - `supplier.repository.js`: supplier DB queries/mutations (core + transactional flows).
 - `supplierOrdersRead.repository.js`: consultas read-only de ordenes/incidencias (slice extraido para reducir acople).
 - `supplierDrafts.repository.js`: consultas/mutaciones del flujo de drafts de pedidos a proveedor.
+- `supplierReceipts.repository.js`: flujo transaccional de recepcion de pedidos y actualizacion de stock.
 
 ## Where To Change What
 - Response contract and endpoint behavior: `supplier.controller.js`
@@ -29,3 +30,4 @@ Handles supplier CRUD and supplier-related movement flows.
   - `supplier.repository.js` (mutaciones y flujos complejos)
   - `supplierOrdersRead.repository.js` (queries de lectura)
   - `supplierDrafts.repository.js` (flujo drafts)
+  - `supplierReceipts.repository.js` (recepcion + stock)
