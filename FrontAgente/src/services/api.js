@@ -1,6 +1,19 @@
-import { getAuthToken } from '../utils/authSession';
+import {
+  API_URL,
+  getAuthHeaders,
+  normalizeBarcode,
+  parseJsonResponse
+} from './api.shared';
+export {
+  buildAdminWebOrdersStreamUrl,
+  fetchIncomingWebOrders,
+  fetchPushPublicConfig,
+  hideIncomingWebOrder,
+  registerPushSubscription,
+  unregisterPushSubscription,
+  updateIncomingWebOrderStatus
+} from './api/webOrders.api';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 const PRODUCT_CACHE_KEY = 'frontagente:scanner-cache';
 const EXPENSE_CACHE_KEY = 'frontagente:expenses-cache';
 const PRODUCT_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -8,30 +21,6 @@ const EXPENSE_CACHE_TTL_MS = 5 * 60 * 1000;
 const productMemoryCache = new Map();
 const pendingScannerRequests = new Map();
 const expenseMemoryCache = new Map();
-
-function normalizeBarcode(value = '') {
-  return String(value).trim().replace(/\s+/g, '');
-}
-
-async function parseJsonResponse(response) {
-  try {
-    return await response.json();
-  } catch (_error) {
-    return {};
-  }
-}
-
-function getAuthHeaders() {
-  const token = getAuthToken();
-
-  if (!token) {
-    return {};
-  }
-
-  return {
-    Authorization: `Bearer ${token}`
-  };
-}
 
 function loadSessionCache() {
   if (typeof window === 'undefined') {
@@ -917,153 +906,6 @@ export async function confirmSupplierPickup(orderId) {
   }
 
   return data.item || null;
-}
-
-export async function fetchIncomingWebOrders(params = {}) {
-  const searchParams = new URLSearchParams();
-  if (Number.isFinite(Number(params.limit)) && Number(params.limit) > 0) {
-    searchParams.set('limit', String(Math.floor(Number(params.limit))));
-  }
-
-  const query = searchParams.toString();
-  const response = await fetch(`${API_URL}/api/web/admin/orders${query ? `?${query}` : ''}`, {
-    headers: {
-      ...getAuthHeaders()
-    }
-  });
-  const data = await parseJsonResponse(response);
-
-  if (!response.ok) {
-    const error = new Error(data.message || 'No se pudieron cargar los pedidos web');
-    error.status = response.status;
-    error.data = data;
-    throw error;
-  }
-
-  return Array.isArray(data.items) ? data.items : [];
-}
-
-export async function updateIncomingWebOrderStatus(orderId, status) {
-  const parsedOrderId = Number(orderId);
-  if (!Number.isFinite(parsedOrderId) || parsedOrderId <= 0) {
-    throw new Error('Pedido invalido');
-  }
-
-  const response = await fetch(`${API_URL}/api/web/admin/orders/${parsedOrderId}/status`, {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      ...getAuthHeaders()
-    },
-    body: JSON.stringify({ status })
-  });
-  const data = await parseJsonResponse(response);
-
-  if (!response.ok) {
-    const error = new Error(data.message || 'No se pudo actualizar estado del pedido web');
-    error.status = response.status;
-    error.data = data;
-    throw error;
-  }
-
-  return data.item || null;
-}
-
-export async function hideIncomingWebOrder(orderId) {
-  const parsedOrderId = Number(orderId);
-  if (!Number.isFinite(parsedOrderId) || parsedOrderId <= 0) {
-    throw new Error('Pedido invalido');
-  }
-
-  const response = await fetch(`${API_URL}/api/web/admin/orders/${parsedOrderId}/hide`, {
-    method: 'PATCH',
-    headers: {
-      ...getAuthHeaders()
-    }
-  });
-  const data = await parseJsonResponse(response);
-
-  if (!response.ok) {
-    const error = new Error(data.message || 'No se pudo ocultar el pedido web');
-    error.status = response.status;
-    error.data = data;
-    throw error;
-  }
-
-  return data.item || null;
-}
-
-export async function fetchPushPublicConfig() {
-  const response = await fetch(`${API_URL}/api/notifications/push/public-key`, {
-    headers: {
-      ...getAuthHeaders()
-    }
-  });
-
-  const data = await parseJsonResponse(response);
-  if (!response.ok) {
-    const error = new Error(data.message || 'No se pudo obtener configuracion push');
-    error.status = response.status;
-    error.data = data;
-    throw error;
-  }
-
-  return {
-    enabled: Boolean(data?.enabled),
-    publicKey: String(data?.publicKey || '').trim()
-  };
-}
-
-export async function registerPushSubscription(payload = {}) {
-  const response = await fetch(`${API_URL}/api/notifications/push/subscribe`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...getAuthHeaders()
-    },
-    body: JSON.stringify(payload || {})
-  });
-
-  const data = await parseJsonResponse(response);
-  if (!response.ok) {
-    const error = new Error(data.message || 'No se pudo registrar suscripcion push');
-    error.status = response.status;
-    error.data = data;
-    throw error;
-  }
-
-  return data;
-}
-
-export async function unregisterPushSubscription(payload = {}) {
-  const response = await fetch(`${API_URL}/api/notifications/push/unsubscribe`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...getAuthHeaders()
-    },
-    body: JSON.stringify(payload || {})
-  });
-
-  const data = await parseJsonResponse(response);
-  if (!response.ok) {
-    const error = new Error(data.message || 'No se pudo remover suscripcion push');
-    error.status = response.status;
-    error.data = data;
-    throw error;
-  }
-
-  return data;
-}
-
-export function buildAdminWebOrdersStreamUrl() {
-  const token = getAuthToken();
-  if (!token) {
-    return '';
-  }
-
-  const separator = API_URL.includes('?') ? '&' : '?';
-  return `${API_URL}/api/web/admin/orders/stream${separator}token=${encodeURIComponent(token)}`;
 }
 
 export async function scanProductByBarcode(barcode) {

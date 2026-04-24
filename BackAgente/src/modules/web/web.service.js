@@ -273,10 +273,6 @@ function parseImagePayload(imageValue) {
   return null;
 }
 
-function normalizeEtag(value = '') {
-  return String(value || '').trim().replace(/^W\//i, '').replace(/^"|"$/g, '');
-}
-
 function computeImageHash(bufferValue) {
   if (!Buffer.isBuffer(bufferValue) || bufferValue.length === 0) {
     return '';
