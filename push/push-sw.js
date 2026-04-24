@@ -14,22 +14,6 @@ function resolveAssetUrl(assetValue = '', fallbackUrl = '') {
   return new URL(normalizedRelative, self.registration.scope).href;
 }
 
-async function clearWebOrderNotificationsUi() {
-  if (typeof self.registration?.clearAppBadge === 'function') {
-    await self.registration.clearAppBadge().catch(() => {});
-  }
-
-  const activeNotifications = await self.registration.getNotifications().catch(() => []);
-  activeNotifications.forEach((notification) => {
-    const targetUrl = String(notification?.data?.url || '');
-    const targetTag = String(notification?.tag || '');
-    const isWebOrderNotification = targetUrl.includes('/web-pedidos') || targetTag.startsWith('web-order');
-    if (isWebOrderNotification) {
-      notification.close();
-    }
-  });
-}
-
 self.addEventListener('push', (event) => {
   let payload = {};
   try {
@@ -93,13 +77,4 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil(
     openOrFocusPromise
   );
-});
-
-self.addEventListener('message', (event) => {
-  const messageType = String(event?.data?.type || '').trim().toLowerCase();
-  if (messageType !== 'web_orders_mark_read') {
-    return;
-  }
-
-  event.waitUntil(clearWebOrderNotificationsUi());
 });
