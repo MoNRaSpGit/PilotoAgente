@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from 'react-bootstrap';
 import toast from 'react-hot-toast';
 import {
@@ -7,6 +7,12 @@ import {
   hideIncomingWebOrder,
   updateIncomingWebOrderStatus
 } from '../services/api';
+import {
+  createWebOrdersBeepPlayer,
+  getOrderCreatedEventId,
+  loadWebOrdersSoundEnabled,
+  saveWebOrdersSoundEnabled
+} from './webOrders/webOrdersAudioAlert';
 import { applyAdminWebOrderEvent, normalizeWebOrderStatus } from './webOrders/webOrdersRealtime';
 
 function statusLabel(status) {
@@ -105,6 +111,16 @@ export default function WebPedidosPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [savingOrderId, setSavingOrderId] = useState(null);
   const [orders, setOrders] = useState([]);
+  const [soundEnabled, setSoundEnabled] = useState(() => loadWebOrdersSoundEnabled());
+  const beepPlayerRef = useRef(null);
+  const lastBeepOrderIdRef = useRef(0);
+
+  const getBeepPlayer = useCallback(() => {
+    if (!beepPlayerRef.current) {
+      beepPlayerRef.current = createWebOrdersBeepPlayer();
+    }
+    return beepPlayerRef.current;
+  }, []);
 
   const loadOrders = useCallback(async ({ silent = false } = {}) => {
     try {
@@ -141,6 +157,11 @@ export default function WebPedidosPage() {
         if (payload?.type === 'keepalive' || payload?.type === 'connected') {
           return;
         }
+        const createdOrderId = getOrderCreatedEventId(payload);
+        if (createdOrderId && soundEnabled && lastBeepOrderIdRef.current !== createdOrderId) {
+          lastBeepOrderIdRef.current = createdOrderId;
+          getBeepPlayer().play();
+        }
         if (payload?.order || payload?.order_id) {
           setOrders((current) => applyAdminWebOrderEvent(current, payload));
           return;
@@ -157,7 +178,18 @@ export default function WebPedidosPage() {
     return () => {
       eventSource.close();
     };
-  }, [loadOrders]);
+  }, [getBeepPlayer, loadOrders, soundEnabled]);
+
+  useEffect(() => {
+    saveWebOrdersSoundEnabled(soundEnabled);
+  }, [soundEnabled]);
+
+  useEffect(() => () => {
+    if (beepPlayerRef.current) {
+      beepPlayerRef.current.destroy();
+      beepPlayerRef.current = null;
+    }
+  }, []);
 
   const activeOrders = useMemo(
     () => orders.filter((order) => ['pendiente', 'en_proceso', 'listo', 'entregado'].includes(normalizeWebOrderStatus(order?.estado))),
@@ -223,6 +255,22 @@ export default function WebPedidosPage() {
         <p className="empty-copy">Pedidos recibidos desde la web para seguimiento operativo.</p>
         <div className="web-orders-header-actions">
           <small>{refreshing ? 'Actualizando...' : `${activeOrders.length} pedidos activos`}</small>
+          <Button
+            variant={soundEnabled ? 'dark' : 'outline-dark'}
+            size="sm"
+            onClick={() => {
+              const next = !soundEnabled;
+              setSoundEnabled(next);
+              if (next) {
+                getBeepPlayer().play();
+                toast.success('Sonido de pedidos activado');
+              } else {
+                toast('Sonido de pedidos desactivado');
+              }
+            }}
+          >
+            Sonido: {soundEnabled ? 'ON' : 'OFF'}
+          </Button>
           <Button variant="outline-dark" size="sm" onClick={() => loadOrders({ silent: true })}>
             Refrescar
           </Button>
