@@ -57,6 +57,11 @@ function App() {
   }, []);
 
   const handleWebOrderCreatedAlert = useCallback(() => {
+    const isVisible = typeof document === 'undefined' || document.visibilityState === 'visible';
+    if (!isVisible) {
+      return;
+    }
+
     if (!loadWebOrdersSoundEnabled()) {
       return;
     }
