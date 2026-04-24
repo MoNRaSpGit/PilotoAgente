@@ -15,6 +15,9 @@ self.addEventListener('push', (event) => {
   const tag = String(payload?.tag || 'frontagente-notification');
   const data = payload?.data || {};
   const renotify = Boolean(payload?.renotify);
+  const silent = Boolean(payload?.silent);
+  const vibrate = Array.isArray(payload?.vibrate) ? payload.vibrate : undefined;
+  const requireInteraction = Boolean(payload?.requireInteraction);
 
   event.waitUntil(
     self.registration.showNotification(title, {
@@ -23,7 +26,10 @@ self.addEventListener('push', (event) => {
       badge,
       tag,
       data,
-      renotify
+      renotify,
+      silent,
+      vibrate,
+      requireInteraction
     })
   );
 });

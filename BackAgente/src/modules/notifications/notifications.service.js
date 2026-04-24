@@ -128,7 +128,9 @@ export async function notifyOpsWebOrderCreated(order = {}) {
     },
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
-    renotify: true
+    renotify: true,
+    silent: false,
+    vibrate: [180, 80, 180]
   });
 
   const results = await Promise.allSettled(
