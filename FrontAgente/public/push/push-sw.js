@@ -42,10 +42,6 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-
-  const clearBadgePromise = (typeof self.registration?.clearAppBadge === 'function')
-    ? self.registration.clearAppBadge().catch(() => {})
-    : Promise.resolve();
   const targetPath = String(event.notification?.data?.url || '/web-pedidos');
   const targetUrl = new URL(targetPath, self.location.origin).href;
 
@@ -59,17 +55,6 @@ self.addEventListener('notificationclick', (event) => {
   });
 
   event.waitUntil(
-    Promise.all([clearBadgePromise, openOrFocusPromise])
+    openOrFocusPromise
   );
-});
-
-self.addEventListener('notificationclose', (event) => {
-  const shouldClearBadge = String(event.notification?.tag || '').startsWith('web-order-');
-  if (!shouldClearBadge) {
-    return;
-  }
-
-  if (typeof self.registration?.clearAppBadge === 'function') {
-    event.waitUntil(self.registration.clearAppBadge().catch(() => {}));
-  }
 });
