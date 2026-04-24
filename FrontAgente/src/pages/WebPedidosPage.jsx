@@ -18,6 +18,12 @@ import {
   saveWebOrdersSoundStyleId,
   getWebOrdersSoundStyles
 } from './webOrders/webOrdersAudioAlert';
+import {
+  disableWebOrdersPushNotifications,
+  enableWebOrdersPushNotifications,
+  isPushRuntimeSupported,
+  loadWebOrdersPushEnabled
+} from './webOrders/webOrdersPushAlerts';
 import { applyAdminWebOrderEvent, normalizeWebOrderStatus } from './webOrders/webOrdersRealtime';
 
 function statusLabel(status) {
@@ -118,9 +124,12 @@ export default function WebPedidosPage() {
   const [orders, setOrders] = useState([]);
   const [soundEnabled, setSoundEnabled] = useState(() => loadWebOrdersSoundEnabled());
   const [soundStyleId, setSoundStyleId] = useState(() => loadWebOrdersSoundStyleId());
+  const [pushEnabled, setPushEnabled] = useState(() => loadWebOrdersPushEnabled());
+  const [savingPush, setSavingPush] = useState(false);
   const beepPlayerRef = useRef(null);
   const lastBeepOrderIdRef = useRef(0);
   const soundStyles = useMemo(() => getWebOrdersSoundStyles(), []);
+  const pushSupported = useMemo(() => isPushRuntimeSupported(), []);
 
   const getBeepPlayer = useCallback(() => {
     if (!beepPlayerRef.current) {
@@ -296,6 +305,36 @@ export default function WebPedidosPage() {
           </Button>
           <Button variant="outline-dark" size="sm" onClick={() => loadOrders({ silent: true })}>
             Refrescar
+          </Button>
+          <Button
+            variant={pushEnabled ? 'dark' : 'outline-dark'}
+            size="sm"
+            disabled={!pushSupported || savingPush}
+            onClick={async () => {
+              if (!pushSupported) {
+                toast.error('Push no soportado en este dispositivo');
+                return;
+              }
+
+              setSavingPush(true);
+              try {
+                if (pushEnabled) {
+                  await disableWebOrdersPushNotifications();
+                  setPushEnabled(false);
+                  toast('Push de pedidos desactivado');
+                } else {
+                  await enableWebOrdersPushNotifications();
+                  setPushEnabled(true);
+                  toast.success('Push de pedidos activado');
+                }
+              } catch (error) {
+                toast.error(error.message || 'No se pudo cambiar push');
+              } finally {
+                setSavingPush(false);
+              }
+            }}
+          >
+            Push SO: {pushEnabled ? 'ON' : 'OFF'}
           </Button>
         </div>
       </article>

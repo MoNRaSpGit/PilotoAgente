@@ -993,6 +993,69 @@ export async function hideIncomingWebOrder(orderId) {
   return data.item || null;
 }
 
+export async function fetchPushPublicConfig() {
+  const response = await fetch(`${API_URL}/api/notifications/push/public-key`, {
+    headers: {
+      ...getAuthHeaders()
+    }
+  });
+
+  const data = await parseJsonResponse(response);
+  if (!response.ok) {
+    const error = new Error(data.message || 'No se pudo obtener configuracion push');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  return {
+    enabled: Boolean(data?.enabled),
+    publicKey: String(data?.publicKey || '').trim()
+  };
+}
+
+export async function registerPushSubscription(payload = {}) {
+  const response = await fetch(`${API_URL}/api/notifications/push/subscribe`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders()
+    },
+    body: JSON.stringify(payload || {})
+  });
+
+  const data = await parseJsonResponse(response);
+  if (!response.ok) {
+    const error = new Error(data.message || 'No se pudo registrar suscripcion push');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  return data;
+}
+
+export async function unregisterPushSubscription(payload = {}) {
+  const response = await fetch(`${API_URL}/api/notifications/push/unsubscribe`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders()
+    },
+    body: JSON.stringify(payload || {})
+  });
+
+  const data = await parseJsonResponse(response);
+  if (!response.ok) {
+    const error = new Error(data.message || 'No se pudo remover suscripcion push');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  return data;
+}
+
 export function buildAdminWebOrdersStreamUrl() {
   const token = getAuthToken();
   if (!token) {

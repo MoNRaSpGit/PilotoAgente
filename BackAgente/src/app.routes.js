@@ -3,6 +3,7 @@ import cajaRoutes from './routes/cajaRoutes.js';
 import clientRoutes from './routes/clientRoutes.js';
 import gastosRoutes from './routes/gastosRoutes.js';
 import healthRoutes from './routes/healthRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
 import productRoutes from './routes/productRoutes.js';
 import protectedRoutes from './routes/protectedRoutes.js';
 import supplierRoutes from './routes/supplierRoutes.js';
@@ -24,6 +25,7 @@ export async function registerAppRoutes(app) {
   app.use('/api', webAuthRoutes);
   app.use('/api', webUsersRoutes);
   app.use('/api', webOrdersRoutes);
+  app.use('/api', notificationRoutes);
   app.use('/api/auth', authRoutes);
   app.use('/api', clientRoutes);
   app.use('/api', cajaRoutes);

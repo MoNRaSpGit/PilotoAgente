@@ -14,6 +14,7 @@ import { invalidateWebAuthProfileCache } from '../webUsers/webUsers.service.js';
 import { emitWebOrderEvent } from './webOrders.events.js';
 import { canHideWebOrder, normalizeWebOrderStatus } from './webOrders.status.js';
 import { parseCreateOrderPayload, parseOrderId, parseOrderStatusPayload } from './webOrders.contract.js';
+import { notifyOpsWebOrderCreated } from '../notifications/notifications.service.js';
 
 const WEB_MY_ORDERS_CACHE_TTL_MS = 30 * 1000;
 const webMyOrdersCache = new Map();
@@ -144,6 +145,7 @@ export async function createOrderFromWebUser(webUser, payload = {}) {
     webUserId: webUser.id,
     order: item
   });
+  notifyOpsWebOrderCreated(item).catch(() => {});
 
   return {
     item,
