@@ -1,5 +1,4 @@
 import { pool } from '../../config/db.js';
-import { runMigrations } from '../../bootstrap/migrations/runMigrations.js';
 import { ensureWebUsersTable } from '../webAuth/webAuth.repository.js';
 import { getRequestContext } from '../../observability/telemetry.js';
 
@@ -51,7 +50,6 @@ export async function ensureWebOrdersTables() {
 
   webOrdersTablesPromise = (async () => {
     await ensureWebUsersTable();
-    await runMigrations();
   })();
 
   try {

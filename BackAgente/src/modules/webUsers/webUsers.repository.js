@@ -1,5 +1,4 @@
 import { pool } from '../../config/db.js';
-import { runMigrations } from '../../bootstrap/migrations/runMigrations.js';
 import { ensureWebUsersTable } from '../webAuth/webAuth.repository.js';
 
 let webUsersSupportTablesPromise = null;
@@ -27,7 +26,6 @@ export async function ensureWebUsersSupportTables() {
 
   webUsersSupportTablesPromise = (async () => {
     await ensureWebUsersTable();
-    await runMigrations();
   })();
 
   try {

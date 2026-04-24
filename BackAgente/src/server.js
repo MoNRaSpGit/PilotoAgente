@@ -29,10 +29,13 @@ function startServer() {
   app.listen(env.port, () => {
     console.log(`BackAgente escuchando en http://localhost:${env.port}`);
   });
-
-  initDatabaseWithRetry().catch((error) => {
-    console.error('No se pudo iniciar inicializacion de base de datos:', error);
-  });
 }
 
-startServer();
+async function bootstrap() {
+  await initDatabaseWithRetry();
+  startServer();
+}
+
+bootstrap().catch((error) => {
+  console.error('No se pudo iniciar inicializacion de base de datos:', error);
+});
