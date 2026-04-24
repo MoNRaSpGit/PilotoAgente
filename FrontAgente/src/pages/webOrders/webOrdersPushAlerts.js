@@ -61,7 +61,26 @@ export function isPushRuntimeSupported() {
 async function ensurePushWorkerRegistration() {
   const scriptUrl = getPushWorkerScriptUrl();
   const scope = getPushWorkerScope();
-  return navigator.serviceWorker.register(scriptUrl, { scope });
+  await navigator.serviceWorker.register(scriptUrl, { scope });
+  const readyRegistration = await navigator.serviceWorker.ready;
+  return readyRegistration;
+}
+
+function normalizePushSubscribeError(error) {
+  const message = String(error?.message || '').trim();
+  const lower = message.toLowerCase();
+
+  if (lower.includes('permission') || lower.includes('denied')) {
+    return 'Permiso de notificaciones denegado por el navegador/dispositivo';
+  }
+  if (lower.includes('service worker') || lower.includes('registration failed')) {
+    return 'No se pudo activar el Service Worker de push. Reintenta en unos segundos.';
+  }
+  if (lower.includes('applicationserverkey') || lower.includes('invalid character')) {
+    return 'La clave VAPID publica no es valida en backend';
+  }
+
+  return message || 'No se pudo suscribir notificaciones push';
 }
 
 export async function enableWebOrdersPushNotifications() {
@@ -82,10 +101,14 @@ export async function enableWebOrdersPushNotifications() {
   const registration = await ensurePushWorkerRegistration();
   let subscription = await registration.pushManager.getSubscription();
   if (!subscription) {
-    subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(config.publicKey)
-    });
+    try {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(config.publicKey)
+      });
+    } catch (error) {
+      throw new Error(normalizePushSubscribeError(error));
+    }
   }
 
   await registerPushSubscription(subscription.toJSON());
