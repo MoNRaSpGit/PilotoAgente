@@ -74,9 +74,10 @@ No mezclar credenciales entre ambos dominios.
   - `OBS_REQUEST_SLOW_MS` (default 1200)
   - `OBS_REQUEST_LOG_MIN_MS` (default 300)
   - `OBS_DB_QUERY_SLOW_MS` (default 700)
+  - `OBS_ORDER_STAGE_LOG_ENABLED` (default `false`)
   - `OBS_ORDER_STAGE_SLOW_MS` (default 250)
 - Recomendado para diagnostico fino de `POST /web/orders`:
-  - setear `OBS_ORDER_STAGE_SLOW_MS=1` temporalmente.
+  - setear `OBS_ORDER_STAGE_LOG_ENABLED=1` y `OBS_ORDER_STAGE_SLOW_MS=1` temporalmente.
 
 ## Migraciones
 

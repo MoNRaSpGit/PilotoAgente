@@ -3,6 +3,9 @@ import { ensureWebUsersTable } from '../webAuth/webAuth.repository.js';
 import { getRequestContext } from '../../observability/telemetry.js';
 
 let webOrdersTablesPromise = null;
+const ORDER_STAGE_LOG_ENABLED = ['1', 'true', 'yes', 'on'].includes(
+  String(process.env.OBS_ORDER_STAGE_LOG_ENABLED || '').trim().toLowerCase()
+);
 const ORDER_STAGE_SLOW_MS = Math.max(1, Number(process.env.OBS_ORDER_STAGE_SLOW_MS || 250));
 
 function nowMs() {
@@ -11,6 +14,10 @@ function nowMs() {
 
 function logOrderStage(stage, startedAtMs, extra = {}, options = {}) {
   const durationMs = Number((nowMs() - Number(startedAtMs || 0)).toFixed(2));
+  if (!ORDER_STAGE_LOG_ENABLED) {
+    return durationMs;
+  }
+
   const forceLog = Boolean(options?.force);
   if (!forceLog && durationMs < ORDER_STAGE_SLOW_MS) {
     return durationMs;
