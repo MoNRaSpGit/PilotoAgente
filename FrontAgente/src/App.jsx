@@ -12,6 +12,7 @@ import {
   loadWebOrdersSoundEnabled,
   loadWebOrdersSoundStyleId
 } from './pages/webOrders/webOrdersAudioAlert';
+import { markWebOrdersPushAsRead } from './pages/webOrders/webOrdersPushAlerts';
 import { clearSession } from './store/slices/authSlice';
 import { clearAuthSession } from './utils/authSession';
 import './styles/layout.css';
@@ -104,6 +105,17 @@ function App() {
 
     navigator.clearAppBadge().catch(() => {});
   }, [isLoggedIn, location.pathname, userRole, webOrdersUnreadCount]);
+
+  useEffect(() => {
+    const isOpsUser = userRole === 'admin' || userRole === 'operario';
+    const onWebOrdersPage = String(location.pathname || '').toLowerCase() === '/web-pedidos';
+
+    if (!isLoggedIn || !isOpsUser || !onWebOrdersPage) {
+      return;
+    }
+
+    markWebOrdersPushAsRead().catch(() => {});
+  }, [isLoggedIn, location.pathname, userRole]);
 
   const handleLogoutConfirm = () => {
     dispatch(clearSession());

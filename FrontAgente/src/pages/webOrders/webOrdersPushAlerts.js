@@ -5,6 +5,7 @@ import {
 } from '../../services/api';
 
 const WEB_ORDERS_PUSH_PREF_KEY = 'frontagente:web-orders-push-enabled';
+const WEB_ORDERS_PUSH_MARK_READ_EVENT = 'web_orders_mark_read';
 
 function getAppBaseUrl() {
   const baseUrl = String(import.meta.env.BASE_URL || '/').trim();
@@ -56,6 +57,38 @@ export function isPushRuntimeSupported() {
     && 'PushManager' in window
     && 'Notification' in window
   );
+}
+
+async function postMessageToPushWorker(payload = {}) {
+  if (!('serviceWorker' in navigator)) {
+    return;
+  }
+
+  const registration = await navigator.serviceWorker.ready;
+  const worker = registration.active || registration.waiting || registration.installing;
+  if (!worker) {
+    return;
+  }
+
+  worker.postMessage(payload);
+}
+
+export async function markWebOrdersPushAsRead() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  if (typeof navigator.clearAppBadge === 'function') {
+    await navigator.clearAppBadge().catch(() => {});
+  }
+
+  if (!('serviceWorker' in navigator)) {
+    return;
+  }
+
+  await postMessageToPushWorker({
+    type: WEB_ORDERS_PUSH_MARK_READ_EVENT
+  }).catch(() => {});
 }
 
 async function ensurePushWorkerRegistration() {
