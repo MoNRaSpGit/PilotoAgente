@@ -1,5 +1,5 @@
 import { Button, Modal } from 'react-bootstrap';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { featureFlags } from './config/featureFlags';
@@ -20,6 +20,17 @@ import './styles/pages/scanner.css';
 import './styles/pages/suppliers.css';
 import './styles/pages/webOrders.css';
 
+function supportsAppBadgeApi() {
+  if (typeof navigator === 'undefined') {
+    return false;
+  }
+
+  return (
+    typeof navigator.setAppBadge === 'function'
+    && typeof navigator.clearAppBadge === 'function'
+  );
+}
+
 function App() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -35,6 +46,28 @@ function App() {
     enabled: isLoggedIn && (userRole === 'admin' || userRole === 'operario'),
     currentPath: location.pathname
   });
+
+  useEffect(() => {
+    if (!supportsAppBadgeApi()) {
+      return;
+    }
+
+    const isOpsUser = userRole === 'admin' || userRole === 'operario';
+    const onWebOrdersPage = String(location.pathname || '').toLowerCase() === '/web-pedidos';
+
+    if (!isLoggedIn || !isOpsUser || onWebOrdersPage) {
+      navigator.clearAppBadge().catch(() => {});
+      return;
+    }
+
+    const safeCount = Math.max(0, Number(webOrdersUnreadCount || 0));
+    if (safeCount > 0) {
+      navigator.setAppBadge(safeCount).catch(() => {});
+      return;
+    }
+
+    navigator.clearAppBadge().catch(() => {});
+  }, [isLoggedIn, location.pathname, userRole, webOrdersUnreadCount]);
 
   const handleLogoutConfirm = () => {
     dispatch(clearSession());
