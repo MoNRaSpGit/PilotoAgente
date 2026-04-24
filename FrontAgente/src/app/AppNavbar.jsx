@@ -7,8 +7,24 @@ export function AppNavbar({
   isAdmin,
   isLoggedIn,
   dashboardEnabled,
+  webOrdersUnreadCount,
   onLogoutClick
 }) {
+  const safeUnreadCount = Math.max(0, Number(webOrdersUnreadCount || 0));
+  const unreadLabel = safeUnreadCount > 99 ? '99+' : String(safeUnreadCount);
+
+  const webNavLabel = (
+    <span className="nav-icon-wrap">
+      <Globe size={16} />
+      Web
+      {safeUnreadCount > 0 ? (
+        <span className="nav-notification-badge" aria-label={`${safeUnreadCount} pedidos web sin ver`}>
+          {unreadLabel}
+        </span>
+      ) : null}
+    </span>
+  );
+
   return (
     <Navbar className="app-navbar" sticky="top">
       <Container>
@@ -34,10 +50,7 @@ export function AppNavbar({
                 Proveedores
               </Nav.Link>
               <Nav.Link as={NavLink} to="/web-pedidos">
-                <span className="nav-icon-wrap">
-                  <Globe size={16} />
-                  Web
-                </span>
+                {webNavLabel}
               </Nav.Link>
             </>
           ) : (
@@ -55,10 +68,7 @@ export function AppNavbar({
                 </span>
               </Nav.Link>
               <Nav.Link as={NavLink} to="/web-pedidos">
-                <span className="nav-icon-wrap">
-                  <Globe size={16} />
-                  Web
-                </span>
+                {webNavLabel}
               </Nav.Link>
             </>
           )}

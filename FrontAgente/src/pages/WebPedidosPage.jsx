@@ -9,9 +9,14 @@ import {
 } from '../services/api';
 import {
   createWebOrdersBeepPlayer,
+  getNextWebOrdersSoundStyleId,
   getOrderCreatedEventId,
+  getWebOrdersSoundStyleLabel,
   loadWebOrdersSoundEnabled,
-  saveWebOrdersSoundEnabled
+  loadWebOrdersSoundStyleId,
+  saveWebOrdersSoundEnabled,
+  saveWebOrdersSoundStyleId,
+  getWebOrdersSoundStyles
 } from './webOrders/webOrdersAudioAlert';
 import { applyAdminWebOrderEvent, normalizeWebOrderStatus } from './webOrders/webOrdersRealtime';
 
@@ -112,8 +117,10 @@ export default function WebPedidosPage() {
   const [savingOrderId, setSavingOrderId] = useState(null);
   const [orders, setOrders] = useState([]);
   const [soundEnabled, setSoundEnabled] = useState(() => loadWebOrdersSoundEnabled());
+  const [soundStyleId, setSoundStyleId] = useState(() => loadWebOrdersSoundStyleId());
   const beepPlayerRef = useRef(null);
   const lastBeepOrderIdRef = useRef(0);
+  const soundStyles = useMemo(() => getWebOrdersSoundStyles(), []);
 
   const getBeepPlayer = useCallback(() => {
     if (!beepPlayerRef.current) {
@@ -160,7 +167,7 @@ export default function WebPedidosPage() {
         const createdOrderId = getOrderCreatedEventId(payload);
         if (createdOrderId && soundEnabled && lastBeepOrderIdRef.current !== createdOrderId) {
           lastBeepOrderIdRef.current = createdOrderId;
-          getBeepPlayer().play();
+          getBeepPlayer().playStyle(soundStyleId);
         }
         if (payload?.order || payload?.order_id) {
           setOrders((current) => applyAdminWebOrderEvent(current, payload));
@@ -178,11 +185,15 @@ export default function WebPedidosPage() {
     return () => {
       eventSource.close();
     };
-  }, [getBeepPlayer, loadOrders, soundEnabled]);
+  }, [getBeepPlayer, loadOrders, soundEnabled, soundStyleId]);
 
   useEffect(() => {
     saveWebOrdersSoundEnabled(soundEnabled);
   }, [soundEnabled]);
+
+  useEffect(() => {
+    saveWebOrdersSoundStyleId(soundStyleId);
+  }, [soundStyleId]);
 
   useEffect(() => () => {
     if (beepPlayerRef.current) {
@@ -262,7 +273,7 @@ export default function WebPedidosPage() {
               const next = !soundEnabled;
               setSoundEnabled(next);
               if (next) {
-                getBeepPlayer().play();
+                getBeepPlayer().playStyle(soundStyleId);
                 toast.success('Sonido de pedidos activado');
               } else {
                 toast('Sonido de pedidos desactivado');
@@ -270,6 +281,18 @@ export default function WebPedidosPage() {
             }}
           >
             Sonido: {soundEnabled ? 'ON' : 'OFF'}
+          </Button>
+          <Button
+            variant="outline-dark"
+            size="sm"
+            onClick={() => {
+              const nextStyleId = getNextWebOrdersSoundStyleId(soundStyleId);
+              setSoundStyleId(nextStyleId);
+              getBeepPlayer().playStyle(nextStyleId);
+              toast(`Beep: ${getWebOrdersSoundStyleLabel(nextStyleId)}`);
+            }}
+          >
+            Beep: {soundStyles.findIndex((style) => style.id === soundStyleId) + 1}/{soundStyles.length}
           </Button>
           <Button variant="outline-dark" size="sm" onClick={() => loadOrders({ silent: true })}>
             Refrescar

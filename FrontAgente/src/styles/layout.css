@@ -44,6 +44,21 @@
   gap: 0.35rem;
 }
 
+.nav-notification-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.2rem;
+  height: 1.2rem;
+  padding: 0 0.32rem;
+  border-radius: 999px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 0.67rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .app-main {
   padding: 1.5rem 0 2.5rem;
 }

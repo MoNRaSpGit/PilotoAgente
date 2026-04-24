@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getNextWebOrdersSoundStyleId,
   getOrderCreatedEventId,
+  getWebOrdersSoundStyles,
   loadWebOrdersSoundEnabled,
-  saveWebOrdersSoundEnabled
+  loadWebOrdersSoundStyleId,
+  saveWebOrdersSoundEnabled,
+  saveWebOrdersSoundStyleId
 } from '../pages/webOrders/webOrdersAudioAlert';
 
 describe('webOrdersAudioAlert', () => {
@@ -19,5 +23,14 @@ describe('webOrdersAudioAlert', () => {
 
     saveWebOrdersSoundEnabled(true);
     expect(loadWebOrdersSoundEnabled()).toBe(true);
+  });
+
+  it('persiste y rota estilo de beep', () => {
+    const styles = getWebOrdersSoundStyles();
+    expect(styles.length).toBe(5);
+
+    saveWebOrdersSoundStyleId(styles[1].id);
+    expect(loadWebOrdersSoundStyleId()).toBe(styles[1].id);
+    expect(getNextWebOrdersSoundStyleId(styles[1].id)).toBe(styles[2].id);
   });
 });

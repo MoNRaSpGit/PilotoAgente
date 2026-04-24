@@ -6,6 +6,7 @@ import { featureFlags } from './config/featureFlags';
 import { AppNavbar } from './app/AppNavbar';
 import { AppRoutes } from './app/AppRoutes';
 import { normalizeRole } from './app/roleGate.utils';
+import { useWebOrdersUnreadCounter } from './app/useWebOrdersUnreadCounter';
 import { clearSession } from './store/slices/authSlice';
 import { clearAuthSession } from './utils/authSession';
 import './styles/layout.css';
@@ -30,6 +31,10 @@ function App() {
   const hideNavbar = location.pathname === '/login';
   const dashboardEnabled = featureFlags.dashboardEnabled;
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const webOrdersUnreadCount = useWebOrdersUnreadCounter({
+    enabled: isLoggedIn && (userRole === 'admin' || userRole === 'operario'),
+    currentPath: location.pathname
+  });
 
   const handleLogoutConfirm = () => {
     dispatch(clearSession());
@@ -46,6 +51,7 @@ function App() {
           isAdmin={isAdmin}
           isLoggedIn={isLoggedIn}
           dashboardEnabled={dashboardEnabled}
+          webOrdersUnreadCount={webOrdersUnreadCount}
           onLogoutClick={() => setLogoutConfirmOpen(true)}
         />
       ) : null}
