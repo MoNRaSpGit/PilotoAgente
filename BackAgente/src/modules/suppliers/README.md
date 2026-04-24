@@ -18,9 +18,12 @@ Handles supplier CRUD and supplier-related movement flows.
 ## File Map
 - `supplier.controller.js`: HTTP handlers for supplier routes.
 - `supplier.service.js`: supplier business logic and validations.
-- `supplier.repository.js`: supplier DB queries/mutations.
+- `supplier.repository.js`: supplier DB queries/mutations (core + transactional flows).
+- `supplierOrdersRead.repository.js`: consultas read-only de ordenes/incidencias (slice extraido para reducir acople).
 
 ## Where To Change What
 - Response contract and endpoint behavior: `supplier.controller.js`
 - Domain rules: `supplier.service.js`
-- Data access behavior: `supplier.repository.js`
+- Data access behavior:
+  - `supplier.repository.js` (mutaciones y flujos complejos)
+  - `supplierOrdersRead.repository.js` (queries de lectura)
